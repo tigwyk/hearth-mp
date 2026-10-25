@@ -9,6 +9,11 @@ extends Node
 ##
 ## The backend is instantiated by class name on purpose: a web export never
 ## parses a `HearthNative` reference that does not exist there.
+##
+## With `use_schema()` the autoload also keeps a typed state mirror (see
+## `hearth_typed.gd`): `raw_state` is always the wire Dictionary while `state` is
+## the typed root, so v0.1 game code that reads `state` as a Dictionary keeps
+## working until it opts in.
 
 signal joined(player_id: String, seat: int)
 signal state_reset()
@@ -16,15 +21,28 @@ signal patched(ops: Array)
 signal acked(state_seq: int, intent_seqs: Array)
 signal event(name: String, data: Variant)
 signal error(code: String, message: String, ref_seq: int)
+## Fires only when the client gives up (deliberate or fatal close, or the
+## reconnect grace window is spent). Recoverable drops emit `reconnecting`.
 signal disconnected(code: int, reason: String)
+## A retry is scheduled. `attempt` is 0-based; `retry_in_ms` is from now.
+signal reconnecting(attempt: int, retry_in_ms: int)
+## A retry joined the room again.
+signal reconnected()
+## Intents sent before a drop whose fate the server may or may not have decided.
+## Reported once per drop, sorted ascending; never resent.
+signal intents_unconfirmed(seqs: Array)
 
 ## Gateway base URL, for example `http://127.0.0.1:8787`.
 @export var server_url: String = "http://127.0.0.1:8787"
 ## 16-char hex schema hash of the room's state type (see `GET /schema/<type>`).
 @export var schema_hash: String = ""
 
-## Local view of the room state (sync fields only); `{}` before join.
-var state: Dictionary = {}
+## Raw view of the room state (sync fields only); `{}` before join. This is what
+## v0.1 exposed as `state`; patches are applied to it in place by `HearthPatch`.
+var raw_state: Dictionary = {}
+## The typed state root once `use_schema()` has been called, otherwise
+## `raw_state` (the v0.1 behaviour: a plain Dictionary).
+var state = {}
 ## Verified player id from `JOIN_OK`; `""` before login.
 var player_id: String = ""
 ## Assigned seat from `JOIN_OK`; `-1` before join.
@@ -34,9 +52,11 @@ var seat: int = -1
 var device_id_override: String = ""
 
 var _backend = null
+var _typed_root = null
 var _token: String = ""
 
 const _WEB_CLIENT = preload("res://addons/hearth/hearth_web_client.gd")
+const _PATCH = preload("res://addons/hearth/hearth_patch.gd")
 const _DEVICE_ID_PATH := "user://hearth_device_id"
 
 
@@ -51,6 +71,9 @@ func _ready() -> void:
 	_backend.event.connect(_on_event)
 	_backend.error.connect(_on_error)
 	_backend.disconnected.connect(_on_disconnected)
+	_backend.reconnecting.connect(_on_reconnecting)
+	_backend.reconnected.connect(_on_reconnected)
+	_backend.intents_unconfirmed.connect(_on_intents_unconfirmed)
 	add_child(_backend)
 
 
@@ -109,6 +132,18 @@ func join(room_type: String, room: String, opts := {}) -> void:
 	_backend.connect_to_room(_room_url(room_type, room), schema_hash, opts)
 
 
+## Enable the typed state mirror (plan v0.2a Task 6). `root_class` is a
+## code-generated state class: it extends `HearthObject` and carries the room's
+## `SCHEMA_HASH` constant. Call it after `login_anonymous()`/`create_room()` and
+## before `join()`; `state` becomes the typed root while `raw_state` keeps the
+## plain wire Dictionary.
+func use_schema(root_class: GDScript) -> void:
+	schema_hash = String(root_class.SCHEMA_HASH)
+	_typed_root = root_class.new()
+	_typed_root._hearth_load(raw_state)
+	state = _typed_root
+
+
 ## Queue one intent. Returns its client-assigned sequence number (>= 1), or 0
 ## when the intent could not be converted.
 func send_intent(intent) -> int:
@@ -121,6 +156,12 @@ func send_intent(intent) -> int:
 func leave() -> void:
 	if _backend != null:
 		_backend.leave()
+
+
+## Test seam: simulate an abrupt socket drop (debug builds only).
+func _debug_drop() -> void:
+	if _backend != null:
+		_backend._debug_drop()
 
 
 func _room_url(room_type: String, room: String) -> String:
@@ -176,8 +217,18 @@ func _device_id() -> String:
 
 
 func _refresh_state() -> void:
-	if _backend != null:
-		state = _backend.get_state()
+	if _backend == null:
+		return
+	var backend_state = _backend.get_state()
+	if typeof(backend_state) != TYPE_DICTIONARY:
+		return
+	# Keep an independent copy: `hearth_patch.gd` mutates the tree in place and
+	# the web backend returns its live dictionary.
+	raw_state = backend_state.duplicate(true)
+	if _typed_root != null:
+		_typed_root._hearth_load(raw_state)
+	else:
+		state = raw_state
 
 
 func _on_joined(joined_player_id: String, joined_seat: int) -> void:
@@ -192,7 +243,16 @@ func _on_state_reset() -> void:
 
 
 func _on_patched(ops: Array) -> void:
-	_refresh_state()
+	for op in ops:
+		var next_state = _PATCH.apply(raw_state, op)
+		if typeof(next_state) != TYPE_DICTIONARY:
+			# The backend already reported DESYNC; the next FULL_STATE resyncs us.
+			break
+		raw_state = next_state
+		if _typed_root != null:
+			HearthObject.route(state, raw_state, op)
+	if _typed_root == null:
+		state = raw_state
 	patched.emit(ops)
 
 
@@ -210,6 +270,18 @@ func _on_error(code: String, message: String, ref_seq: int) -> void:
 
 func _on_disconnected(code: int, reason: String) -> void:
 	disconnected.emit(code, reason)
+
+
+func _on_reconnecting(attempt: int, retry_in_ms: int) -> void:
+	reconnecting.emit(attempt, retry_in_ms)
+
+
+func _on_reconnected() -> void:
+	reconnected.emit()
+
+
+func _on_intents_unconfirmed(seqs: Array) -> void:
+	intents_unconfirmed.emit(seqs)
 
 
 func _emit_error(code: String, message: String, ref_seq: int) -> void:
