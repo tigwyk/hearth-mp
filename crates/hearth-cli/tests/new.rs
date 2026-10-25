@@ -95,7 +95,7 @@ fn new_writes_the_templates_and_names_the_crate_and_room() {
     assert!(lib.contains("room_type: \"my-game\""), "{lib}");
     assert!(lib.contains("binding: \"ROOM\""), "{lib}");
     assert!(
-        lib.contains("<GameState as HearthState>::schema_hash_hex"),
+        lib.contains("hearth::server::schema_hash_hex::<MyGame>"),
         "{lib}"
     );
     let wrangler = fs::read_to_string(root.join("wrangler.toml")).unwrap();

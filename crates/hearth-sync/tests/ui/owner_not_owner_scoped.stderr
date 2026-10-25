@@ -4,7 +4,7 @@ error[E0277]: the trait bound `u32: OwnerScoped` is not satisfied
 5 | #[derive(HearthState, Serialize, Deserialize, Default)]
   |          ^^^^^^^^^^^ the trait `OwnerScoped` is not implemented for `u32`
   |
-help: the trait `OwnerScoped` is implemented for `SyncMap<PlayerId, V>`
+help: the trait `OwnerScoped` is implemented for `hearth_sync::SyncMap<hearth_sync::PlayerId, V>`
  --> src/schema.rs
   |
   | impl<V: Serialize> OwnerScoped for SyncMap<PlayerId, V> {

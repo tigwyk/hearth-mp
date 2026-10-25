@@ -13,7 +13,10 @@ pub use diff::diff;
 pub use hearth_protocol::{PlayerId, Value};
 pub use hearth_sync_derive::{HearthState, Schema};
 pub use map::SyncMap;
-pub use schema::{fnv1a64, mix, HearthState, OwnerScoped, Schema};
+pub use schema::{
+    fnv1a64, mix, Field, HearthState, OwnerScoped, Registry, Schema, Shape, TypeDef, TypeRef,
+    Variant, Vis,
+};
 
 /// Implementation details used by generated code. Not public API.
 #[doc(hidden)]

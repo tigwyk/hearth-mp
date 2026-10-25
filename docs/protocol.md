@@ -67,6 +67,8 @@ Field types are JSON types: `u16`/`u32`/`u64` are numbers (MessagePack integers)
 
 - `protocol`: protocol version, currently `1`.
 - `schema_hash`: the client's build's schema hash, 16 lowercase hex characters.
+  The hash covers both the room's state type and its `Intent` type, so a change
+  to either makes stale clients fail loudly instead of desyncing.
 - `opts`: pass-through join options for the room's `on_join` hook (for example a
   reconnect token in a later version). May be `{}`.
 

@@ -1,0 +1,5 @@
+error: Hearth schema types can't change their serde shape (found `flatten`); typed clients would desync
+ --> tests/ui/serde_flatten.rs:7:5
+  |
+7 |     #[serde(flatten)]
+  |     ^^^^^^^^^^^^^^^^^

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use hearth_protocol::{PlayerId, Value};
-use hearth_sync::HearthState;
+use hearth_sync::{HearthState, Schema};
 use serde::de::DeserializeOwned;
 
 use crate::Result;
@@ -74,7 +74,7 @@ impl From<String> for TimerKey {
 #[allow(async_fn_in_trait)]
 pub trait Room: RoomConfig + Default + 'static {
     type State: HearthState;
-    type Intent: DeserializeOwned;
+    type Intent: Schema + DeserializeOwned;
 
     async fn on_join(
         &mut self,

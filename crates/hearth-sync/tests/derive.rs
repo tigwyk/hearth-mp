@@ -173,5 +173,13 @@ fn derive_schema_registers_the_sync_helper_attribute() {
 
 #[test]
 fn ui() {
-    trybuild::TestCases::new().compile_fail("tests/ui/*.rs");
+    let cases = trybuild::TestCases::new();
+    cases.compile_fail("tests/ui/hearth_state_on_enum.rs");
+    cases.compile_fail("tests/ui/owner_not_owner_scoped.rs");
+    cases.compile_fail("tests/ui/sync_team.rs");
+    cases.compile_fail("tests/ui/serde_rename.rs");
+    cases.compile_fail("tests/ui/serde_rename_state.rs");
+    cases.compile_fail("tests/ui/serde_tag.rs");
+    cases.compile_fail("tests/ui/serde_flatten.rs");
+    cases.pass("tests/ui/serde_default_ok.rs");
 }

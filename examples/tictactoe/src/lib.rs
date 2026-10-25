@@ -37,7 +37,8 @@ pub struct Board {
 }
 
 /// Intents are the only way a client can change the room.
-#[derive(Deserialize)]
+#[derive(Schema, Deserialize)]
+#[hearth(crate = "hearth")]
 pub enum Move {
     Place { cell: u8 },
     Rematch,
@@ -175,7 +176,7 @@ async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response>
         &[hearth_gateway::RoomRoute {
             room_type: "tictactoe",
             binding: "TICTACTOE",
-            schema_hash: <Board as HearthState>::schema_hash_hex,
+            schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
         }],
     )
     .await

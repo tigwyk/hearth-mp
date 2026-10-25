@@ -52,7 +52,10 @@ pub use anyhow;
 pub use hearth_protocol as protocol;
 pub use hearth_protocol::PlayerId;
 pub use hearth_server as server;
-pub use hearth_server::{Client, Ctx, JoinOpts, Leave, Result, Room, TimerKey};
+pub use hearth_server::{
+    schema_doc, schema_hash, schema_hash_hex, Client, Ctx, JoinOpts, Leave, Result, Room,
+    SchemaDoc, TimerKey,
+};
 pub use hearth_server_macros::room;
 pub use hearth_sync as sync;
 pub use hearth_sync::{HearthState, Schema, SyncMap};

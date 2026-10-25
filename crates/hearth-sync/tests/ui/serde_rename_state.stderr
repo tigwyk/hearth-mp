@@ -1,0 +1,5 @@
+error: Hearth schema types can't change their serde shape (found `rename`); typed clients would desync
+ --> tests/ui/serde_rename_state.rs:8:5
+  |
+8 |     #[serde(rename = "other")]
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^

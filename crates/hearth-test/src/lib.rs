@@ -15,8 +15,7 @@ use std::time::Duration;
 use futures::executor::block_on;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
-use hearth_server::{Host, Room, RoomRuntime, Sql};
-use hearth_sync::HearthState;
+use hearth_server::{schema_hash_hex, Host, Room, RoomRuntime, Sql};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
 
@@ -182,7 +181,7 @@ impl<R: Room> TestRoom<R> {
 
     fn spawn_client(&mut self, player: PlayerId, encoding: Encoding) -> (usize, Socket) {
         let socket = self.host.open_socket();
-        let mut config = ClientConfig::new(<R::State as HearthState>::schema_hash_hex(), encoding);
+        let mut config = ClientConfig::new(schema_hash_hex::<R>(), encoding);
         // The harness drives `poll_send` by hand at one virtual instant, so the
         // production 20 msgs/s pacing would stall every send. Effectively
         // unlimit the client; rate limiting is a server-side concern.

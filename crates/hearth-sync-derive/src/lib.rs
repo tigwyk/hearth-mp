@@ -1,14 +1,21 @@
 //! Derive macros for Hearth state sync.
 //!
 //! `#[derive(Schema)]` implements `hearth_sync::Schema` for a struct (named,
-//! tuple or unit) or an enum. `HASH` folds, in declaration order: the type
-//! name, then each field's name and `<FieldTy as Schema>::HASH` (or for an
-//! enum, each variant's name followed by its fields).
+//! tuple or unit) or an enum: the compile-time `HASH` and the machine-readable
+//! `describe`. `HASH` folds, in declaration order: the type name, then each
+//! field's name and `<FieldTy as Schema>::HASH` (or for an enum, each variant's
+//! name followed by its fields).
 //!
 //! `#[derive(HearthState)]` implements `Schema` and `HearthState` for a struct
 //! with named fields. Only `#[sync]` and `#[sync(owner)]` fields take part in
-//! the schema hash and the per-client view; unmarked fields never leave the
-//! server. The JSON key of a synced field is its Rust field name.
+//! the schema hash, the description and the per-client view; unmarked fields
+//! never leave the server. The JSON key of a synced field is its Rust field
+//! name.
+//!
+//! Because generated typed clients mirror the wire shape, both derives reject
+//! `#[serde(...)]` attributes that would change that shape (`rename`,
+//! `rename_all`, `tag`, `content`, `untagged`, `flatten` and the `skip*`
+//! family). `#[serde(default)]` is allowed.
 //!
 //! # Crate path
 //!
@@ -21,9 +28,25 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
-use syn::{Data, DeriveInput, Field, Fields, Meta, Token};
+use syn::punctuated::Punctuated;
+use syn::{Attribute, Data, DeriveInput, Field, Fields, Meta, Token};
 
-/// Derive the compile-time state fingerprint.
+/// `#[serde(...)]` options that change the wire shape. A generated typed client
+/// would silently desync against a type that uses them.
+const FORBIDDEN_SERDE: &[&str] = &[
+    "rename",
+    "rename_all",
+    "tag",
+    "content",
+    "untagged",
+    "flatten",
+    "skip",
+    "skip_serializing",
+    "skip_deserializing",
+    "skip_serializing_if",
+];
+
+/// Derive the compile-time state fingerprint and the machine-readable shape.
 #[proc_macro_derive(Schema, attributes(sync, hearth))]
 pub fn derive_schema(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as DeriveInput);
@@ -32,7 +55,8 @@ pub fn derive_schema(input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive schema hashing and the owner-filtered per-client view.
+/// Derive schema hashing, the machine-readable shape and the owner-filtered
+/// per-client view.
 #[proc_macro_derive(HearthState, attributes(sync, hearth))]
 pub fn derive_hearth_state(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as DeriveInput);
@@ -58,19 +82,56 @@ fn runtime(attrs: &[syn::Attribute]) -> syn::Result<TokenStream2> {
     Ok(quote!(::hearth_sync))
 }
 
+/// Reject `#[serde(...)]` attributes that would change the wire shape.
+fn check_serde_attrs(attrs: &[Attribute]) -> syn::Result<()> {
+    for attr in attrs {
+        if !attr.path().is_ident("serde") {
+            continue;
+        }
+        let options = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)?;
+        for option in options {
+            let Some(name) = option.path().get_ident().map(ToString::to_string) else {
+                continue;
+            };
+            if FORBIDDEN_SERDE.contains(&name.as_str()) {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    format!(
+                        "Hearth schema types can't change their serde shape (found `{name}`); typed clients would desync"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn expand_schema(input: &DeriveInput) -> syn::Result<TokenStream2> {
+    check_serde_attrs(&input.attrs)?;
     let rt = runtime(&input.attrs)?;
     let ident = &input.ident;
     let type_name = ident.to_string();
     let mut hash = quote!(#rt::fnv1a64(#type_name.as_bytes()));
-    match &input.data {
-        Data::Struct(data) => hash = fold_fields(hash, &data.fields, &rt),
+    let def = match &input.data {
+        Data::Struct(data) => {
+            let fields = describe_fields(&data.fields, &rt)?;
+            hash = fold_fields(hash, &data.fields, &rt);
+            quote!(#rt::TypeDef::Struct { fields: vec![#(#fields),*] })
+        }
         Data::Enum(data) => {
+            let mut variants = Vec::new();
             for variant in &data.variants {
+                check_serde_attrs(&variant.attrs)?;
                 let variant_name = variant.ident.to_string();
+                let shape = describe_shape(&variant.fields, &rt)?;
+                variants.push(quote!(#rt::Variant {
+                    name: #variant_name.to_owned(),
+                    shape: #shape,
+                }));
                 hash = quote!(#rt::mix(#hash, #rt::fnv1a64(#variant_name.as_bytes())));
                 hash = fold_fields(hash, &variant.fields, &rt);
             }
+            quote!(#rt::TypeDef::Enum { variants: vec![#(#variants),*] })
         }
         Data::Union(_) => {
             return Err(syn::Error::new_spanned(
@@ -78,10 +139,15 @@ fn expand_schema(input: &DeriveInput) -> syn::Result<TokenStream2> {
                 "#[derive(Schema)] does not support unions",
             ));
         }
-    }
+    };
     Ok(quote! {
         impl #rt::Schema for #ident {
             const HASH: u64 = #hash;
+
+            fn describe(reg: &mut #rt::Registry) -> #rt::TypeRef {
+                reg.add(#type_name, <Self as #rt::Schema>::HASH, |reg| #def);
+                #rt::TypeRef::Named(#type_name.to_owned())
+            }
         }
     })
 }
@@ -97,6 +163,51 @@ fn fold_fields(mut hash: TokenStream2, fields: &Fields, rt: &TokenStream2) -> To
         hash = quote!(#rt::mix(#hash, <#ty as #rt::Schema>::HASH));
     }
     hash
+}
+
+/// Describe a struct's or struct variant's fields. Tuple fields are named by
+/// their position.
+fn describe_fields(fields: &Fields, rt: &TokenStream2) -> syn::Result<Vec<TokenStream2>> {
+    let mut described = Vec::new();
+    for (index, field) in fields.iter().enumerate() {
+        check_serde_attrs(&field.attrs)?;
+        let name = field
+            .ident
+            .as_ref()
+            .map(ToString::to_string)
+            .unwrap_or_else(|| index.to_string());
+        let ty = &field.ty;
+        described.push(quote!(#rt::Field {
+            name: #name.to_owned(),
+            ty: <#ty as #rt::Schema>::describe(reg),
+            vis: #rt::Vis::Public,
+        }));
+    }
+    Ok(described)
+}
+
+/// Describe one enum variant's payload shape.
+fn describe_shape(fields: &Fields, rt: &TokenStream2) -> syn::Result<TokenStream2> {
+    Ok(match fields {
+        Fields::Unit => quote!(#rt::Shape::Unit),
+        Fields::Unnamed(unnamed) => {
+            let mut types = Vec::new();
+            for field in &unnamed.unnamed {
+                check_serde_attrs(&field.attrs)?;
+                let ty = &field.ty;
+                types.push(quote!(<#ty as #rt::Schema>::describe(reg)));
+            }
+            if let [only] = types.as_slice() {
+                quote!(#rt::Shape::Newtype(#only))
+            } else {
+                quote!(#rt::Shape::Tuple(vec![#(#types),*]))
+            }
+        }
+        Fields::Named(_) => {
+            let fields = describe_fields(fields, rt)?;
+            quote!(#rt::Shape::Struct(vec![#(#fields),*]))
+        }
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -153,12 +264,15 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let Fields::Named(named) = &data.fields else {
         return Err(syn::Error::new_spanned(&input.ident, NAMED_STRUCT));
     };
+    check_serde_attrs(&input.attrs)?;
     let rt = runtime(&input.attrs)?;
     let ident = &input.ident;
     let type_name = ident.to_string();
     let mut hash = quote!(#rt::fnv1a64(#type_name.as_bytes()));
     let mut inserts = Vec::new();
+    let mut described = Vec::new();
     for field in &named.named {
+        check_serde_attrs(&field.attrs)?;
         let Some(visibility) = field_visibility(field)? else {
             continue;
         };
@@ -177,11 +291,27 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
             Visibility::Plain => quote!(#rt::__private::to_value(&self.#field_ident)),
             Visibility::Owner => quote!(#rt::OwnerScoped::owner_view(&self.#field_ident, viewer)),
         };
+        let vis = match visibility {
+            Visibility::Plain => quote!(#rt::Vis::Public),
+            Visibility::Owner => quote!(#rt::Vis::Owner),
+        };
+        described.push(quote!(#rt::Field {
+            name: #field_name.to_owned(),
+            ty: <#ty as #rt::Schema>::describe(reg),
+            vis: #vis,
+        }));
         inserts.push(quote!(map.insert(#field_name.to_owned(), #value);));
     }
     Ok(quote! {
         impl #rt::Schema for #ident {
             const HASH: u64 = #hash;
+
+            fn describe(reg: &mut #rt::Registry) -> #rt::TypeRef {
+                reg.add(#type_name, <Self as #rt::Schema>::HASH, |reg| #rt::TypeDef::Struct {
+                    fields: vec![#(#described),*],
+                });
+                #rt::TypeRef::Named(#type_name.to_owned())
+            }
         }
 
         impl #rt::HearthState for #ident {

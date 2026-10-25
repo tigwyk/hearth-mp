@@ -9,7 +9,7 @@ use hearth_protocol::{ErrorCode, PatchOp, PlayerId};
 use hearth_server::{
     Client, Ctx, JoinOpts, Leave, Mode, Result, Room, RoomConfig, SqlValue, TimerKey,
 };
-use hearth_sync::{HearthState, SyncMap};
+use hearth_sync::{HearthState, Schema, SyncMap};
 use hearth_test::{TestRoom, C};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -35,7 +35,7 @@ pub struct CState {
     pub leave_log: Vec<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Schema, Debug)]
 pub enum CIntent {
     Add(i64),
     Fail,
@@ -180,7 +180,7 @@ counter_room!(GraceZeroRoom, Duration::ZERO);
 
 /// The schema hash a client must send in `HELLO` to join a [`CounterRoom`].
 pub fn schema_hash() -> String {
-    <CState as HearthState>::schema_hash_hex()
+    hearth_server::schema_hash_hex::<CounterRoom>()
 }
 
 // Shared assertion helpers. Every test binary includes this module; helpers a

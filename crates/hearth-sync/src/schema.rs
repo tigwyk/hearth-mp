@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use hearth_protocol::{PlayerId, Value};
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::SyncMap;
 
@@ -35,71 +35,217 @@ pub const fn mix(a: u64, b: u64) -> u64 {
     fnv1a64(&bytes)
 }
 
+/// A type as it appears in the machine-readable schema.
+///
+/// Serialised with serde's default external tagging plus `snake_case` names:
+/// `"player_id"`, `{"list": "u8"}`, `{"sync_map": ["player_id", "u8"]}`, and so
+/// on. Codegen consumes this shape verbatim.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TypeRef {
+    Bool,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
+    String,
+    PlayerId,
+    Unit,
+    Option(Box<TypeRef>),
+    List(Box<TypeRef>),
+    /// A fixed-size array: the element type and the length.
+    Array(Box<TypeRef>, u64),
+    Map(Box<TypeRef>, Box<TypeRef>),
+    SyncMap(Box<TypeRef>, Box<TypeRef>),
+    Tuple(Vec<TypeRef>),
+    /// A type registered in the [`Registry`] under this Rust type name.
+    Named(String),
+}
+
+/// Who may see a field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Vis {
+    Public,
+    Owner,
+}
+
+/// One field of a struct or struct variant.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Field {
+    pub name: String,
+    pub ty: TypeRef,
+    pub vis: Vis,
+}
+
+/// One enum variant and its payload shape.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Variant {
+    pub name: String,
+    pub shape: Shape,
+}
+
+/// The payload shape of an enum variant.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Shape {
+    Unit,
+    Newtype(TypeRef),
+    Tuple(Vec<TypeRef>),
+    Struct(Vec<Field>),
+}
+
+/// The machine-readable shape of a type: a struct or an enum.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TypeDef {
+    Struct { fields: Vec<Field> },
+    Enum { variants: Vec<Variant> },
+}
+
+/// Every named type reachable from one room's state and intent types.
+#[derive(Clone, Debug, Default)]
+pub struct Registry {
+    /// Type name to `(schema hash, definition)`.
+    pub types: BTreeMap<String, (u64, TypeDef)>,
+}
+
+impl Registry {
+    /// Register `name`. Registering the same name with the same hash again is a
+    /// no-op; registering it with a different hash is a hard error, because
+    /// generated clients need unique type names.
+    pub fn add(&mut self, name: &str, hash: u64, def: impl FnOnce(&mut Registry) -> TypeDef) {
+        if let Some((existing, _)) = self.types.get(name) {
+            if *existing == hash {
+                return;
+            }
+            panic!("two schema types are named `{name}`; rename one (codegen needs unique type names)");
+        }
+        let type_def = def(self);
+        self.types.insert(name.to_owned(), (hash, type_def));
+    }
+}
+
 /// Compile-time fingerprint of a state type's shape.
 ///
 /// Two schema hashes match only when the synchronised shape matches; clients
 /// send the hash in `HELLO` and a mismatch is a hard reject.
 pub trait Schema {
     const HASH: u64;
+
+    /// This type's shape, registering every named type it reaches in `reg`.
+    fn describe(reg: &mut Registry) -> TypeRef;
 }
 
 macro_rules! schema_by_name {
-    ($($ty:ty => $name:expr),* $(,)?) => {
+    ($($ty:ty => $name:expr, $type_ref:expr),* $(,)?) => {
         $(
             impl Schema for $ty {
                 const HASH: u64 = fnv1a64($name);
+
+                fn describe(_reg: &mut Registry) -> TypeRef {
+                    $type_ref
+                }
             }
         )*
     };
 }
 
 schema_by_name!(
-    bool => b"bool",
-    i8 => b"i8",
-    i16 => b"i16",
-    i32 => b"i32",
-    i64 => b"i64",
-    u8 => b"u8",
-    u16 => b"u16",
-    u32 => b"u32",
-    u64 => b"u64",
-    f32 => b"f32",
-    f64 => b"f64",
-    String => b"String",
-    PlayerId => b"PlayerId",
-    () => b"()",
+    bool => b"bool", TypeRef::Bool,
+    i8 => b"i8", TypeRef::I8,
+    i16 => b"i16", TypeRef::I16,
+    i32 => b"i32", TypeRef::I32,
+    i64 => b"i64", TypeRef::I64,
+    u8 => b"u8", TypeRef::U8,
+    u16 => b"u16", TypeRef::U16,
+    u32 => b"u32", TypeRef::U32,
+    u64 => b"u64", TypeRef::U64,
+    f32 => b"f32", TypeRef::F32,
+    f64 => b"f64", TypeRef::F64,
+    String => b"String", TypeRef::String,
+    PlayerId => b"PlayerId", TypeRef::PlayerId,
+    () => b"()", TypeRef::Unit,
 );
 
 impl<T: Schema> Schema for Option<T> {
     const HASH: u64 = mix(fnv1a64(b"Option"), T::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Option(Box::new(T::describe(reg)))
+    }
 }
 
 impl<T: Schema> Schema for Vec<T> {
     const HASH: u64 = mix(fnv1a64(b"Vec"), T::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::List(Box::new(T::describe(reg)))
+    }
 }
 
 impl<T: Schema, const N: usize> Schema for [T; N] {
     const HASH: u64 = mix(mix(fnv1a64(b"array"), T::HASH), N as u64);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Array(Box::new(T::describe(reg)), N as u64)
+    }
 }
 
 impl<K: Schema, V: Schema> Schema for BTreeMap<K, V> {
     const HASH: u64 = mix(mix(fnv1a64(b"BTreeMap"), K::HASH), V::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Map(
+            Box::new(K::describe(reg)),
+            Box::new(V::describe(reg)),
+        )
+    }
 }
 
 impl<K: Ord + Schema, V: Schema> Schema for SyncMap<K, V> {
     const HASH: u64 = mix(mix(fnv1a64(b"SyncMap"), K::HASH), V::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::SyncMap(
+            Box::new(K::describe(reg)),
+            Box::new(V::describe(reg)),
+        )
+    }
 }
 
 impl<A: Schema> Schema for (A,) {
     const HASH: u64 = mix(fnv1a64(b"tuple1"), A::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Tuple(vec![A::describe(reg)])
+    }
 }
 
 impl<A: Schema, B: Schema> Schema for (A, B) {
     const HASH: u64 = mix(mix(fnv1a64(b"tuple2"), A::HASH), B::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Tuple(vec![A::describe(reg), B::describe(reg)])
+    }
 }
 
 impl<A: Schema, B: Schema, C: Schema> Schema for (A, B, C) {
     const HASH: u64 = mix(mix(mix(fnv1a64(b"tuple3"), A::HASH), B::HASH), C::HASH);
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Tuple(vec![
+            A::describe(reg),
+            B::describe(reg),
+            C::describe(reg),
+        ])
+    }
 }
 
 impl<A: Schema, B: Schema, C: Schema, D: Schema> Schema for (A, B, C, D) {
@@ -107,6 +253,15 @@ impl<A: Schema, B: Schema, C: Schema, D: Schema> Schema for (A, B, C, D) {
         mix(mix(mix(fnv1a64(b"tuple4"), A::HASH), B::HASH), C::HASH),
         D::HASH,
     );
+
+    fn describe(reg: &mut Registry) -> TypeRef {
+        TypeRef::Tuple(vec![
+            A::describe(reg),
+            B::describe(reg),
+            C::describe(reg),
+            D::describe(reg),
+        ])
+    }
 }
 
 /// A field whose value is filtered per viewer before it leaves the server.
@@ -131,7 +286,9 @@ pub trait HearthState: Schema + Serialize + DeserializeOwned + Default + 'static
     /// fields filtered to the viewer.
     fn view(&self, viewer: &PlayerId) -> Value;
 
-    /// The schema hash as the 16-char lowercase hex exchanged in `HELLO`.
+    /// The **state-only** schema hash as 16-char lowercase hex. The wire
+    /// `HELLO.schema_hash` is the room-level hash covering state *and* intent;
+    /// see `hearth_server::schema_hash_hex`.
     fn schema_hash_hex() -> String {
         format!("{:016x}", Self::HASH)
     }

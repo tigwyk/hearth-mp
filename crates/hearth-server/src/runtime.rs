@@ -275,7 +275,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 .close(&socket, close::BAD_FRAME, "unsupported protocol");
             return Ok(());
         }
-        let server_hash = R::State::schema_hash_hex();
+        let server_hash = crate::schema_hash_hex::<R>();
         if schema_hash != server_hash {
             self.send_error(
                 &socket,

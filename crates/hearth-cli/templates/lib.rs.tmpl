@@ -3,7 +3,7 @@
 //! Durable data lives in [`GameState`]. The room struct is rebuilt from
 //! `Default` every time the Durable Object wakes from hibernation.
 
-use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, Room};
+use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, Room, Schema};
 use serde::{Deserialize, Serialize};
 use worker::{event, Context, Env, Request, Response};
 
@@ -16,7 +16,8 @@ pub struct GameState {
 }
 
 /// What clients send up to the room.
-#[derive(Deserialize)]
+#[derive(Schema, Deserialize)]
+#[hearth(crate = "hearth")]
 pub enum Intent {
     Add(i64),
 }
@@ -73,7 +74,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response
         &[hearth_gateway::RoomRoute {
             room_type: "{{room_type}}",
             binding: "ROOM",
-            schema_hash: <GameState as HearthState>::schema_hash_hex,
+            schema_hash: hearth::server::schema_hash_hex::<{{Room}}>,
         }],
     )
     .await

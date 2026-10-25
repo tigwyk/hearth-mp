@@ -1,0 +1,5 @@
+error: Hearth schema types can't change their serde shape (found `tag`); typed clients would desync
+ --> tests/ui/serde_tag.rs:6:1
+  |
+6 | #[serde(tag = "kind")]
+  | ^^^^^^^^^^^^^^^^^^^^^^
