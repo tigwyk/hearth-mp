@@ -1,0 +1,5 @@
+error: #[HearthState] must be derived on a struct with named fields
+ --> tests/ui/hearth_state_on_enum.rs:5:6
+  |
+5 | enum Card {
+  |      ^^^^
