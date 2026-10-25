@@ -19,14 +19,21 @@ pub trait RoomConfig {
     const MODE: Mode;
     const MAX_CLIENTS: u8;
     const EMPTY_GRACE: Duration = Duration::from_secs(60);
+    /// How long a dropped player's seat stays held. Set it with the
+    /// `#[hearth::room(reconnect_grace_secs = N)]` attribute; `0` restores the
+    /// v0.1 behaviour of calling `on_leave(Closed)` at once.
+    const RECONNECT_GRACE: Duration = Duration::from_secs(30);
 }
 
-/// A joined client. Identity comes from the gateway, never from the client's
-/// own headers.
+/// One client. Identity comes from the gateway, never from the client's own
+/// headers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Client {
     pub player_id: PlayerId,
     pub seat: u8,
+    /// Whether the client's socket is live. A held seat appears in
+    /// [`crate::Ctx::clients`] with `connected: false`.
+    pub connected: bool,
 }
 
 /// Opaque options handed to `on_join`, forwarded from `HELLO.opts`.
@@ -89,6 +96,18 @@ pub trait Room: RoomConfig + Default + 'static {
         who: &Client,
         reason: Leave,
     ) -> Result<()>;
+
+    /// The socket dropped and the seat is now held for
+    /// [`RoomConfig::RECONNECT_GRACE`]. `on_leave` has not run.
+    async fn on_disconnect(&mut self, _ctx: &mut crate::Ctx<Self>, _who: &Client) -> Result<()> {
+        Ok(())
+    }
+
+    /// A held seat resumed: the client got a fresh `FULL_STATE` and `on_join`
+    /// did not run.
+    async fn on_reconnect(&mut self, _ctx: &mut crate::Ctx<Self>, _who: &Client) -> Result<()> {
+        Ok(())
+    }
 
     async fn on_timer(&mut self, _ctx: &mut crate::Ctx<Self>, _key: TimerKey) -> Result<()> {
         Ok(())

@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use hearth_client::ClientEvent;
 use hearth_protocol::ErrorCode;
 use hearth_test::{TestRoom, C};
@@ -130,6 +132,9 @@ fn leave_mid_game_resets() {
     place(&mut room, b, 1);
 
     room.disconnect(b);
+    // The seat is held for the default 30 s reconnect grace before the room
+    // treats b as gone and resets to Waiting.
+    room.advance(Duration::from_secs(30));
 
     assert_eq!(status(&room, a), json!("Waiting"));
     assert_eq!(cells(&room, a), json!([0, 0, 0, 0, 0, 0, 0, 0, 0]));

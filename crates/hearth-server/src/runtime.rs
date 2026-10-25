@@ -12,6 +12,8 @@ use crate::Result;
 /// Internal key for the empty-room grace timer. User timers are stored under a
 /// `u:` prefix, so internal keys can never collide with user keys.
 const EMPTY_TIMER: &str = "h:empty";
+/// Internal key prefix for one held seat's reconnect grace timer.
+const GRACE_TIMER_PREFIX: &str = "h:grace:";
 const USER_TIMER_PREFIX: &str = "u:";
 
 /// Per-player intent bucket: capacity 120 intents, refill 60/s. Hibernation
@@ -26,6 +28,8 @@ const CREATE_STATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_state (\
     data BLOB NOT NULL)";
 const CREATE_TIMERS_TABLE: &str =
     "CREATE TABLE IF NOT EXISTS hearth_timers (key TEXT PRIMARY KEY, due_ms INTEGER NOT NULL)";
+const CREATE_HELD_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_held (\
+    player_id TEXT PRIMARY KEY, seat INTEGER NOT NULL, until_ms INTEGER NOT NULL)";
 
 /// Event-mode room runtime. One instance lives behind the room's async mutex;
 /// `new` after hibernation rebuilds everything from the [`Host`] (SQLite and
@@ -85,6 +89,21 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             if let Some(attachment) = self.host.attachment(&existing) {
                 if attachment.player_id == player {
                     kept_seat = attachment.seat;
+                    // Detach the old socket before closing it. Production
+                    // delivers a late websocket_close/websocket_error for this
+                    // socket *after* this call, and an attachment that still
+                    // looks joined would make that event hold a phantom seat for
+                    // a player who is currently live (duplicate roster entry,
+                    // wrong seat count, late on_leave). The mem harness cannot
+                    // replay that late event, so there is no test for it here.
+                    self.host.set_attachment(
+                        &existing,
+                        &Attachment {
+                            player_id: player.clone(),
+                            seat: None,
+                            encoding: None,
+                        },
+                    );
                     self.host
                         .close(&existing, close::REPLACED, "replaced by a newer socket");
                 }
@@ -284,6 +303,16 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             return Ok(());
         }
 
+        // A held seat resumes without going through on_join, and works while
+        // the room is locked or full.
+        if attachment.seat.is_none() {
+            if let Some(seat) = self.held_seat(&attachment.player_id)? {
+                return self
+                    .resume(socket, attachment, wire_encoding, seat)
+                    .await;
+            }
+        }
+
         let replacement_seat = attachment.seat;
         if replacement_seat.is_none() {
             if self.locked {
@@ -298,7 +327,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 self.host.close(&socket, close::ROOM_LOCKED, "room locked");
                 return Ok(());
             }
-            if self.joined().len() >= usize::from(R::MAX_CLIENTS) {
+            if self.occupied()? >= usize::from(R::MAX_CLIENTS) {
                 self.send_error(
                     &socket,
                     &attachment,
@@ -313,17 +342,18 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         }
         let seat = match replacement_seat {
             Some(seat) => seat,
-            None => self.lowest_free_seat(),
+            None => self.lowest_free_seat()?,
         };
         let who = Client {
             player_id: attachment.player_id.clone(),
             seat,
+            connected: true,
         };
         let before = self.views();
         let mut effects = Vec::new();
 
         if replacement_seat.is_none() {
-            let roster = self.clients_roster();
+            let roster = self.clients_roster()?;
             let snapshot = self.snapshot()?;
             let state = self.state.take().expect("state loaded");
             let sql = self.host.sql_handle();
@@ -393,6 +423,73 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         Ok(())
     }
 
+    /// Complete a resumed `HELLO`: delete the held row and its grace timer, send
+    /// `JOIN_OK` + `FULL_STATE`, then run `on_reconnect` as a handler pass.
+    async fn resume(
+        &mut self,
+        socket: H::Socket,
+        attachment: Attachment,
+        wire_encoding: Encoding,
+        seat: u8,
+    ) -> Result<()> {
+        self.expire_held(&attachment.player_id)?;
+        let who = Client {
+            player_id: attachment.player_id.clone(),
+            seat,
+            connected: true,
+        };
+        let joined_attachment = Attachment {
+            player_id: attachment.player_id.clone(),
+            seat: Some(seat),
+            encoding: Some(wire_encoding),
+        };
+        self.host.set_attachment(&socket, &joined_attachment);
+        let view = self
+            .state
+            .as_ref()
+            .expect("state loaded")
+            .view(&who.player_id);
+        self.send_frame(
+            &socket,
+            &joined_attachment,
+            Frame::JoinOk {
+                player_id: who.player_id.clone(),
+                seat,
+            },
+        );
+        self.send_frame(
+            &socket,
+            &joined_attachment,
+            Frame::FullState {
+                seq: self.seq,
+                state: view,
+            },
+        );
+
+        let before = self.views();
+        let roster = self.clients_roster()?;
+        let snapshot = self.snapshot()?;
+        let state = self.state.take().expect("state loaded");
+        let sql = self.host.sql_handle();
+        let now = self.host.now_ms();
+        let mut ctx = Ctx::new(state, roster, sql, now);
+        let result = self.room.on_reconnect(&mut ctx, &who).await;
+        let (state, effects) = ctx.into_parts();
+        self.state = Some(state);
+        let effects = if result.is_ok() {
+            effects
+        } else {
+            self.state = Some(rmp_serde::from_slice(&snapshot)?);
+            Vec::new()
+        };
+        let seq = self.persist()?;
+        self.patch_joined(&before, seq);
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        self.apply_rest_and_kicks(rest).await?;
+        Ok(())
+    }
+
     async fn handle_intents(
         &mut self,
         socket: H::Socket,
@@ -417,6 +514,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let who = Client {
             player_id: attachment.player_id.clone(),
             seat: attachment.seat.unwrap_or(0),
+            connected: true,
         };
         let before = self.views();
         let mut effects: Vec<Effect> = Vec::new();
@@ -444,7 +542,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 continue;
             };
             let snapshot = self.snapshot()?;
-            let roster = self.clients_roster();
+            let roster = self.clients_roster()?;
             let state = self.state.take().expect("state loaded");
             let sql = self.host.sql_handle();
             let now = self.host.now_ms();
@@ -501,7 +599,11 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         };
         let joined = attachment.seat.is_some() && attachment.encoding.is_some();
         if joined {
-            self.run_leave(socket, attachment, Leave::Closed).await?;
+            if R::RECONNECT_GRACE.is_zero() {
+                self.run_leave(socket, attachment, Leave::Closed).await?;
+            } else {
+                self.run_hold(socket, attachment).await?;
+            }
         } else {
             self.host.set_attachment(
                 &socket,
@@ -512,6 +614,69 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 },
             );
         }
+        Ok(())
+    }
+
+    /// Hold a dropped client's seat in SQLite, start its grace timer and run
+    /// `on_disconnect` as a handler pass. `on_leave` does not run.
+    async fn run_hold(&mut self, socket: H::Socket, attachment: Attachment) -> Result<()> {
+        if self.ensure_loaded().await? {
+            return Ok(());
+        }
+        let Some(seat) = attachment.seat else {
+            return Ok(());
+        };
+        let player = attachment.player_id.clone();
+        let due = self
+            .host
+            .now_ms()
+            .saturating_add(R::RECONNECT_GRACE.as_millis() as u64);
+        self.host.sql().exec(
+            "INSERT OR REPLACE INTO hearth_held (player_id, seat, until_ms) VALUES (?, ?, ?)",
+            vec![
+                SqlValue::Text(player.0.clone()),
+                SqlValue::Int(i64::from(seat)),
+                SqlValue::Int(due as i64),
+            ],
+        )?;
+        self.timer_set(&grace_timer_key(&player), due)?;
+
+        // The socket is gone: exclude it from the roster's live clients and from
+        // every patch.
+        self.host.set_attachment(
+            &socket,
+            &Attachment {
+                player_id: player.clone(),
+                seat: None,
+                encoding: None,
+            },
+        );
+        let who = Client {
+            player_id: player,
+            seat,
+            connected: false,
+        };
+        let before = self.views();
+        let roster = self.clients_roster()?;
+        let snapshot = self.snapshot()?;
+        let state = self.state.take().expect("state loaded");
+        let sql = self.host.sql_handle();
+        let now = self.host.now_ms();
+        let mut ctx = Ctx::new(state, roster, sql, now);
+        let result = self.room.on_disconnect(&mut ctx, &who).await;
+        let (state, effects) = ctx.into_parts();
+        self.state = Some(state);
+        let effects = if result.is_ok() {
+            effects
+        } else {
+            self.state = Some(rmp_serde::from_slice(&snapshot)?);
+            Vec::new()
+        };
+        let seq = self.persist()?;
+        self.patch_joined(&before, seq);
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        self.apply_rest_and_kicks(rest).await?;
         Ok(())
     }
 
@@ -540,6 +705,13 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 self.run_dispose().await?;
                 break;
             }
+            if let Some(player) = key.strip_prefix(GRACE_TIMER_PREFIX) {
+                self.run_grace_expired(&PlayerId(player.to_string())).await?;
+                if self.state.is_none() {
+                    break;
+                }
+                continue;
+            }
             if let Some(user_key) = key.strip_prefix(USER_TIMER_PREFIX) {
                 self.run_timer(TimerKey(user_key.to_string())).await?;
                 if self.state.is_none() {
@@ -560,7 +732,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             return Ok(());
         }
         let before = self.views();
-        let roster = self.clients_roster();
+        let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
         let sql = self.host.sql_handle();
@@ -610,9 +782,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let who = Client {
             player_id: attachment.player_id.clone(),
             seat,
+            connected: false,
         };
         let before = self.views();
-        let roster = self.clients_roster();
+        let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
         let sql = self.host.sql_handle();
@@ -641,15 +814,76 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         self.patch_joined(&before, seq);
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
-        if self.joined().is_empty() {
-            let due = self
-                .host
-                .now_ms()
-                .saturating_add(R::EMPTY_GRACE.as_millis() as u64);
+        if !self.any_live_or_held()? {
+            self.start_empty_timer()?;
+        }
+        self.apply_rest(rest).await?;
+        Ok(())
+    }
+
+    /// Run `on_leave` for a held seat whose `hearth_held` row is already
+    /// deleted. Used by the grace timer and by kicks. `leave_ms` is when the
+    /// player actually left (the grace expiry), so the empty-room timer is
+    /// anchored to it rather than to the moment this handler happened to run.
+    async fn run_held_leave(
+        &mut self,
+        player: &PlayerId,
+        seat: u8,
+        reason: Leave,
+        leave_ms: Option<u64>,
+    ) -> Result<()> {
+        if self.ensure_loaded().await? {
+            return Ok(());
+        }
+        let who = Client {
+            player_id: player.clone(),
+            seat,
+            connected: false,
+        };
+        let before = self.views();
+        let roster = self.clients_roster()?;
+        let snapshot = self.snapshot()?;
+        let state = self.state.take().expect("state loaded");
+        let sql = self.host.sql_handle();
+        let now = self.host.now_ms();
+        let mut ctx = Ctx::new(state, roster, sql, now);
+        let result = self.room.on_leave(&mut ctx, &who, reason).await;
+        let (state, effects) = ctx.into_parts();
+        self.state = Some(state);
+        let effects = if result.is_ok() {
+            effects
+        } else {
+            self.state = Some(rmp_serde::from_slice(&snapshot)?);
+            Vec::new()
+        };
+        let seq = self.persist()?;
+        self.patch_joined(&before, seq);
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        if !self.any_live_or_held()? {
+            let since = leave_ms.unwrap_or(now);
+            let due = since.saturating_add(R::EMPTY_GRACE.as_millis() as u64);
             self.timer_set(EMPTY_TIMER, due)?;
         }
         self.apply_rest(rest).await?;
         Ok(())
+    }
+
+    /// Fired by a held seat's grace timer: delete the row, then `on_leave(Closed)`.
+    async fn run_grace_expired(&mut self, player: &PlayerId) -> Result<()> {
+        let Some((seat, until_ms)) = self.expire_held(player)? else {
+            return Ok(());
+        };
+        self.run_held_leave(player, seat, Leave::Closed, Some(until_ms))
+            .await
+    }
+
+    fn start_empty_timer(&self) -> Result<()> {
+        let due = self
+            .host
+            .now_ms()
+            .saturating_add(R::EMPTY_GRACE.as_millis() as u64);
+        self.timer_set(EMPTY_TIMER, due)
     }
 
     async fn run_dispose(&mut self) -> Result<()> {
@@ -658,7 +892,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             return Ok(());
         }
         if let Some(state) = self.state.take() {
-            let roster = self.clients_roster();
+            let roster = self.clients_roster()?;
             let sql = self.host.sql_handle();
             let now = self.host.now_ms();
             let mut ctx = Ctx::new(state, roster, sql, now);
@@ -728,6 +962,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 self.run_leave(socket.clone(), attachment, Leave::Kicked)
                     .await?;
                 self.host.close(&socket, close::KICKED, "kicked");
+            } else if let Some((seat, _)) = self.expire_held(&player)? {
+                // Kicking a held player deletes the row and calls on_leave.
+                self.run_held_leave(&player, seat, Leave::Kicked, None)
+                    .await?;
             }
         }
         if dispose {
@@ -745,6 +983,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         }
         self.host.sql().exec(CREATE_STATE_TABLE, Vec::new())?;
         self.host.sql().exec(CREATE_TIMERS_TABLE, Vec::new())?;
+        self.host.sql().exec(CREATE_HELD_TABLE, Vec::new())?;
         let rows = self.host.sql().exec(
             "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
             Vec::new(),
@@ -882,14 +1121,94 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         joined
     }
 
-    fn clients_roster(&self) -> Vec<Client> {
-        self.joined()
+    fn clients_roster(&self) -> Result<Vec<Client>> {
+        let mut roster: Vec<Client> = self
+            .joined()
             .into_iter()
             .map(|(_, attachment)| Client {
                 player_id: attachment.player_id,
                 seat: attachment.seat.unwrap_or(0),
+                connected: true,
             })
-            .collect()
+            .collect();
+        roster.extend(
+            self.held_rows()?
+                .into_iter()
+                .map(|(player_id, seat)| Client {
+                    player_id,
+                    seat,
+                    connected: false,
+                }),
+        );
+        Ok(roster)
+    }
+
+    /// Every live or held seat, in player order.
+    fn held_rows(&self) -> Result<Vec<(PlayerId, u8)>> {
+        let rows = self.host.sql().exec(
+            "SELECT player_id, seat FROM hearth_held ORDER BY player_id",
+            Vec::new(),
+        )?;
+        let mut held = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Some(player) = row.get("player_id").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(seat) = row.get("seat").and_then(Value::as_u64) else {
+                continue;
+            };
+            held.push((PlayerId(player.to_owned()), seat as u8));
+        }
+        Ok(held)
+    }
+
+    fn held_seat(&self, player: &PlayerId) -> Result<Option<u8>> {
+        let rows = self.host.sql().exec(
+            "SELECT seat FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        Ok(rows
+            .first()
+            .and_then(|row| row.get("seat"))
+            .and_then(Value::as_u64)
+            .map(|seat| seat as u8))
+    }
+
+    /// Delete a held seat's row and grace timer. Returns the seat and the
+    /// scheduled expiry if it was held.
+    fn expire_held(&self, player: &PlayerId) -> Result<Option<(u8, u64)>> {
+        let Some(seat) = self.held_seat(player)? else {
+            return Ok(None);
+        };
+        let until_ms = self
+            .held_until(player)?
+            .unwrap_or_else(|| self.host.now_ms());
+        self.host.sql().exec(
+            "DELETE FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        self.timer_delete(&grace_timer_key(player))?;
+        Ok(Some((seat, until_ms)))
+    }
+
+    fn held_until(&self, player: &PlayerId) -> Result<Option<u64>> {
+        let rows = self.host.sql().exec(
+            "SELECT until_ms FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        Ok(rows
+            .first()
+            .and_then(|row| row.get("until_ms"))
+            .and_then(Value::as_u64))
+    }
+
+    /// Live joined sockets plus held seats.
+    fn occupied(&self) -> Result<usize> {
+        Ok(self.joined().len() + self.held_rows()?.len())
+    }
+
+    fn any_live_or_held(&self) -> Result<bool> {
+        Ok(!self.joined().is_empty() || !self.held_rows()?.is_empty())
     }
 
     fn views(&self) -> Vec<(H::Socket, Value)> {
@@ -972,16 +1291,21 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         );
     }
 
-    fn lowest_free_seat(&self) -> u8 {
-        let taken: Vec<u8> = self
+    fn lowest_free_seat(&self) -> Result<u8> {
+        let mut taken: Vec<u8> = self
             .joined()
             .iter()
             .filter_map(|(_, attachment)| attachment.seat)
             .collect();
-        (0..R::MAX_CLIENTS)
+        taken.extend(self.held_rows()?.into_iter().map(|(_, seat)| seat));
+        Ok((0..R::MAX_CLIENTS)
             .find(|seat| !taken.contains(seat))
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
+}
+
+fn grace_timer_key(player: &PlayerId) -> String {
+    format!("{GRACE_TIMER_PREFIX}{}", player.0)
 }
 
 fn split_events(effects: Vec<Effect>) -> (Vec<Effect>, Vec<Effect>) {

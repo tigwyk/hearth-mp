@@ -38,6 +38,8 @@ pub struct TestRoom<R: Room> {
     runtime: Option<RoomRuntime<R, MemHost>>,
     clients: Vec<TestClient>,
     sockets: Vec<Socket>,
+    /// The player and encoding behind each client, so `resume` can reconnect.
+    players: Vec<(PlayerId, Encoding)>,
 }
 
 impl<R: Room> TestRoom<R> {
@@ -47,6 +49,7 @@ impl<R: Room> TestRoom<R> {
             runtime: None,
             clients: Vec::new(),
             sockets: Vec::new(),
+            players: Vec::new(),
         }
     }
 
@@ -57,8 +60,9 @@ impl<R: Room> TestRoom<R> {
 
     /// Join a client with a fresh `HELLO` in `encoding`.
     pub fn join_with(&mut self, player: &str, encoding: Encoding, opts: Value) -> C {
-        let (index, socket) = self.spawn_client(encoding);
-        block_on(self.runtime().connect(socket, PlayerId(player.to_owned())));
+        let player = PlayerId(player.to_owned());
+        let (index, socket) = self.spawn_client(player.clone(), encoding);
+        block_on(self.runtime().connect(socket, player));
         let hello = self.clients[index].core.hello(opts);
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -67,8 +71,9 @@ impl<R: Room> TestRoom<R> {
 
     /// Register a socket and a client core without sending `HELLO`.
     pub fn connect_raw(&mut self, player: &str) -> C {
-        let (index, socket) = self.spawn_client(Encoding::MsgPack);
-        block_on(self.runtime().connect(socket, PlayerId(player.to_owned())));
+        let player = PlayerId(player.to_owned());
+        let (index, socket) = self.spawn_client(player.clone(), Encoding::MsgPack);
+        block_on(self.runtime().connect(socket, player));
         self.pump();
         C(index)
     }
@@ -103,6 +108,25 @@ impl<R: Room> TestRoom<R> {
         // The transport close arrives after the runtime handled the event.
         self.host.close(&socket, 1000, "client closed");
         self.pump();
+    }
+
+    /// Simulate an abnormal socket drop: the server sees close code 1006.
+    pub fn drop_socket(&mut self, c: C) {
+        let socket = self.sockets[c.0];
+        block_on(self.runtime().close(socket));
+        self.host.close(&socket, 1006, "abnormal closure");
+        self.pump();
+    }
+
+    /// Reconnect `c`'s player on a new socket with a fresh `HELLO`.
+    pub fn resume(&mut self, c: C) -> C {
+        let (player, encoding) = self.players[c.0].clone();
+        let (index, socket) = self.spawn_client(player.clone(), encoding);
+        block_on(self.runtime().connect(socket, player));
+        let hello = self.clients[index].core.hello(serde_json::json!({}));
+        block_on(self.runtime().message(socket, hello));
+        self.pump();
+        C(index)
     }
 
     /// Move the virtual clock and fire the alarm until nothing else is due.
@@ -156,7 +180,7 @@ impl<R: Room> TestRoom<R> {
         self.host.sql()
     }
 
-    fn spawn_client(&mut self, encoding: Encoding) -> (usize, Socket) {
+    fn spawn_client(&mut self, player: PlayerId, encoding: Encoding) -> (usize, Socket) {
         let socket = self.host.open_socket();
         let mut config = ClientConfig::new(<R::State as HearthState>::schema_hash_hex(), encoding);
         // The harness drives `poll_send` by hand at one virtual instant, so the
@@ -170,6 +194,7 @@ impl<R: Room> TestRoom<R> {
             closed: None,
         });
         self.sockets.push(socket);
+        self.players.push((player, encoding));
         (index, socket)
     }
 
@@ -242,6 +267,10 @@ pub enum Step {
     Join(&'static str),
     Intent(&'static str, Value),
     Leave(&'static str),
+    /// The socket drops with close code 1006.
+    Drop(&'static str),
+    /// A new socket for the same player sends a fresh `HELLO`.
+    Resume(&'static str),
     Advance(Duration),
 }
 
@@ -300,6 +329,16 @@ fn run_script<R: Room>(seed: u64, script: &[Step], hibernate: bool) -> Vec<RunCl
             Step::Leave(name) => {
                 if let Some((_, c)) = clients.iter().find(|(who, _)| who == name) {
                     room.disconnect(*c);
+                }
+            }
+            Step::Drop(name) => {
+                if let Some((_, c)) = clients.iter().find(|(who, _)| who == name) {
+                    room.drop_socket(*c);
+                }
+            }
+            Step::Resume(name) => {
+                if let Some(entry) = clients.iter_mut().find(|(who, _)| who == name) {
+                    entry.1 = room.resume(entry.1);
                 }
             }
             Step::Advance(delta) => room.advance(*delta),

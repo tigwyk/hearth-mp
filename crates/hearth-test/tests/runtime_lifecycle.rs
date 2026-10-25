@@ -13,12 +13,12 @@ use hearth_protocol::{
 use hearth_server::SqlValue;
 use hearth_test::TestRoom;
 use serde_json::json;
-use support::CounterRoom;
+use support::GraceZeroRoom;
 
-type Room = TestRoom<CounterRoom>;
+type Room = TestRoom<GraceZeroRoom>;
 
 fn new_room() -> Room {
-    TestRoom::<CounterRoom>::new()
+    TestRoom::<GraceZeroRoom>::new()
 }
 
 #[test]

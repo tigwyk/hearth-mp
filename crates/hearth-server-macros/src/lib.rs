@@ -22,6 +22,7 @@ struct RoomArgs {
     mode: Option<(String, Span)>,
     max_clients: Option<(i64, Span)>,
     empty_grace_secs: Option<u64>,
+    reconnect_grace_secs: Option<u64>,
 }
 
 #[proc_macro_attribute]
@@ -85,6 +86,7 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
     }
     let max_clients = max_clients as u8;
     let empty_grace_secs = args.empty_grace_secs.unwrap_or(60);
+    let reconnect_grace_secs = args.reconnect_grace_secs.unwrap_or(30);
 
     let room = self_ident(&item_impl)?;
     let self_ty = &item_impl.self_ty;
@@ -98,6 +100,8 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
             const MAX_CLIENTS: u8 = #max_clients;
             const EMPTY_GRACE: ::std::time::Duration =
                 ::std::time::Duration::from_secs(#empty_grace_secs);
+            const RECONNECT_GRACE: ::std::time::Duration =
+                ::std::time::Duration::from_secs(#reconnect_grace_secs);
         }
 
         // `#[worker::durable_object]`'s wasm-bindgen struct-marker expansion
@@ -189,6 +193,10 @@ fn parse_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
             "empty_grace_secs" => {
                 let value = int_value(&meta, "empty_grace_secs")?;
                 args.empty_grace_secs = Some(value.base10_parse::<u64>()?);
+            }
+            "reconnect_grace_secs" => {
+                let value = int_value(&meta, "reconnect_grace_secs")?;
+                args.reconnect_grace_secs = Some(value.base10_parse::<u64>()?);
             }
             other => {
                 return Err(syn::Error::new_spanned(

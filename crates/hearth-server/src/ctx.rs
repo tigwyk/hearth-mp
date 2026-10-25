@@ -59,7 +59,8 @@ impl<R: Room> Ctx<R> {
         &mut self.state
     }
 
-    /// The roster at the start of this handler.
+    /// Every client seat: live sockets plus seats held across a reconnect, which
+    /// appear with `connected: false`.
     pub fn clients(&self) -> &[Client] {
         &self.clients
     }
