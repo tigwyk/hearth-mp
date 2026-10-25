@@ -7,8 +7,10 @@ use std::time::Duration;
 
 use hearth_client::ClientEvent;
 use hearth_protocol::{ErrorCode, PatchOp, PlayerId};
+use hearth_server::{Callable, RoomReport, Target};
 use hearth_server::{
-    Client, Ctx, JoinOpts, Leave, Mode, Result, Room, RoomConfig, SqlValue, TimerKey,
+    Client, Ctx, JoinOpts, Leave, Mode, Result, Room, RoomConfig, Service, ServiceCtx, SqlValue,
+    TimerKey,
 };
 use hearth_sync::{HearthState, Schema, SyncMap};
 use hearth_test::{TestRoom, C};
@@ -343,4 +345,36 @@ pub fn held_players<R: Room>(room: &TestRoom<R>) -> Vec<String> {
         .filter_map(|value| value.as_str())
         .map(str::to_owned)
         .collect()
+}
+
+/// A test-only registry service: records every room report the outbox delivers,
+/// so report tests can assert exactly what a room advertised.
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct RegistryState {
+    pub reports: Vec<RoomReport>,
+}
+
+#[derive(Default)]
+pub struct TestRegistry;
+
+impl Callable for TestRegistry {
+    const BINDING: &'static str = "HEARTH_REGISTRY";
+    type Rpc = RoomReport;
+    type Reply = ();
+}
+
+impl Service for TestRegistry {
+    type State = RegistryState;
+    type Rpc = RoomReport;
+    type Reply = ();
+
+    async fn on_call(
+        &mut self,
+        ctx: &mut ServiceCtx<Self>,
+        _from: &Target,
+        report: RoomReport,
+    ) -> Result<()> {
+        ctx.state().reports.push(report);
+        Ok(())
+    }
 }

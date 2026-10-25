@@ -17,6 +17,7 @@ use crate::call::{
 };
 use crate::ctx::Effect;
 use crate::host::{Host, Sql};
+use crate::outbox;
 use crate::room::TimerKey;
 use crate::store;
 use crate::Result;
@@ -203,6 +204,12 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
         if envelope.chain.contains(&me) {
             return Err(CallError::ReentrantCall(me));
         }
+        if let Some(id) = envelope.msg_id.as_deref() {
+            if outbox::seen(self.host.sql(), id).map_err(internal)? {
+                // Already applied: answer success without running the handler.
+                return Ok(outbox::duplicate_reply());
+            }
+        }
         let rpc = rpc_from_value::<S::Rpc>(envelope.rpc)?;
         let state = self.state.take().expect("state loaded");
         let snapshot = rmp_serde::to_vec_named(&state).map_err(internal)?;
@@ -219,6 +226,10 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
         match result {
             Ok(reply) => {
                 self.persist_and_apply(effects).await.map_err(internal)?;
+                if let Some(id) = envelope.msg_id.as_deref() {
+                    outbox::remember(self.host.sql(), id, self.host.now_ms()).map_err(internal)?;
+                }
+                self.flush_outbox().await;
                 rpc_to_value(reply)
             }
             Err(err) => {
@@ -265,11 +276,44 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
         for key in due {
             // Delete before firing so a failing handler can never loop forever.
             store::timer_delete(self.host.sql(), &key)?;
+            if key == outbox::OUTBOX_TIMER {
+                self.flush_outbox().await;
+                continue;
+            }
             if let Some(user_key) = key.strip_prefix(USER_TIMER_PREFIX) {
                 self.run_timer(TimerKey(user_key.to_owned())).await?;
             }
         }
+        self.flush_outbox().await;
         self.reschedule_alarm().await
+    }
+
+    /// Send every pending outbox row, retrying the ones that fail. Delivery
+    /// errors are logged and retried by the alarm: they never fail a handler.
+    async fn flush_outbox(&mut self) {
+        let transport = HostCaller {
+            host: Rc::clone(&self.host),
+        };
+        let me = self.target("");
+        let now = self.host.now_ms();
+        match outbox::deliver(self.host.sql(), &me, now, &transport).await {
+            Ok(dropped) => {
+                for row in dropped {
+                    self.log_json(serde_json::json!({
+                        "hearth": "outbox_dropped",
+                        "object": self.label(),
+                        "to": format!("{}/{}", row.binding, row.name),
+                        "first_ms": row.first_ms,
+                    }));
+                }
+            }
+            Err(err) => self.log_json(serde_json::json!({
+                "hearth": "outbox_error",
+                "object": self.label(),
+                "msg": err.to_string(),
+            })),
+        }
+        let _ = self.reschedule_alarm().await;
     }
 
     async fn run_timer(&mut self, key: TimerKey) -> Result<()> {
@@ -306,7 +350,18 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
     /// synchronous up to the first `await`, so one commit is one turn.
     async fn persist_and_apply(&mut self, effects: Vec<Effect>) -> Result<()> {
         self.persist()?;
+        // Notify rows share the state commit: no `await` sits between them.
         let now = self.host.now_ms();
+        for effect in &effects {
+            if let Effect::Notify {
+                binding,
+                name,
+                body,
+            } = effect
+            {
+                outbox::enqueue(self.host.sql(), binding, name, body, now)?;
+            }
+        }
         for effect in effects {
             match effect {
                 Effect::Timer { key, after } => {
@@ -371,6 +426,7 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
             .sql()
             .exec(store::CREATE_TIMERS_TABLE, Vec::new())?;
         self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
+        outbox::create(self.host.sql())?;
         if self.name.is_none() {
             self.name = store::meta_get(self.host.sql(), "name")?;
         }

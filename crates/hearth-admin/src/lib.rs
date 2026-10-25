@@ -10,7 +10,7 @@
 pub mod registry;
 pub mod routes;
 
-pub use registry::{Registry, RegistryObject, RoomRow};
+pub use registry::{Registry, RegistryObject, RegistryService, RegistryState, RoomRow};
 pub use routes::{admin_token, check_bearer, serve_admin, token_from};
 
 /// Declare the `HearthRegistry` Durable Object class in the calling crate.

@@ -7,7 +7,9 @@
 use std::rc::Rc;
 
 use hearth_server::worker::WorkerSql;
-use hearth_server::{Result, RoomName, RoomReport, Sql, SqlValue};
+use hearth_server::{
+    Callable, Result, RoomName, RoomReport, Service, ServiceCtx, Sql, SqlValue, Target,
+};
 use serde::{Deserialize, Serialize};
 use worker::{Date, Method, Request, Response, State};
 
@@ -148,6 +150,39 @@ impl<'a> Registry<'a> {
 /// object — including the `u8` range check on `players`.
 fn row_from_json(fields: serde_json::Map<String, serde_json::Value>) -> Result<RoomRow> {
     Ok(serde_json::from_value(serde_json::Value::Object(fields))?)
+}
+
+/// The room registry as a Hearth [`Service`]: rooms `ctx.notify` their
+/// [`RoomReport`]s to it through the durable outbox, and `on_call` applies them
+/// to the registry table.
+#[derive(Default)]
+pub struct RegistryService;
+
+/// The service's own state is empty: all bookkeeping lives in SQL, so the
+/// registry table stays queryable by the admin listing.
+#[derive(Default, Serialize, Deserialize)]
+pub struct RegistryState {}
+
+impl Callable for RegistryService {
+    const BINDING: &'static str = "HEARTH_REGISTRY";
+    type Rpc = RoomReport;
+    type Reply = ();
+}
+
+impl Service for RegistryService {
+    type State = RegistryState;
+    type Rpc = RoomReport;
+    type Reply = ();
+
+    async fn on_call(
+        &mut self,
+        ctx: &mut ServiceCtx<Self>,
+        _from: &Target,
+        report: RoomReport,
+    ) -> Result<()> {
+        Registry::new(ctx.sql()).apply(&report, ctx.now_ms())?;
+        Ok(())
+    }
 }
 
 /// The Durable Object the rooms report to. One for every room in the

@@ -9,6 +9,7 @@ pub mod admin;
 pub mod call;
 pub mod ctx;
 pub mod host;
+mod outbox;
 pub mod room;
 pub mod runtime;
 pub mod schema;

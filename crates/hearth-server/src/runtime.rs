@@ -10,6 +10,7 @@ use crate::admin::{Cause, InspectClient, InspectDoc, TailMsg};
 use crate::call::{rpc_from_value, rpc_to_value, CallError, Caller, Envelope, HostCaller, Target};
 use crate::ctx::{Ctx, Effect};
 use crate::host::{Attachment, Host, RoomName, RoomReport, SqlValue};
+use crate::outbox;
 use crate::room::{Client, JoinOpts, Leave, Room, RoomRpc, TimerKey};
 use crate::store;
 use crate::Result;
@@ -20,6 +21,11 @@ const EMPTY_TIMER: &str = "h:empty";
 /// Internal key prefix for one held seat's reconnect grace timer.
 const GRACE_TIMER_PREFIX: &str = "h:grace:";
 const USER_TIMER_PREFIX: &str = "u:";
+/// Binding of the optional room registry. Reports go through the outbox when
+/// the deployment declares it, and a room without it never reports.
+const REGISTRY_BINDING: &str = "HEARTH_REGISTRY";
+/// The single registry instance (the v0.2c shortcut, unchanged).
+const REGISTRY_NAME: &str = "global";
 
 /// Per-player intent bucket: capacity 120 intents, refill 60/s. Hibernation
 /// resets the bucket, which is intended: a room only hibernates when quiet.
@@ -189,6 +195,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     fn remember_room(&mut self, room: &RoomName) -> Result<()> {
         let existed = self.has_table("hearth_meta")?;
         self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
+        outbox::create(self.host.sql())?;
         let created_ms = self.host.now_ms().to_string();
         for (key, value) in [
             ("room_type", room.room_type.as_str()),
@@ -358,6 +365,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         for socket in self.host.sockets() {
             self.host.close(&socket, close::DISPOSED, "disposed");
         }
+        // The Disposed report is the last row this room ever writes: deliver it
+        // before the wipe, because a disposed room cannot retry afterwards.
+        self.queue_report(RoomReport::Disposed { room });
+        self.flush_outbox().await;
         self.host.wipe().await?;
         self.reset_after_dispose();
         self.host.set_alarm(None).await?;
@@ -365,11 +376,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             "hearth": "dispose",
             "room": label,
         }));
-        self.send_report(RoomReport::Disposed { room }).await;
         Ok(true)
     }
 
-    async fn report_players(&mut self) {
+    fn report_players(&mut self) {
         if !self.open_reported {
             return;
         }
@@ -381,14 +391,13 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             return;
         }
         self.last_players = Some(players);
-        self.send_report(RoomReport::Players {
+        self.queue_report(RoomReport::Players {
             room: self.room_or_unknown(),
             players,
-        })
-        .await;
+        });
     }
 
-    async fn report_open(&mut self) {
+    fn report_open(&mut self) {
         if self.open_reported {
             return;
         }
@@ -397,23 +406,72 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         };
         self.open_reported = true;
         self.last_players = Some(players as u8);
-        self.send_report(RoomReport::Open {
+        self.queue_report(RoomReport::Open {
             room: self.room_or_unknown(),
             created_ms: self.created_ms,
             players: players as u8,
-        })
-        .await;
+        });
     }
 
-    /// Reports never propagate: a registry outage only shows up in the logs.
-    async fn send_report(&self, report: RoomReport) {
-        if let Err(err) = self.host.report(report).await {
+    /// Queue a report as a durable notify to the registry. The registry is
+    /// optional: without its binding a room never reports, and a registry
+    /// outage only shows up in the logs and the outbox.
+    fn queue_report(&self, report: RoomReport) {
+        if !self.host.has_binding(REGISTRY_BINDING) {
+            return;
+        }
+        let Ok(body) = serde_json::to_value(&report) else {
+            return;
+        };
+        if let Err(err) = outbox::enqueue(
+            self.host.sql(),
+            REGISTRY_BINDING,
+            REGISTRY_NAME,
+            &body,
+            self.host.now_ms(),
+        ) {
             self.log_json(serde_json::json!({
                 "hearth": "report_error",
                 "room": self.room_label(),
                 "msg": err.to_string(),
             }));
         }
+    }
+
+    /// The end of every handler pass: report the seated count, then deliver
+    /// whatever committed notifies are pending.
+    async fn finish_pass(&mut self) {
+        self.report_players();
+        self.flush_outbox().await;
+    }
+
+    /// Send every pending outbox row, retrying the ones that fail. Delivery
+    /// errors never reach play: they are logged and retried by the alarm.
+    async fn flush_outbox(&mut self) {
+        let transport = HostCaller {
+            host: Rc::clone(&self.host),
+        };
+        let now = self.host.now_ms();
+        let me = self.me();
+        let delivered = outbox::deliver(self.host.sql(), &me, now, &transport).await;
+        match delivered {
+            Ok(dropped) => {
+                for row in dropped {
+                    self.log_json(serde_json::json!({
+                        "hearth": "outbox_dropped",
+                        "room": self.room_label(),
+                        "to": format!("{}/{}", row.binding, row.name),
+                        "first_ms": row.first_ms,
+                    }));
+                }
+            }
+            Err(err) => self.log_json(serde_json::json!({
+                "hearth": "outbox_error",
+                "room": self.room_label(),
+                "msg": err.to_string(),
+            })),
+        }
+        let _ = self.reschedule_alarm().await;
     }
 
     fn log_json(&self, line: serde_json::Value) {
@@ -945,7 +1003,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 Vec::new(),
                 seq,
             );
-            self.report_open().await;
+            self.report_open();
             self.log_json(serde_json::json!({
                 "hearth": "join",
                 "room": self.room_label(),
@@ -956,7 +1014,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1032,7 +1090,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1151,7 +1209,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 .close(&socket, close::RATE_LIMITED, "rate limited");
         }
         self.apply_rest_and_kicks(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1252,7 +1310,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1280,6 +1338,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             if key == EMPTY_TIMER {
                 self.run_dispose().await?;
                 break;
+            }
+            if key == outbox::OUTBOX_TIMER {
+                self.flush_outbox().await;
+                continue;
             }
             if let Some(player) = key.strip_prefix(GRACE_TIMER_PREFIX) {
                 self.run_grace_expired(&PlayerId(player.to_string()))
@@ -1340,7 +1402,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1421,7 +1483,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.start_empty_timer()?;
         }
         self.apply_rest(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1483,7 +1545,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.timer_set(EMPTY_TIMER, due)?;
         }
         self.apply_rest(rest).await?;
-        self.report_players().await;
+        self.finish_pass().await;
         Ok(())
     }
 
@@ -1525,6 +1587,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             let _ = ctx.into_parts();
         }
         let seq = self.seq;
+        // The last write of a disposed room: deliver the Disposed report
+        // before the wipe, because a disposed room cannot retry afterwards.
+        self.queue_report(RoomReport::Disposed { room });
+        self.flush_outbox().await;
         self.host.wipe().await?;
         self.admin_after(admin_before, vec![Cause::Dispose], Vec::new(), seq);
         for socket in self.host.sockets() {
@@ -1536,11 +1602,23 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             "hearth": "dispose",
             "room": label,
         }));
-        self.send_report(RoomReport::Disposed { room }).await;
         Ok(())
     }
 
     async fn apply_rest(&mut self, effects: Vec<Effect>) -> Result<()> {
+        // Notify rows are written here, in the same synchronous block as the
+        // state save that precedes every pass: a committed handler's notifies
+        // are durable and a failed handler never reaches this point.
+        for effect in &effects {
+            if let Effect::Notify {
+                binding,
+                name,
+                body,
+            } = effect
+            {
+                outbox::enqueue(self.host.sql(), binding, name, body, self.host.now_ms())?;
+            }
+        }
         let mut dispose = false;
         for effect in effects {
             match effect {
@@ -1556,9 +1634,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                     self.persist()?;
                 }
                 Effect::Dispose => dispose = true,
-                // Events are delivered by the caller; nested kicks are not
-                // supported in v0.1 and are ignored here. `Notify` rows are
-                // written by the outbox pass, before this point.
+                // Events are delivered by the caller, notify rows were written
+                // above; nested kicks are not supported in v0.1.
                 Effect::Event { .. } | Effect::Kick(_) | Effect::Notify { .. } => {}
             }
         }
@@ -1618,6 +1695,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .exec(store::CREATE_TIMERS_TABLE, Vec::new())?;
         self.host.sql().exec(store::CREATE_HELD_TABLE, Vec::new())?;
         self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
+        outbox::create(self.host.sql())?;
         if self.identity.is_none() {
             if let Some((room, created_ms)) = self.read_meta()? {
                 self.identity = Some(room);
@@ -1968,6 +2046,12 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
         if envelope.chain.contains(&me) {
             return Err(CallError::ReentrantCall(me));
         }
+        if let Some(id) = envelope.msg_id.as_deref() {
+            if outbox::seen(self.host.sql(), id).map_err(call_internal)? {
+                // Already applied: answer success without running the handler.
+                return Ok(outbox::duplicate_reply());
+            }
+        }
         let rpc = rpc_from_value::<R::Rpc>(envelope.rpc.clone())?;
         if self.ensure_loaded().await.map_err(call_internal)? {
             return Err(CallError::Handler(
@@ -1990,6 +2074,12 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
         match result {
             Ok(reply) => {
                 let seq = self.persist().map_err(call_internal)?;
+                // The applied-message marker shares the state commit, so a
+                // retried delivery can never run the handler twice.
+                if let Some(id) = envelope.msg_id.as_deref() {
+                    outbox::remember(self.host.sql(), id, self.host.now_ms())
+                        .map_err(call_internal)?;
+                }
                 self.patch_joined(&before, seq);
                 self.admin_after(
                     admin_before,
@@ -2004,7 +2094,7 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
                 self.apply_rest_and_kicks(rest)
                     .await
                     .map_err(call_internal)?;
-                self.report_players().await;
+                self.finish_pass().await;
                 rpc_to_value(reply)
             }
             Err(err) => {

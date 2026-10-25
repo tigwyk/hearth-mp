@@ -16,9 +16,7 @@ use std::time::Duration;
 use futures::executor::block_on;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
-use hearth_server::{
-    schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomReport, RoomRuntime, Sql,
-};
+use hearth_server::{schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Sql};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
 
@@ -204,20 +202,9 @@ impl<R: Room> TestRoom<R> {
         self.host.sql()
     }
 
-    /// Every registry report the room sent, in order.
-    pub fn reports(&self) -> Vec<RoomReport> {
-        self.host.reports()
-    }
-
     /// Every JSON log line the room emitted, in order.
     pub fn logs(&self) -> Vec<String> {
         self.host.logs()
-    }
-
-    /// Make `Host::report` fail, so tests can prove a registry outage never
-    /// affects gameplay.
-    pub fn fail_reports(&mut self, on: bool) {
-        self.host.fail_reports(on);
     }
 
     /// How many unfiltered full-state renders the admin tail asked for.
