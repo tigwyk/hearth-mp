@@ -59,12 +59,7 @@ impl Room for CounterRoom {
     type State = CState;
     type Intent = CIntent;
 
-    async fn on_join(
-        &mut self,
-        ctx: &mut Ctx<'_, Self>,
-        who: &Client,
-        opts: JoinOpts,
-    ) -> Result<()> {
+    async fn on_join(&mut self, ctx: &mut Ctx<Self>, who: &Client, opts: JoinOpts) -> Result<()> {
         if opts.0 == json!({"reject": true}) {
             anyhow::bail!("join rejected by test room");
         }
@@ -76,7 +71,7 @@ impl Room for CounterRoom {
 
     async fn on_intent(
         &mut self,
-        ctx: &mut Ctx<'_, Self>,
+        ctx: &mut Ctx<Self>,
         who: &Client,
         intent: CIntent,
     ) -> Result<()> {
@@ -111,12 +106,7 @@ impl Room for CounterRoom {
         Ok(())
     }
 
-    async fn on_leave(
-        &mut self,
-        ctx: &mut Ctx<'_, Self>,
-        who: &Client,
-        reason: Leave,
-    ) -> Result<()> {
+    async fn on_leave(&mut self, ctx: &mut Ctx<Self>, who: &Client, reason: Leave) -> Result<()> {
         let state = ctx.state();
         state.leave_calls += 1;
         state
@@ -126,7 +116,7 @@ impl Room for CounterRoom {
         Ok(())
     }
 
-    async fn on_timer(&mut self, ctx: &mut Ctx<'_, Self>, key: TimerKey) -> Result<()> {
+    async fn on_timer(&mut self, ctx: &mut Ctx<Self>, key: TimerKey) -> Result<()> {
         // The "room variant whose on_timer errors" of plan Task 6: a `boom`
         // timer fails so the runtime's no-retry behaviour is testable.
         if key.0 == "boom" {

@@ -154,6 +154,10 @@ impl Host for MemHost {
         self
     }
 
+    fn sql_handle(&self) -> Rc<dyn Sql> {
+        Rc::new(self.clone())
+    }
+
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()> {
         self.inner.alarm.set(at_ms);
         Ok(())

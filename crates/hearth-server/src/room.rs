@@ -71,30 +71,30 @@ pub trait Room: RoomConfig + Default + 'static {
 
     async fn on_join(
         &mut self,
-        ctx: &mut crate::Ctx<'_, Self>,
+        ctx: &mut crate::Ctx<Self>,
         who: &Client,
         opts: JoinOpts,
     ) -> Result<()>;
 
     async fn on_intent(
         &mut self,
-        ctx: &mut crate::Ctx<'_, Self>,
+        ctx: &mut crate::Ctx<Self>,
         who: &Client,
         intent: Self::Intent,
     ) -> Result<()>;
 
     async fn on_leave(
         &mut self,
-        ctx: &mut crate::Ctx<'_, Self>,
+        ctx: &mut crate::Ctx<Self>,
         who: &Client,
         reason: Leave,
     ) -> Result<()>;
 
-    async fn on_timer(&mut self, _ctx: &mut crate::Ctx<'_, Self>, _key: TimerKey) -> Result<()> {
+    async fn on_timer(&mut self, _ctx: &mut crate::Ctx<Self>, _key: TimerKey) -> Result<()> {
         Ok(())
     }
 
-    async fn on_dispose(&mut self, _ctx: &mut crate::Ctx<'_, Self>) -> Result<()> {
+    async fn on_dispose(&mut self, _ctx: &mut crate::Ctx<Self>) -> Result<()> {
         Ok(())
     }
 }

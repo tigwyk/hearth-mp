@@ -326,7 +326,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             let roster = self.clients_roster();
             let snapshot = self.snapshot()?;
             let state = self.state.take().expect("state loaded");
-            let sql = self.host.sql();
+            let sql = self.host.sql_handle();
             let now = self.host.now_ms();
             let mut ctx = Ctx::new(state, roster, sql, now);
             let result = self.room.on_join(&mut ctx, &who, JoinOpts(opts)).await;
@@ -446,7 +446,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             let snapshot = self.snapshot()?;
             let roster = self.clients_roster();
             let state = self.state.take().expect("state loaded");
-            let sql = self.host.sql();
+            let sql = self.host.sql_handle();
             let now = self.host.now_ms();
             let mut ctx = Ctx::new(state, roster, sql, now);
             let result = self.room.on_intent(&mut ctx, &who, intent).await;
@@ -563,7 +563,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster();
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql();
+        let sql = self.host.sql_handle();
         let now = self.host.now_ms();
         let mut ctx = Ctx::new(state, roster, sql, now);
         let result = self.room.on_timer(&mut ctx, key).await;
@@ -615,7 +615,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster();
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql();
+        let sql = self.host.sql_handle();
         let now = self.host.now_ms();
         let mut ctx = Ctx::new(state, roster, sql, now);
         let result = self.room.on_leave(&mut ctx, &who, reason).await;
@@ -659,7 +659,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         }
         if let Some(state) = self.state.take() {
             let roster = self.clients_roster();
-            let sql = self.host.sql();
+            let sql = self.host.sql_handle();
             let now = self.host.now_ms();
             let mut ctx = Ctx::new(state, roster, sql, now);
             let _ = self.room.on_dispose(&mut ctx).await;

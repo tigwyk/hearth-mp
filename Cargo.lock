@@ -499,6 +499,7 @@ dependencies = [
 name = "hearth"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "hearth-protocol",
  "hearth-server",
  "hearth-server-macros",
@@ -1294,6 +1295,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "tictactoe"
+version = "0.1.0"
+dependencies = [
+ "hearth",
+ "hearth-client",
+ "hearth-gateway",
+ "hearth-protocol",
+ "hearth-test",
+ "serde",
+ "serde_json",
+ "worker",
 ]
 
 [[package]]

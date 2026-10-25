@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::time::Duration;
 
 use hearth_protocol::{PlayerId, Value};
@@ -29,19 +30,19 @@ pub(crate) enum Effect {
 /// The room's capabilities for one handler. State changes are diffed and
 /// flushed when the handler returns; sends, timers, kick, lock and dispose are
 /// buffered and applied only on success.
-pub struct Ctx<'a, R: Room> {
+pub struct Ctx<R: Room> {
     state: R::State,
     clients: Vec<Client>,
     effects: Vec<Effect>,
-    sql: &'a dyn Sql,
+    sql: Rc<dyn Sql>,
     now_ms: u64,
 }
 
-impl<'a, R: Room> Ctx<'a, R> {
+impl<R: Room> Ctx<R> {
     pub(crate) fn new(
         state: R::State,
         clients: Vec<Client>,
-        sql: &'a dyn Sql,
+        sql: Rc<dyn Sql>,
         now_ms: u64,
     ) -> Self {
         Self {
@@ -96,7 +97,7 @@ impl<'a, R: Room> Ctx<'a, R> {
 
     /// The room's SQLite database.
     pub fn sql(&self) -> &dyn Sql {
-        self.sql
+        self.sql.as_ref()
     }
 
     pub fn kick(&mut self, who: &PlayerId) {

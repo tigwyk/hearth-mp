@@ -1,0 +1,21 @@
+[package]
+name = "hearth-server-macros"
+description = "Hearth `#[hearth::room]` attribute macro: generates the Durable Object wrapper."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
+
+[dev-dependencies]
+hearth.workspace = true
+worker.workspace = true
+trybuild.workspace = true

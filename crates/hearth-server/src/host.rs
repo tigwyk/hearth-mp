@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use hearth_protocol::{PlayerId, WireMsg};
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +48,9 @@ pub trait Host {
     fn close(&self, socket: &Self::Socket, code: u16, reason: &str);
     fn now_ms(&self) -> u64;
     fn sql(&self) -> &dyn Sql;
+    /// An owned SQL handle for [`crate::Ctx::sql`]. `Ctx` outlives the runtime
+    /// borrow that produced it, so the handle is reference-counted.
+    fn sql_handle(&self) -> Rc<dyn Sql>;
 
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()>;
     async fn wipe(&self) -> Result<()>;

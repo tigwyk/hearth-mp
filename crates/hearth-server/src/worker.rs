@@ -21,6 +21,7 @@ use crate::Result;
 
 /// [`Host`] backed by a Durable Object: hibernation sockets, SQLite storage and
 /// the single alarm.
+#[derive(Clone)]
 pub struct WorkerHost {
     state: Rc<State>,
 }
@@ -66,6 +67,10 @@ impl Host for WorkerHost {
 
     fn sql(&self) -> &dyn Sql {
         self
+    }
+
+    fn sql_handle(&self) -> Rc<dyn Sql> {
+        Rc::new(self.clone())
     }
 
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()> {

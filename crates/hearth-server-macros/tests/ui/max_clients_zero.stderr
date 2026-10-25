@@ -1,0 +1,5 @@
+error: max_clients must be 1..=255
+ --> tests/ui/max_clients_zero.rs:7:38
+  |
+7 | #[room(mode = "event", max_clients = 0)]
+  |                                      ^

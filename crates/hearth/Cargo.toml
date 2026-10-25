@@ -1,0 +1,20 @@
+[package]
+name = "hearth"
+description = "Hearth: a Rust framework for Durable Object game servers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = ["worker"]
+# Enables the workers-rs Durable Object adapter behind `hearth::server::worker`.
+worker = ["hearth-server/worker"]
+
+[dependencies]
+anyhow.workspace = true
+hearth-protocol.workspace = true
+hearth-sync.workspace = true
+hearth-server.workspace = true
+hearth-server-macros.workspace = true
