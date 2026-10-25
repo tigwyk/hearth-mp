@@ -1,0 +1,12 @@
+[package]
+name = "hearth-client"
+description = "Hearth v0.1 sans-IO client core: handshake, patch apply, intent batching and send pacing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-protocol.workspace = true
+serde_json.workspace = true
