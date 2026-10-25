@@ -49,6 +49,8 @@
 //! can `anyhow::bail!` / `anyhow::ensure!` without adding its own dependency.
 
 pub use anyhow;
+pub use hearth_admin as admin;
+pub use hearth_admin::registry_object;
 pub use hearth_protocol as protocol;
 pub use hearth_protocol::PlayerId;
 pub use hearth_server as server;
