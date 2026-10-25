@@ -137,12 +137,11 @@ fn export_schema(manifest: Option<&Path>, schema_dir: &Path) -> Result<(), Strin
 
 /// Read every `*.json` [`SchemaDoc`] in `dir`, ordered by file name.
 pub fn load_docs(dir: &Path) -> Result<Vec<SchemaDoc>, String> {
-    let entries = fs::read_dir(dir)
-        .map_err(|error| format!("could not read {}: {error}", dir.display()))?;
+    let entries =
+        fs::read_dir(dir).map_err(|error| format!("could not read {}: {error}", dir.display()))?;
     let mut paths = Vec::new();
     for entry in entries {
-        let entry =
-            entry.map_err(|error| format!("could not read {}: {error}", dir.display()))?;
+        let entry = entry.map_err(|error| format!("could not read {}: {error}", dir.display()))?;
         let path = entry.path();
         if path.is_file()
             && path

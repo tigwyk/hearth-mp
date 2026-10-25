@@ -1,9 +1,7 @@
 //! Plan v0.2a Task 4: the machine-readable schema description.
 
 use hearth_protocol::PlayerId;
-use hearth_sync::{
-    HearthState, Registry, Schema, Shape, SyncMap, TypeDef, TypeRef, Variant, Vis,
-};
+use hearth_sync::{HearthState, Registry, Schema, Shape, SyncMap, TypeDef, TypeRef, Variant, Vis};
 use serde::{Deserialize, Serialize};
 
 #[derive(Schema, Serialize, Deserialize, Default, Clone, PartialEq, Debug)]

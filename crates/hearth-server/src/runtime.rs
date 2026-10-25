@@ -307,9 +307,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         // the room is locked or full.
         if attachment.seat.is_none() {
             if let Some(seat) = self.held_seat(&attachment.player_id)? {
-                return self
-                    .resume(socket, attachment, wire_encoding, seat)
-                    .await;
+                return self.resume(socket, attachment, wire_encoding, seat).await;
             }
         }
 
@@ -706,7 +704,8 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 break;
             }
             if let Some(player) = key.strip_prefix(GRACE_TIMER_PREFIX) {
-                self.run_grace_expired(&PlayerId(player.to_string())).await?;
+                self.run_grace_expired(&PlayerId(player.to_string()))
+                    .await?;
                 if self.state.is_none() {
                     break;
                 }

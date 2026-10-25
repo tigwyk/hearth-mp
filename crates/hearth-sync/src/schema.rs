@@ -125,7 +125,9 @@ impl Registry {
             if *existing == hash {
                 return;
             }
-            panic!("two schema types are named `{name}`; rename one (codegen needs unique type names)");
+            panic!(
+                "two schema types are named `{name}`; rename one (codegen needs unique type names)"
+            );
         }
         let type_def = def(self);
         self.types.insert(name.to_owned(), (hash, type_def));
@@ -202,10 +204,7 @@ impl<K: Schema, V: Schema> Schema for BTreeMap<K, V> {
     const HASH: u64 = mix(mix(fnv1a64(b"BTreeMap"), K::HASH), V::HASH);
 
     fn describe(reg: &mut Registry) -> TypeRef {
-        TypeRef::Map(
-            Box::new(K::describe(reg)),
-            Box::new(V::describe(reg)),
-        )
+        TypeRef::Map(Box::new(K::describe(reg)), Box::new(V::describe(reg)))
     }
 }
 
@@ -213,10 +212,7 @@ impl<K: Ord + Schema, V: Schema> Schema for SyncMap<K, V> {
     const HASH: u64 = mix(mix(fnv1a64(b"SyncMap"), K::HASH), V::HASH);
 
     fn describe(reg: &mut Registry) -> TypeRef {
-        TypeRef::SyncMap(
-            Box::new(K::describe(reg)),
-            Box::new(V::describe(reg)),
-        )
+        TypeRef::SyncMap(Box::new(K::describe(reg)), Box::new(V::describe(reg)))
     }
 }
 
@@ -240,11 +236,7 @@ impl<A: Schema, B: Schema, C: Schema> Schema for (A, B, C) {
     const HASH: u64 = mix(mix(mix(fnv1a64(b"tuple3"), A::HASH), B::HASH), C::HASH);
 
     fn describe(reg: &mut Registry) -> TypeRef {
-        TypeRef::Tuple(vec![
-            A::describe(reg),
-            B::describe(reg),
-            C::describe(reg),
-        ])
+        TypeRef::Tuple(vec![A::describe(reg), B::describe(reg), C::describe(reg)])
     }
 }
 

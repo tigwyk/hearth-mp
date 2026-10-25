@@ -8,7 +8,7 @@ use hearth_server::{
 use hearth_sync::{HearthState, Schema};
 use serde::Deserialize;
 use serde_json::json;
-use support::{CounterRoom, CState};
+use support::{CState, CounterRoom};
 
 /// Same state, one extra intent variant: the only change is the intent type.
 #[derive(Schema, Deserialize, Debug)]
@@ -102,5 +102,8 @@ fn hash_covers_the_intent_type() {
     assert_eq!(doc.state, "CState");
     assert_eq!(doc.intent, "CIntentExtra");
     assert_eq!(doc.hash, extra);
-    assert_eq!(doc.types.len(), schema_doc::<CounterRoom>("CounterRoom").types.len());
+    assert_eq!(
+        doc.types.len(),
+        schema_doc::<CounterRoom>("CounterRoom").types.len()
+    );
 }

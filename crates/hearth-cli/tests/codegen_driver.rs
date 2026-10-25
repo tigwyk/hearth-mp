@@ -72,10 +72,7 @@ fn codegen_driver() {
     let keep = "extends Node\n# hand written\n";
     fs::write(out_dir.join("keep.gd"), keep).unwrap();
     fs::write(out_dir.join("old.gd"), format!("{HEADER}\nstale\n")).unwrap();
-    let manifest = repo
-        .join("examples")
-        .join("tictactoe")
-        .join("Cargo.toml");
+    let manifest = repo.join("examples").join("tictactoe").join("Cargo.toml");
 
     let output = run_codegen(&manifest, &out_dir);
     assert!(

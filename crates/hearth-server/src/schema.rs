@@ -27,10 +27,7 @@ pub struct SchemaDoc {
 
 /// The room's schema hash: the state hash mixed with the intent hash.
 pub fn schema_hash<R: Room>() -> u64 {
-    mix(
-        <R::State as Schema>::HASH,
-        <R::Intent as Schema>::HASH,
-    )
+    mix(<R::State as Schema>::HASH, <R::Intent as Schema>::HASH)
 }
 
 /// [`schema_hash`] as the 16-char lowercase hex exchanged in `HELLO`.

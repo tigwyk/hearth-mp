@@ -138,7 +138,9 @@ fn doc(room: &str, state: &str, intent: &str, types: Vec<(&str, TypeDef)>) -> Sc
 }
 
 fn empty_enum() -> TypeDef {
-    TypeDef::Enum { variants: Vec::new() }
+    TypeDef::Enum {
+        variants: Vec::new(),
+    }
 }
 
 fn generated_file(docs: &[SchemaDoc], name: &str) -> String {
@@ -253,8 +255,9 @@ fn intent_constructors_cover_all_shapes() {
         "tuple variant takes positional args: {contents}"
     );
     assert!(
-        contents
-            .contains("static func place(cell: int) -> Dictionary:\n\treturn {\"Place\": {\"cell\": cell}}"),
+        contents.contains(
+            "static func place(cell: int) -> Dictionary:\n\treturn {\"Place\": {\"cell\": cell}}"
+        ),
         "struct variant takes named args: {contents}"
     );
 }
@@ -264,10 +267,7 @@ fn owner_field_documented() {
     let state = TypeDef::Struct {
         fields: vec![field(
             "hand",
-            TypeRef::SyncMap(
-                Box::new(TypeRef::PlayerId),
-                Box::new(TypeRef::String),
-            ),
+            TypeRef::SyncMap(Box::new(TypeRef::PlayerId), Box::new(TypeRef::String)),
             Vis::Owner,
         )],
     };
