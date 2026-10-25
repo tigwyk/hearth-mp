@@ -1,0 +1,23 @@
+[package]
+name = "tictactoe"
+description = "Hearth v0.1 sample: tic-tac-toe as one event-mode Durable Object room."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hearth.workspace = true
+hearth-gateway.workspace = true
+worker.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+hearth-test.workspace = true
+hearth-client.workspace = true
+hearth-protocol.workspace = true
+serde_json.workspace = true

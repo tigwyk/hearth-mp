@@ -7,3 +7,5 @@ godot/addons/hearth/bin/
 examples/tictactoe-godot/.godot/
 examples/tictactoe-godot/android/
 .DS_Store
+examples/tictactoe/build/
+examples/tictactoe/.wrangler/

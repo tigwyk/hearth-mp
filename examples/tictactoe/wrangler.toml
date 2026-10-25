@@ -1,0 +1,14 @@
+name = "hearth-tictactoe"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[[durable_objects.bindings]]
+name = "TICTACTOE"
+class_name = "TicTacToeObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TicTacToeObject"]
