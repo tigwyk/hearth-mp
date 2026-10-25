@@ -1,0 +1,19 @@
+[package]
+name = "arena-godot-ext"
+description = "Hearth v0.4 arena GDExtension: the stock Hearth Godot classes plus the arena predictor."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+# Same name as the stock addon library so the sample project's
+# `hearth.gdextension` (entry symbol `gdext_rust_init`) loads this instead.
+name = "arena_godot"
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = { workspace = true, features = ["api-4-3"] }
+hearth-godot = { path = "../../crates/hearth-godot" }
+arena-logic = { path = "../arena-logic" }

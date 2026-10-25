@@ -1,0 +1,22 @@
+; Engine configuration file.
+; Hearth v0.4 ticked-room prediction sample. Build the arena extension first:
+;   pwsh -File examples/arena-godot-ext/build.ps1
+; then open this project in Godot (or `godot --headless --import --path .`).
+; Conformance/smoke scripts run headless with `-s`.
+
+config_version=5
+
+[application]
+
+config/name="Hearth Arena"
+config/features=PackedStringArray("4.4")
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+Hearth="*res://addons/hearth/hearth_client.gd"
+
+[display]
+
+window/size/viewport_width=640
+window/size/viewport_height=720

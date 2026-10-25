@@ -12,6 +12,10 @@ extends Node
 ## The state tree comes from `JSON.parse_string`, so all numbers are floats;
 ## patch paths are applied by `hearth_patch.gd` with the same semantics as the
 ## Rust reference.
+##
+## Ticked rooms also get snapshot interpolation: `Hearth.interpolator(paths)`
+## returns a `hearth_interp.gd` instance that this backend feeds from every
+## ticked `PATCH` (the optional `t` field is the server clock).
 
 signal joined(player_id: String, seat: int)
 signal state_reset()
@@ -26,6 +30,7 @@ signal intents_unconfirmed(seqs: Array)
 
 const Patch = preload("res://addons/hearth/hearth_patch.gd")
 const Reconnect = preload("res://addons/hearth/hearth_reconnect.gd")
+const Interp = preload("res://addons/hearth/hearth_interp.gd")
 
 const PROTOCOL_VERSION := 1
 const MAX_MSGS_PER_SEC := 20
@@ -51,6 +56,10 @@ var _first_drop_ms := -1
 var _attempt := 0
 var _retry_at_ms := -1
 var _resuming := false
+var _interpolators: Array = []
+var _last_patch_t := -1
+## The last ticked PATCH tick; ticked patches repeat the persisted `seq`.
+var _last_tick := -1
 
 
 func connect_to_room(url: String, schema_hash: String, opts: Dictionary) -> void:
@@ -66,6 +75,10 @@ func connect_to_room(url: String, schema_hash: String, opts: Dictionary) -> void
 	_desynced = false
 	_awaiting_join = false
 	_last_send_ms = -100000
+	_last_patch_t = -1
+	_last_tick = -1
+	for interp in _interpolators:
+		interp.reset()
 	_cancel_reconnect()
 	_open_socket()
 
@@ -91,6 +104,24 @@ func get_state() -> Dictionary:
 
 func get_player_id() -> String:
 	return _player_id
+
+
+## Create an interpolator fed from every ticked `PATCH` from now on. `paths` is
+## an Array of paths (Arrays of keys or list indices; a `"*"` segment matches
+## every key at its level).
+func create_interpolator(paths: Array) -> Object:
+	var interp = Interp.new()
+	for path in paths:
+		interp.track(path)
+	_interpolators.append(interp)
+	return interp
+
+
+func _feed_interpolators() -> void:
+	if _interpolators.is_empty() or _last_patch_t < 0:
+		return
+	for interp in _interpolators:
+		interp._on_patch(_state, _last_patch_t)
 
 
 ## Test seam: drop the socket locally and handle it like an abnormal (1006)
@@ -228,6 +259,11 @@ func _handle_text(text: String) -> void:
 			_state = frame.get("state", {})
 			_state_seq = int(frame.get("seq", 0))
 			_desynced = false
+			# The state was replaced: old snapshots must not leak into it.
+			_last_patch_t = -1
+			_last_tick = -1
+			for interp in _interpolators:
+				interp.reset()
 			state_reset.emit()
 		"PATCH":
 			_handle_patch(frame)
@@ -249,9 +285,18 @@ func _handle_text(text: String) -> void:
 
 func _handle_patch(frame: Dictionary) -> void:
 	var seq := int(frame.get("seq", 0))
-	# A patch that is not newer than our tree is stale; after a desync we wait
-	# for the next FULL_STATE.
-	if _desynced or seq <= _state_seq:
+	# Event-mode patches advance `seq`. Ticked patches carry a `tick` and repeat
+	# the persisted `seq` until the next persist, so they are ordered by `tick`
+	# instead. After a desync we wait for the next FULL_STATE.
+	var tick = frame.get("tick")
+	var stale := false
+	if typeof(tick) == TYPE_INT or typeof(tick) == TYPE_FLOAT:
+		tick = int(tick)
+		stale = _last_tick >= 0 and tick <= _last_tick
+		_last_tick = tick
+	else:
+		stale = seq <= _state_seq
+	if _desynced or stale:
 		return
 	var ops = frame.get("ops", [])
 	if typeof(ops) != TYPE_ARRAY:
@@ -268,6 +313,12 @@ func _handle_patch(frame: Dictionary) -> void:
 			return
 	_state = next_state
 	_state_seq = seq
+	# Ticked patches carry the server clock; feed interpolators before the
+	# signal so game code can sample immediately in its `patched` handler.
+	var patch_t = frame.get("t")
+	if typeof(patch_t) == TYPE_INT or typeof(patch_t) == TYPE_FLOAT:
+		_last_patch_t = int(patch_t)
+		_feed_interpolators()
 	patched.emit(ops)
 
 

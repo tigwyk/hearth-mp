@@ -9,6 +9,8 @@
 //! Every call in this module needs a running Godot engine. The JSON <-> Variant
 //! helpers live in [`crate::convert`] and stay engine-free for tests.
 
+use std::collections::VecDeque;
+
 use godot::classes::web_socket_peer::State;
 use godot::classes::{INode, Node, Os, Time, WebSocketPeer};
 use godot::global::Error as GodotError;
@@ -18,6 +20,7 @@ use hearth_protocol::{Encoding, ErrorCode, WireMsg};
 use serde_json::Value;
 
 use crate::convert::{json_to_variant, variant_to_json};
+use crate::HearthInterp;
 
 /// Godot-facing Hearth client. See `godot/addons/hearth/hearth_client.gd` for the
 /// autoload that owns this node on desktop builds.
@@ -41,6 +44,17 @@ pub struct HearthNative {
     retry_at_ms: Option<u64>,
     /// The next `JOIN_OK` is a resume, so it emits `reconnected`.
     resuming: bool,
+    /// Interpolators created by `Hearth.interpolator()`, fed from every ticked
+    /// `PATCH`.
+    interpolators: Vec<Gd<HearthInterp>>,
+    /// Debug-only latency injection: delays outgoing sends and incoming frames
+    /// by this many milliseconds (the prediction smoke test needs it).
+    #[var]
+    debug_latency_ms: i64,
+    /// Outgoing frames waiting for their (local ms) send time.
+    outgoing: VecDeque<(u64, WireMsg)>,
+    /// Incoming frames waiting for their (local ms) delivery time.
+    incoming: VecDeque<(u64, WireMsg)>,
 }
 
 #[godot_api]
@@ -58,6 +72,10 @@ impl INode for HearthNative {
             attempt: 0,
             retry_at_ms: None,
             resuming: false,
+            interpolators: Vec::new(),
+            debug_latency_ms: 0,
+            outgoing: VecDeque::new(),
+            incoming: VecDeque::new(),
         }
     }
 
@@ -122,7 +140,24 @@ impl HearthNative {
         ));
         self.url = url.to_string();
         self.cancel_reconnect();
+        self.incoming.clear();
+        self.outgoing.clear();
         self.open_socket();
+    }
+
+    /// Create a snapshot interpolator fed from every ticked `PATCH` from now
+    /// on. `paths` holds paths (arrays of keys or list indices; a `"*"` segment
+    /// matches every key at its level).
+    #[func]
+    fn create_interpolator(&mut self, paths: VarArray) -> Gd<HearthInterp> {
+        let mut interpolator = HearthInterp::new_gd();
+        for index in 0..paths.len() {
+            if let Ok(Value::Array(path)) = variant_to_json(&paths.at(index)) {
+                interpolator.bind_mut().track(path);
+            }
+        }
+        self.interpolators.push(interpolator.clone());
+        interpolator
     }
 
     /// Queue one intent, returning its client-assigned sequence number. `0` means
@@ -143,6 +178,8 @@ impl HearthNative {
     #[func]
     fn leave(&mut self) {
         self.cancel_reconnect();
+        self.incoming.clear();
+        self.outgoing.clear();
         if let Some(mut peer) = self.peer.clone() {
             let leave = self.core.leave();
             send_frame(&mut peer, &leave);
@@ -199,9 +236,10 @@ impl HearthNative {
 
         match peer.get_ready_state() {
             State::OPEN => {
+                let latency = self.latency_ms();
                 if !self.hello_sent {
                     let hello = self.core.hello(self.opts.clone());
-                    send_frame(&mut peer, &hello);
+                    self.queue_or_send(&mut peer, hello, latency);
                     self.hello_sent = true;
                 }
 
@@ -212,27 +250,91 @@ impl HearthNative {
                     } else {
                         WireMsg::Binary(packet.to_vec())
                     };
-                    match self.core.handle(&message) {
-                        Ok(events) => self.emit_events(events),
-                        Err(error) => {
-                            let message = format!("bad server frame: {error:?}");
-                            self.emit_error("BAD_FRAME", &message, -1);
-                        }
+                    if latency == 0 {
+                        self.deliver(message);
+                    } else {
+                        self.incoming.push_back((now_ms + latency, message));
                     }
                 }
+                self.deliver_due_incoming(now_ms);
 
                 while let Some(message) = self.core.poll_send(now_ms) {
-                    send_frame(&mut peer, &message);
+                    self.queue_or_send(&mut peer, message, latency);
                 }
+                self.deliver_due_outgoing(&mut peer, now_ms);
             }
             State::CLOSED => {
                 let code = socket_close_code(&peer);
                 let reason = peer.get_close_reason().to_string();
                 self.peer = None;
+                self.incoming.clear();
+                self.outgoing.clear();
                 self.handle_drop(code, reason, now_ms);
             }
             State::CONNECTING | State::CLOSING => {}
             _ => {}
+        }
+    }
+
+    /// The injected one-way latency in milliseconds (debug builds only).
+    fn latency_ms(&self) -> u64 {
+        if Os::singleton().is_debug_build() && self.debug_latency_ms > 0 {
+            self.debug_latency_ms as u64
+        } else {
+            0
+        }
+    }
+
+    /// Decode one server frame and emit its events.
+    fn deliver(&mut self, message: WireMsg) {
+        match self.core.handle(&message) {
+            Ok(events) => self.emit_events(events),
+            Err(error) => {
+                let message = format!("bad server frame: {error:?}");
+                self.emit_error("BAD_FRAME", &message, -1);
+            }
+        }
+    }
+
+    /// Send a frame now, or hold it for `latency` ms.
+    fn queue_or_send(&mut self, peer: &mut Gd<WebSocketPeer>, message: WireMsg, latency: u64) {
+        if latency == 0 {
+            send_frame(peer, &message);
+            return;
+        }
+        let due = Time::singleton().get_ticks_msec() + latency;
+        self.outgoing.push_back((due, message));
+    }
+
+    /// Deliver incoming frames whose injected latency has elapsed.
+    fn deliver_due_incoming(&mut self, now_ms: u64) {
+        loop {
+            let Some(front) = self.incoming.front() else {
+                break;
+            };
+            if front.0 > now_ms {
+                break;
+            }
+            let Some((_, message)) = self.incoming.pop_front() else {
+                break;
+            };
+            self.deliver(message);
+        }
+    }
+
+    /// Send outgoing frames whose injected latency has elapsed.
+    fn deliver_due_outgoing(&mut self, peer: &mut Gd<WebSocketPeer>, now_ms: u64) {
+        loop {
+            let Some(front) = self.outgoing.front() else {
+                break;
+            };
+            if front.0 > now_ms {
+                break;
+            }
+            let Some((_, message)) = self.outgoing.pop_front() else {
+                break;
+            };
+            send_frame(peer, &message);
         }
     }
 
@@ -307,6 +409,27 @@ impl HearthNative {
         self.resuming = false;
     }
 
+    /// Feed every registered interpolator from the newest ticked `PATCH`.
+    fn feed_interpolators(&mut self) {
+        if self.interpolators.is_empty() {
+            return;
+        }
+        let Some((_, server_t)) = self.core.last_tick() else {
+            return;
+        };
+        let state = self.core.state();
+        for interpolator in &mut self.interpolators {
+            interpolator.bind_mut().on_patch(state, server_t);
+        }
+    }
+
+    /// Drop interpolator snapshots after a `FULL_STATE` replaced the state.
+    fn reset_interpolators(&mut self) {
+        for interpolator in &mut self.interpolators {
+            interpolator.bind_mut().reset();
+        }
+    }
+
     fn emit_events(&mut self, events: Vec<ClientEvent>) {
         for event in events {
             match event {
@@ -319,8 +442,14 @@ impl HearthNative {
                         self.signals().reconnected().emit();
                     }
                 }
-                ClientEvent::StateReset => self.signals().state_reset().emit(),
+                ClientEvent::StateReset => {
+                    self.reset_interpolators();
+                    self.signals().state_reset().emit();
+                }
                 ClientEvent::Patched { ops } => {
+                    // Feed the interpolators before the signal so game code can
+                    // sample immediately in its `patched` handler.
+                    self.feed_interpolators();
                     let mut array = VarArray::new();
                     for op in &ops {
                         if let Ok(value) = serde_json::to_value(op) {

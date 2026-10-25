@@ -292,6 +292,20 @@ func use_schema(root_class: GDScript) -> void:
 	state = _typed_root
 
 
+## Create a snapshot interpolator for ticked rooms (plan v0.4 Task 6). `paths`
+## is an Array of paths (Arrays of keys or list indices; a `"*"` segment matches
+## every key at that level, for example `[["avatars", "*", "pos"]]`).
+##
+## The backend feeds it from every ticked `PATCH` automatically; call
+## `sample()`/`sample_v2()` once per frame. Returns the native `HearthInterp` on
+## desktop builds and a `hearth_interp.gd` instance on web builds.
+func interpolator(paths: Array) -> Object:
+	if _backend == null:
+		_emit_error("NO_BACKEND", "Hearth backend is not available", -1)
+		return null
+	return _backend.create_interpolator(paths)
+
+
 ## Queue one intent. Returns its client-assigned sequence number (>= 1), or 0
 ## when the intent could not be converted.
 func send_intent(intent) -> int:
