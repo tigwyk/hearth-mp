@@ -91,7 +91,9 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
     let room = self_ident(&item_impl)?;
     let self_ty = &item_impl.self_ty;
     let object = format_ident!("{room}Object");
-    let wrapper = format_ident!("__hearth_{}_object", room.to_string().to_ascii_lowercase());
+    let room_name = room.to_string();
+    let wrapper = format_ident!("__hearth_{}_object", room_name.to_ascii_lowercase());
+    let export_test = format_ident!("__hearth_schema_export_{}", snake_case(&room_name));
     Ok(quote! {
         #item_impl
 
@@ -102,6 +104,26 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
                 ::std::time::Duration::from_secs(#empty_grace_secs);
             const RECONNECT_GRACE: ::std::time::Duration =
                 ::std::time::Duration::from_secs(#reconnect_grace_secs);
+        }
+
+        /// Test-only schema export for `hearth codegen`: when the driver sets
+        /// `HEARTH_SCHEMA_OUT`, this writes the room's `SchemaDoc` there as
+        /// pretty JSON. Otherwise it is a no-op, so plain `cargo test` is
+        /// unaffected.
+        #[cfg(test)]
+        #[test]
+        fn #export_test() {
+            let Some(directory) = ::std::env::var_os("HEARTH_SCHEMA_OUT") else {
+                return;
+            };
+            let doc = ::hearth::server::schema_doc::<#room>(#room_name);
+            let json = ::serde_json::to_string_pretty(&doc)
+                .expect("a SchemaDoc always serialises as JSON");
+            ::std::fs::create_dir_all(&directory)
+                .expect("HEARTH_SCHEMA_OUT is a creatable directory");
+            let path =
+                ::std::path::Path::new(&directory).join(concat!(#room_name, ".json"));
+            ::std::fs::write(path, json).expect("HEARTH_SCHEMA_OUT is writable");
         }
 
         // `#[worker::durable_object]`'s wasm-bindgen struct-marker expansion
@@ -273,4 +295,20 @@ fn first_token_span(tokens: &TokenStream2) -> Option<Span> {
         .into_iter()
         .next()
         .map(|token: TokenTree| token.span())
+}
+
+/// `TicTacToe` becomes `tic_tac_toe` for the export test's function name.
+fn snake_case(name: &str) -> String {
+    let mut out = String::with_capacity(name.len() + 4);
+    for (index, character) in name.chars().enumerate() {
+        if character.is_ascii_uppercase() {
+            if index != 0 && !out.ends_with('_') {
+                out.push('_');
+            }
+            out.push(character.to_ascii_lowercase());
+        } else {
+            out.push(character);
+        }
+    }
+    out
 }

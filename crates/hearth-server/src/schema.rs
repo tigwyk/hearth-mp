@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use hearth_sync::{mix, Registry, Schema, TypeDef, TypeRef};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::room::Room;
 
@@ -15,7 +15,7 @@ use crate::room::Room;
 pub const HEARTH_SCHEMA_VERSION: u32 = 1;
 
 /// One room's state and intent schema, ready for JSON export.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SchemaDoc {
     pub hearth_schema: u32,
     pub room: String,

@@ -13,3 +13,7 @@ hearth = "0.1"
 hearth-gateway = "0.1"
 serde = { version = "1", features = ["derive"] }
 worker = "0.8"
+
+[dev-dependencies]
+# Used by the test-only schema export that `hearth codegen` runs.
+serde_json = "1"

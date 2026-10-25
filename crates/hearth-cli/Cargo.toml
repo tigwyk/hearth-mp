@@ -9,3 +9,8 @@ authors.workspace = true
 
 # `src/bin/hearth.rs` and `src/bin/cargo-hearth.rs` are auto-discovered: the
 # second name lets `cargo hearth ...` work.
+
+[dependencies]
+hearth-server.workspace = true
+hearth-sync.workspace = true
+serde_json.workspace = true

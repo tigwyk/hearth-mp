@@ -509,6 +509,11 @@ dependencies = [
 [[package]]
 name = "hearth-cli"
 version = "0.1.0"
+dependencies = [
+ "hearth-server",
+ "hearth-sync",
+ "serde_json",
+]
 
 [[package]]
 name = "hearth-client"
