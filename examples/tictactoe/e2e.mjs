@@ -1,7 +1,11 @@
-// Hearth v0.1 end-to-end test for the tictactoe sample.
+// Hearth v0.1/v0.2c end-to-end test for the tictactoe sample.
 //
 // Requires `wrangler dev` in examples/tictactoe (default http://127.0.0.1:8787).
 // Run: node e2e.mjs
+//   HEARTH_ADMIN_TOKEN must match the one in examples/tictactoe/.dev.vars for the
+//   admin checks. E2E_NO_ADMIN=1 runs the "admin API disabled" phase against a
+//   server started without HEARTH_ADMIN_TOKEN. E2E_KEEP_ROOM=1 skips the
+//   force-dispose step (for `hearth inspect` by hand).
 // Exits 0 on success; prints the failed check and exits 1 otherwise.
 import http from 'node:http';
 import { randomBytes } from 'node:crypto';
@@ -9,6 +13,9 @@ import { randomBytes } from 'node:crypto';
 const BASE = process.env.HEARTH_URL ?? 'http://127.0.0.1:8787';
 const WS_BASE = BASE.replace(/^http/, 'ws');
 const TIMEOUT_MS = 10_000;
+const ADMIN_TOKEN = process.env.HEARTH_ADMIN_TOKEN ?? '';
+const NO_ADMIN = process.env.E2E_NO_ADMIN === '1';
+const KEEP_ROOM = process.env.E2E_KEEP_ROOM === '1';
 
 function fail(message) {
   console.error(`e2e FAILED: ${message}`);
@@ -266,6 +273,7 @@ function decodeFrame(buffer) {
   return {
     opcode,
     text: opcode === 1 ? payload.toString('utf8') : null,
+    payload,
     consumed: offset + length,
   };
 }
@@ -293,6 +301,7 @@ class RawSocket {
     this.socket = socket;
     this.buffer = pending ?? Buffer.alloc(0);
     this.frames = [];
+    this.closeCode = null;
     socket.on('data', (chunk) => {
       this.buffer = Buffer.concat([this.buffer, chunk]);
       this.#drain();
@@ -305,10 +314,16 @@ class RawSocket {
       const frame = decodeFrame(this.buffer);
       if (!frame) return;
       this.buffer = this.buffer.subarray(frame.consumed);
+      if (frame.opcode === 8) {
+        this.closeCode = frame.payload.length >= 2 ? frame.payload.readUInt16BE(0) : 1005;
+        this.frames.push({ opcode: 8, closeCode: this.closeCode });
+        continue;
+      }
       this.frames.push(frame);
     }
   }
 
+  /** The next parsed JSON text frame. */
   async nextText(timeoutMs = TIMEOUT_MS) {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -322,6 +337,16 @@ class RawSocket {
     }
   }
 
+  /** The close code, waiting for the close frame if necessary. */
+  async waitForClose(timeoutMs = TIMEOUT_MS) {
+    const deadline = Date.now() + timeoutMs;
+    while (this.closeCode === null) {
+      if (Date.now() > deadline) throw new Error('timed out waiting for the socket to close');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return this.closeCode;
+  }
+
   sendText(text) {
     this.socket.write(encodeClientText(text));
   }
@@ -332,12 +357,31 @@ class RawSocket {
 }
 
 let intentSeq = 0;
-function intent(cell) {
+function intentFrame(intent) {
   intentSeq += 1;
   return {
     op: 'INTENT',
-    intents: [{ seq: intentSeq, intent: { Place: { cell } } }],
+    intents: [{ seq: intentSeq, intent }],
   };
+}
+
+function intent(cell) {
+  return intentFrame({ Place: { cell } });
+}
+
+/** An authenticated admin API request. */
+function adminRequest(path, { method = 'GET' } = {}) {
+  return request(path, { method, token: ADMIN_TOKEN });
+}
+
+/** The close code the server sent to a JSON socket, waiting for the close. */
+async function waitForJsonClose(socket, timeoutMs = TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (socket.closed === null) {
+    if (Date.now() > deadline) throw new Error('timed out waiting for the socket to close');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return socket.closed.code;
 }
 
 async function login(deviceId) {
@@ -459,7 +503,111 @@ async function main() {
   );
   check(pong.text === 'hearth:pong', 'hearth:ping gets hearth:pong');
 
-  // 10. A wrong schema hash is a hard reject with close code 4001.
+  if (NO_ADMIN) {
+    // 10. A deployment without HEARTH_ADMIN_TOKEN has no admin API at all.
+    const unauthenticated = await request('/admin/rooms');
+    check(unauthenticated.status === 404, 'admin API is a 404 without HEARTH_ADMIN_TOKEN');
+    const withToken = await request('/admin/rooms', { token: 'f'.repeat(64) });
+    check(withToken.status === 404, 'admin API stays a 404 even with a token when disabled');
+  } else {
+    if (!ADMIN_TOKEN) {
+      fail('set HEARTH_ADMIN_TOKEN to the token in examples/tictactoe/.dev.vars for the admin checks');
+    }
+
+    // 10. The rooms list is token-gated and shows the room with both players.
+    const unauthenticated = await request('/admin/rooms');
+    check(unauthenticated.status === 401, 'admin rooms without a token is 401');
+    const listed = await adminRequest('/admin/rooms');
+    check(
+      listed.status === 200 && Array.isArray(listed.json.rooms),
+      'admin rooms returns a room list',
+    );
+    const listedRoom = listed.json.rooms.find((candidate) => candidate.name === room);
+    check(listedRoom?.players === 2, 'the room is listed with 2 players');
+
+    // 11. Inspect shows the full server state and both clients.
+    const inspected = await adminRequest(`/admin/rooms/tictactoe/${encodeURIComponent(room)}`);
+    check(inspected.status === 200, 'inspect returns 200');
+    check(
+      JSON.stringify(inspected.json.state?.cells) === JSON.stringify([1, 1, 1, 2, 2, 0, 0, 0, 0]),
+      'inspect shows the full board',
+    );
+    check(
+      inspected.json.clients.length === 2 &&
+        inspected.json.clients.every((client) => client.connected === true),
+      'inspect lists both connected clients',
+    );
+    check(inspected.json.room.room_type === 'tictactoe', 'inspect names the room type');
+    check(inspected.json.seq > 0, 'inspect reports a state seq');
+
+    // 12. A tail socket receives the unfiltered, caused patch for one move.
+    const tailUpgrade = await rawUpgrade(
+      `${BASE}/admin/rooms/tictactoe/${encodeURIComponent(room)}/tail`,
+      { Authorization: `Bearer ${ADMIN_TOKEN}` },
+    );
+    check(tailUpgrade.status === 101, 'the admin tail upgrades');
+    const tail = new RawSocket(tailUpgrade.socket, tailUpgrade.pending);
+    const rematch = intentFrame('Rematch');
+    socketA.send(rematch);
+    await socketA.waitFor(
+      (candidate) =>
+        candidate.op === 'ACK' && candidate.intent_seqs.includes(rematch.intents[0].seq),
+      'ACK for the rematch',
+    );
+    const tailMsg = await tail.nextText();
+    check(tailMsg.cause?.[0]?.cause === 'intent', 'the tail frame is caused by the intent');
+    check(tailMsg.cause[0].player === playerA.player_id, 'the tail names the player');
+    check(tailMsg.cause[0].intent_seq === rematch.intents[0].seq, 'the tail names the intent seq');
+    check(Array.isArray(tailMsg.ops) && tailMsg.ops.length > 0, 'the tail carries the diff');
+
+    // 13. Inspecting a never-used name is a 404 and writes nothing.
+    const ghost = `ghost-${randomBytes(4).toString('hex')}`;
+    const ghostInspect = await adminRequest(`/admin/rooms/tictactoe/${ghost}`);
+    check(ghostInspect.status === 404, 'inspect of a never-used name is 404');
+    const listedAgain = await adminRequest('/admin/rooms');
+    check(
+      !listedAgain.json.rooms.some((candidate) => candidate.name === ghost),
+      'a never-used name is not registered',
+    );
+
+    // 14. Players cannot reach the room's internal paths.
+    const internalDispose = await request(
+      `/rooms/tictactoe/${encodeURIComponent(room)}/__hearth/dispose`,
+    );
+    check(
+      internalDispose.status === 404 || internalDispose.status === 400,
+      'an internal path is rejected by the gateway',
+    );
+    const traversal = await request('/rooms/tictactoe/..%2F__hearth%2Finspect');
+    check(traversal.status === 404 || traversal.status === 400, 'a traversal room name is rejected');
+    const survived = await adminRequest(`/admin/rooms/tictactoe/${encodeURIComponent(room)}`);
+    check(survived.status === 200, 'the room survived the internal-path attempts');
+
+    // 15. Force-dispose wipes the room, closes players and tail with 4008, and
+    // drops the registry row.
+    if (KEEP_ROOM) {
+      console.log('keeping the room for manual checks (E2E_KEEP_ROOM=1)');
+    } else {
+      const disposed = await request(
+        `/admin/rooms/tictactoe/${encodeURIComponent(room)}/dispose`,
+        { method: 'POST', token: ADMIN_TOKEN },
+      );
+      check(disposed.status === 204, 'force-dispose returns 204');
+      const codeA = await waitForJsonClose(socketA);
+      const codeB = await waitForJsonClose(socketB);
+      check(codeA === 4008 && codeB === 4008, 'both players are closed with 4008');
+      check((await tail.waitForClose()) === 4008, 'the admin tail is closed with 4008');
+      const listedAfter = await adminRequest('/admin/rooms');
+      check(
+        !listedAfter.json.rooms.some((candidate) => candidate.name === room),
+        'the disposed room is gone from the list',
+      );
+      const gone = await adminRequest(`/admin/rooms/tictactoe/${encodeURIComponent(room)}`);
+      check(gone.status === 404, 'inspect after dispose is 404');
+    }
+  }
+
+  // 16. A wrong schema hash is a hard reject with close code 4001.
   const rejected = new JsonSocket(
     await openSocket(`${urlA}&throwaway=${randomBytes(4).toString('hex')}`),
   );

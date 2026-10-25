@@ -9,6 +9,21 @@ command = "cargo install -q worker-build && worker-build --release"
 name = "TICTACTOE"
 class_name = "TicTacToeObject"
 
+# Optional room registry: powers `hearth inspect rooms`. Rooms skip reporting when
+# this binding is absent.
+[[durable_objects.bindings]]
+name = "HEARTH_REGISTRY"
+class_name = "HearthRegistry"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["TicTacToeObject"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HearthRegistry"]
+
+# Workers Logs: the runtime emits one JSON line per join, leave, dispose,
+# handler error and incompatible-state wake.
+[observability]
+enabled = true

@@ -167,17 +167,27 @@ fn winning_mark(cells: &[u8]) -> Option<u8> {
     })
 }
 
+// The room registry (`hearth inspect rooms`). Rooms report themselves here; a
+// registry failure never affects gameplay.
+hearth::admin::registry_object!();
+
+/// Every room type this Worker serves.
+fn room_routes() -> [hearth_gateway::RoomRoute; 1] {
+    [hearth_gateway::RoomRoute {
+        room_type: "tictactoe",
+        binding: "TICTACTOE",
+        schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
+    }]
+}
+
 /// The gateway Worker entry: auth, routing, and the tictactoe room route.
 #[worker::event(fetch)]
 async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-    hearth_gateway::serve(
-        req,
-        env,
-        &[hearth_gateway::RoomRoute {
-            room_type: "tictactoe",
-            binding: "TICTACTOE",
-            schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
-        }],
-    )
-    .await
+    let routes = room_routes();
+    // The admin API exists only when HEARTH_ADMIN_TOKEN is set. Without it these
+    // paths are ordinary 404s, as if the feature were not deployed.
+    if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
+        return hearth::admin::serve_admin(req, env, &routes).await;
+    }
+    hearth_gateway::serve(req, env, &routes).await
 }
