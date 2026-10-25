@@ -1,0 +1,20 @@
+[package]
+name = "hearth-test"
+description = "Hearth test harness: in-memory Host, TestRoom, TestClient and hibernation fuzz."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-protocol.workspace = true
+hearth-client.workspace = true
+hearth-server.workspace = true
+hearth-sync.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+rusqlite.workspace = true
+fastrand.workspace = true
+anyhow.workspace = true

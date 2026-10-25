@@ -1,0 +1,22 @@
+[package]
+name = "hearth-server"
+description = "Hearth room runtime: Room trait, Ctx, buffered effects and the Durable Object adapter."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+# Enables the `workers-rs` Durable Object adapter. Native tests leave it off.
+worker = ["dep:worker", "dep:futures"]
+
+[dependencies]
+hearth-protocol.workspace = true
+hearth-sync.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+anyhow.workspace = true
+worker = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
