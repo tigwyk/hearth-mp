@@ -167,13 +167,14 @@ impl<R: Room> TestRoom<R> {
         C(index)
     }
 
-    /// Move the virtual clock and fire the alarm until nothing else is due.
+    /// Move the virtual clock and fire every alarm in order, as real time
+    /// would: each alarm fires at its own due time, so a ticked room gets one
+    /// wake per tick (and a slow handler observes the clock of its wake).
     pub fn advance(&mut self, delta: Duration) {
         let target = self
             .host
             .now_ms()
             .saturating_add(u64::try_from(delta.as_millis()).unwrap_or(u64::MAX));
-        self.host.set_clock(target);
         let mut fired = 0;
         loop {
             let Some(at) = self.host.alarm_at() else {
@@ -181,6 +182,9 @@ impl<R: Room> TestRoom<R> {
             };
             if at > target {
                 break;
+            }
+            if at > self.host.now_ms() {
+                self.host.set_clock(at);
             }
             block_on(self.runtime().alarm());
             self.pump();
@@ -190,6 +194,34 @@ impl<R: Room> TestRoom<R> {
                 "the runtime kept rescheduling a due alarm; is a timer handler looping?"
             );
         }
+        self.host.set_clock(target);
+    }
+
+    /// Move the clock forward without firing anything, then fire the alarm once:
+    /// a late wake, as after an eviction, a GC pause or a slow handler.
+    pub fn stall(&mut self, delta: Duration) {
+        let target = self
+            .host
+            .now_ms()
+            .saturating_add(u64::try_from(delta.as_millis()).unwrap_or(u64::MAX));
+        self.host.set_clock(target);
+        block_on(self.runtime().alarm());
+        self.pump();
+    }
+
+    /// The room's ticked-mode tick number (`0` for an event room).
+    pub fn ticks(&mut self) -> u64 {
+        self.runtime().ticks()
+    }
+
+    /// The next moment the room needs to wake: next timer or next tick.
+    pub fn next_wake(&mut self) -> Option<u64> {
+        self.runtime().next_wake()
+    }
+
+    /// The virtual clock's current time in milliseconds.
+    pub fn clock_ms(&self) -> u64 {
+        self.host.now_ms()
     }
 
     /// Drop the runtime (as hibernation does) while keeping storage and sockets.
@@ -199,6 +231,12 @@ impl<R: Room> TestRoom<R> {
 
     pub fn client(&self, c: C) -> &TestClient {
         &self.clients[c.0]
+    }
+
+    /// A mutable client handle, for driving the client-side reconnect logic by
+    /// hand (e.g. `on_disconnected`).
+    pub fn client_mut(&mut self, c: C) -> &mut TestClient {
+        &mut self.clients[c.0]
     }
 
     /// The persisted full state (including server-only fields) as JSON.

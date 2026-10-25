@@ -1,0 +1,12 @@
+# Copy to `.dev.vars` for local runs. The file is gitignored.
+#
+# The gateway signs session tokens with this secret; any value works locally.
+HEARTH_SECRET=dev-only-not-a-real-secret
+
+# The admin API (and the soak test's room inspection) exists only when set.
+HEARTH_ADMIN_TOKEN=dev-only-admin-token
+
+# Ticked rooms are anonymous-only here, which is the default. Uncomment for JWT:
+# HEARTH_JWT_JWKS_URL=https://example.invalid/jwks.json
+# HEARTH_JWT_ISS=https://issuer.example
+# HEARTH_JWT_AUD=hearth-arena

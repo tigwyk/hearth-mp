@@ -1,0 +1,20 @@
+[package]
+name = "arena"
+description = "Hearth v0.4 sample: a ticked 20 Hz arena room with a shared prediction logic crate."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+arena-logic = { path = "../arena-logic" }
+hearth.workspace = true
+hearth-gateway.workspace = true
+worker.workspace = true
+serde.workspace = true
+# The #[hearth::room] expansion's schema-export test uses serde_json.
+serde_json.workspace = true

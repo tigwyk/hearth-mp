@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::time::Duration;
 
 use hearth_protocol::{
     close, decode, encode, Encoding, ErrorCode, Frame, IntentMsg, PlayerId, Value, WireMsg,
@@ -11,7 +12,7 @@ use crate::call::{rpc_from_value, rpc_to_value, CallError, Caller, Envelope, Hos
 use crate::ctx::{Ctx, Effect};
 use crate::host::{Attachment, Host, RoomName, RoomReport, Session, SqlValue, ANON_PROVIDER};
 use crate::outbox;
-use crate::room::{Client, JoinOpts, Leave, Room, RoomRpc, TimerKey};
+use crate::room::{Client, JoinOpts, Leave, Mode, Room, RoomRpc, TimerKey};
 use crate::store;
 use crate::Result;
 
@@ -63,6 +64,15 @@ pub struct RoomRuntime<R: Room, H: Host> {
     chain: Vec<Target>,
     /// The name a call's header gave this room, used before identity is known.
     call_name: String,
+    /// Ticked-mode tick counter, persisted in `hearth_meta.tick`.
+    tick: u64,
+    /// The tick number last written to `hearth_meta`.
+    last_saved_tick: u64,
+    /// Absolute time of the next tick; `None` when the room is not ticking.
+    next_tick_ms: Option<u64>,
+    /// Intents received between ticks, applied at the start of the next tick in
+    /// arrival order. Lost on eviction; the client then sees them unconfirmed.
+    pending: Vec<(PlayerId, u32, R::Intent)>,
 }
 
 /// The fields a lobby report carries: seated players, capacity, lock and the
@@ -81,6 +91,19 @@ struct HeldSeat {
     until_ms: u64,
     provider: String,
     display_name: Option<String>,
+}
+
+/// The views captured before one handler pass: the public view computed once,
+/// plus each client's owner-scoped view when the state has owner fields. The
+/// public view is what makes one diff serve every client.
+struct CapturedViews<Socket> {
+    public: Option<Value>,
+    /// The joined sockets at capture time: a socket that joins during the pass
+    /// already got `FULL_STATE` and must not also receive a patch.
+    sockets: Vec<Socket>,
+    /// Empty when `R::State::HAS_OWNER` is false, so a room without owner fields
+    /// does no per-client view work at all.
+    owner: Vec<(Socket, Value)>,
 }
 
 impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
@@ -105,6 +128,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             mm: None,
             chain: Vec::new(),
             call_name: String::new(),
+            tick: 0,
+            last_saved_tick: 0,
+            next_tick_ms: None,
+            pending: Vec::new(),
         }
     }
 
@@ -118,6 +145,81 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
 
     pub fn seq(&self) -> u64 {
         self.seq
+    }
+
+    /// The current ticked-mode tick number, `0` for an event room or before the
+    /// room's first tick.
+    pub fn ticks(&self) -> u64 {
+        self.tick
+    }
+
+    /// The next moment this room needs to wake: its next timer (the outbox retry
+    /// is one of those rows) or its next tick, whichever comes first.
+    pub fn next_wake(&self) -> Option<u64> {
+        let timer = store::next_timer(self.host.sql()).ok().flatten();
+        match (timer, self.next_tick_ms) {
+            (Some(timer), Some(tick)) => Some(timer.min(tick)),
+            (timer, tick) => timer.or(tick),
+        }
+    }
+
+    /// Whether this room type is a fixed-step simulation. `TICK_HZ = 0` keeps a
+    /// `mode = "ticked"` room dormant, which the macro never emits.
+    fn ticked_mode() -> bool {
+        R::MODE == Mode::Ticked && R::TICK_HZ > 0
+    }
+
+    /// The scheduling period, `1 s / TICK_HZ` rounded down to whole ms.
+    fn tick_period_ms() -> u64 {
+        (1000 / u64::from(R::TICK_HZ)).max(1)
+    }
+
+    /// The fixed timestep handed to [`Room::on_tick`]: exactly `1 s / TICK_HZ`.
+    fn tick_dt() -> Duration {
+        Duration::from_micros(1_000_000 / u64::from(R::TICK_HZ))
+    }
+
+    fn tick_due(&self) -> bool {
+        Self::ticked_mode()
+            && self
+                .next_tick_ms
+                .is_some_and(|next| self.host.now_ms() >= next)
+    }
+
+    /// Run the ticked steps that are due. A loop driver (the DO adapter's
+    /// held-open driver) calls this; `alarm()` calls the same path.
+    pub async fn tick_if_due(&mut self) {
+        if let Err(err) = self.handle_tick_if_due().await {
+            log_error(err);
+        }
+    }
+
+    async fn handle_tick_if_due(&mut self) -> Result<()> {
+        if self.ensure_loaded().await? {
+            self.host.set_alarm(None).await?;
+            return Ok(());
+        }
+        if self.tick_due() {
+            self.tick().await?;
+        }
+        self.reschedule_alarm().await
+    }
+
+    /// The joined socket for `player`, if they are live right now.
+    fn socket_of_player(&self, player: &PlayerId) -> Option<(H::Socket, Attachment)> {
+        self.joined()
+            .into_iter()
+            .find(|(_, attachment)| &attachment.player_id == player)
+    }
+
+    fn connected_client(&self, player: &PlayerId) -> Option<Client> {
+        self.socket_of_player(player).map(|(_, attachment)| Client {
+            player_id: attachment.player_id,
+            seat: attachment.seat.unwrap_or(0),
+            connected: true,
+            provider: attachment.provider,
+            display_name: attachment.display_name,
+        })
     }
 
     /// The room's own address: its class binding plus its persisted name.
@@ -144,7 +246,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     fn make_ctx(&self, state: R::State, roster: Vec<Client>) -> Ctx<R> {
         let sql = self.host.sql_handle();
         let now = self.host.now_ms();
-        Ctx::new(state, roster, sql, now, self.caller())
+        Ctx::new(state, roster, sql, now, self.tick, self.caller())
     }
 
     /// Persist the room's identity without a connect. Test worlds and the
@@ -286,6 +388,12 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         if !self.has_table("hearth_meta")? {
             return Ok(None);
         }
+        // Inspect is read-only, but a hot ticked room persists first so the
+        // snapshot includes every applied tick (and writes no uninitialised
+        // storage: the state is already loaded).
+        if Self::ticked_mode() && self.state.is_some() {
+            self.persist()?;
+        }
         let Some((room, created_ms)) = self.read_meta()? else {
             return Ok(None);
         };
@@ -313,6 +421,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 }
             }
         }
+        let tick = store::meta_get(self.host.sql(), "tick")?
+            .and_then(|raw| raw.parse::<u64>().ok())
+            .unwrap_or(0);
         let clients = self.inspect_clients()?;
         let timers = if self.has_table("hearth_timers")? {
             self.host
@@ -335,6 +446,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             room,
             created_ms,
             seq,
+            tick,
             locked,
             incompatible,
             clients,
@@ -526,6 +638,71 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     async fn finish_pass(&mut self) {
         self.report_players();
         self.flush_outbox().await;
+        // Start ticking on the first connected join, stop it when the last
+        // connected client goes (held seats and admin tails never tick).
+        if let Err(err) = self.sync_ticking().await {
+            log_error(err);
+        }
+    }
+
+    /// Keep the tick schedule in sync with the connected clients.
+    async fn sync_ticking(&mut self) -> Result<()> {
+        if !Self::ticked_mode() {
+            return Ok(());
+        }
+        if !self.joined().is_empty() {
+            if self.next_tick_ms.is_none() {
+                self.next_tick_ms = Some(self.host.now_ms().saturating_add(Self::tick_period_ms()));
+            }
+        } else if self.next_tick_ms.take().is_some() {
+            // Stopping: accepted intents must not be lost, and the tick number
+            // is persisted with the state.
+            self.drain_pending().await?;
+            self.persist()?;
+        }
+        self.reschedule_alarm().await
+    }
+
+    /// Run the buffered intents when ticking stops. There is no ACK: the room
+    /// is no longer ticking and the last connected client is already leaving.
+    async fn drain_pending(&mut self) -> Result<()> {
+        let pending = std::mem::take(&mut self.pending);
+        let mut effects = Vec::new();
+        for (player, _intent_seq, intent) in pending {
+            // The sender may already have left (a clean LEAVE clears the
+            // attachment before this runs): the plan still runs its accepted
+            // intents on stop, so hand the handler a disconnected client.
+            let who = self.connected_client(&player).unwrap_or(Client {
+                player_id: player,
+                seat: 0,
+                connected: false,
+                provider: ANON_PROVIDER.to_owned(),
+                display_name: None,
+            });
+            let snapshot = self.snapshot()?;
+            let roster = self.clients_roster()?;
+            let state = self.state.take().expect("state loaded");
+            let mut ctx = self.make_ctx(state, roster);
+            let result = self.room.on_intent(&mut ctx, &who, intent).await;
+            let (state, ctx_effects) = ctx.into_parts();
+            self.state = Some(state);
+            match result {
+                Ok(()) => effects.extend(ctx_effects),
+                Err(err) => {
+                    self.state = Some(rmp_serde::from_slice(&snapshot)?);
+                    self.log_json(serde_json::json!({
+                        "hearth": "handler_error",
+                        "room": self.room_label(),
+                        "player": who.player_id.0,
+                        "msg": err.to_string(),
+                    }));
+                }
+            }
+        }
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        self.apply_rest(rest).await?;
+        Ok(())
     }
 
     /// Send every pending outbox row, retrying the ones that fail. Delivery
@@ -593,6 +770,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.mm = None;
         self.chain.clear();
         self.call_name.clear();
+        self.tick = 0;
+        self.last_saved_tick = 0;
+        self.next_tick_ms = None;
+        self.pending.clear();
     }
 
     /// The admin tail's view of a state value, counting the render for the
@@ -998,7 +1179,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             provider: attachment.provider.clone(),
             display_name: attachment.display_name.clone(),
         };
-        let before = self.views();
+        let before = self.capture_views();
         let mut effects = Vec::new();
         let mut admin_before = None;
 
@@ -1059,7 +1240,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.timer_delete(EMPTY_TIMER)?;
 
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         let view = self
             .state
             .as_ref()
@@ -1157,7 +1338,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             },
         );
 
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
@@ -1173,7 +1354,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             Vec::new()
         };
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(
             admin_before,
             vec![Cause::Reconnect {
@@ -1209,6 +1390,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 .close(&socket, close::STATE_INCOMPATIBLE, "state incompatible");
             return Ok(());
         }
+        if Self::ticked_mode() {
+            return self.buffer_intents(socket, attachment, intents).await;
+        }
         let fallback = attachment.encoding.unwrap_or(Encoding::MsgPack);
         let who = Client {
             player_id: attachment.player_id.clone(),
@@ -1217,7 +1401,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             provider: attachment.provider.clone(),
             display_name: attachment.display_name.clone(),
         };
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let mut effects: Vec<Effect> = Vec::new();
         let mut causes: Vec<Cause> = Vec::new();
@@ -1282,7 +1466,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         }
 
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(admin_before, causes, rejected, seq);
         for (code, message, ref_seq) in errors {
             self.send_error(&socket, &attachment, fallback, code, message, ref_seq);
@@ -1296,6 +1480,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 Frame::Ack {
                     state_seq: seq,
                     intent_seqs: accepted,
+                    tick: None,
                 },
             );
         }
@@ -1388,7 +1573,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             provider: attachment.provider,
             display_name: attachment.display_name,
         };
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
@@ -1404,7 +1589,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             Vec::new()
         };
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(
             admin_before,
             vec![Cause::Disconnect {
@@ -1420,10 +1605,211 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(())
     }
 
+    /// Ticked mode: buffer decoded intents until the next tick. Decode and rate
+    /// limit errors are reported immediately, as in event mode; the ACK is sent
+    /// by the tick that applies them, carrying its tick number.
+    async fn buffer_intents(
+        &mut self,
+        socket: H::Socket,
+        attachment: Attachment,
+        intents: Vec<IntentMsg>,
+    ) -> Result<()> {
+        let fallback = attachment.encoding.unwrap_or(Encoding::MsgPack);
+        let mut rate_limited = false;
+        for intent_msg in intents {
+            let now = self.host.now_ms();
+            if !self.take_token(&attachment.player_id, now) {
+                self.send_error(
+                    &socket,
+                    &attachment,
+                    fallback,
+                    ErrorCode::RateLimited,
+                    "intent rate limit exceeded",
+                    Some(intent_msg.seq),
+                );
+                rate_limited = true;
+                break;
+            }
+            let Ok(intent) = serde_json::from_value::<R::Intent>(intent_msg.intent) else {
+                self.send_error(
+                    &socket,
+                    &attachment,
+                    fallback,
+                    ErrorCode::BadIntent,
+                    "intent did not decode",
+                    Some(intent_msg.seq),
+                );
+                continue;
+            };
+            self.pending
+                .push((attachment.player_id.clone(), intent_msg.seq, intent));
+        }
+        if rate_limited {
+            self.run_leave(socket.clone(), attachment, Leave::Kicked)
+                .await?;
+            self.host
+                .close(&socket, close::RATE_LIMITED, "rate limited");
+        }
+        self.finish_pass().await;
+        Ok(())
+    }
+
+    /// Run the fixed steps that are due: at most three catch-up steps, then one
+    /// PATCH per client and one ACK per intent sender. The schedule is absolute,
+    /// so ticks skipped after a stall stay skipped.
+    async fn tick(&mut self) -> Result<()> {
+        let Some(next) = self.next_tick_ms else {
+            return Ok(());
+        };
+        let period = Self::tick_period_ms();
+        let now = self.host.now_ms();
+        if now < next {
+            return Ok(());
+        }
+        let due = (now - next) / period + 1;
+        let steps = due.min(3);
+        if due > steps {
+            self.log_json(serde_json::json!({
+                "hearth": "tick_dropped",
+                "room": self.room_label(),
+                "n": due - steps,
+            }));
+        }
+        let before = self.capture_views();
+        let admin_before = self.admin_before();
+        let started = self.host.now_ms();
+        let mut effects: Vec<Effect> = Vec::new();
+        let mut applied: Vec<(PlayerId, Vec<u32>)> = Vec::new();
+        let mut rejected: Vec<(PlayerId, u32, String)> = Vec::new();
+
+        for _ in 0..steps {
+            self.tick += 1;
+            // 1. The intents that arrived since the last tick run first, in
+            //    arrival order, so the handlers and on_tick agree on the input.
+            let pending = std::mem::take(&mut self.pending);
+            for (player, intent_seq, intent) in pending {
+                let Some(who) = self.connected_client(&player) else {
+                    // The socket went away before its input ran: drop it.
+                    continue;
+                };
+                let snapshot = self.snapshot()?;
+                let roster = self.clients_roster()?;
+                let state = self.state.take().expect("state loaded");
+                let mut ctx = self.make_ctx(state, roster);
+                let result = self.room.on_intent(&mut ctx, &who, intent).await;
+                let (state, ctx_effects) = ctx.into_parts();
+                self.state = Some(state);
+                match result {
+                    Ok(()) => {
+                        match applied.iter_mut().find(|(id, _)| id == &player) {
+                            Some((_, seqs)) => seqs.push(intent_seq),
+                            None => applied.push((player, vec![intent_seq])),
+                        }
+                        effects.extend(ctx_effects);
+                    }
+                    Err(err) => {
+                        self.state = Some(rmp_serde::from_slice(&snapshot)?);
+                        self.log_json(serde_json::json!({
+                            "hearth": "handler_error",
+                            "room": self.room_label(),
+                            "player": who.player_id.0,
+                            "msg": err.to_string(),
+                        }));
+                        rejected.push((player, intent_seq, err.to_string()));
+                    }
+                }
+            }
+            // 2. The tick itself. A failed step is rolled back and not retried.
+            let snapshot = self.snapshot()?;
+            let roster = self.clients_roster()?;
+            let state = self.state.take().expect("state loaded");
+            let mut ctx = self.make_ctx(state, roster);
+            let result = self.room.on_tick(&mut ctx, Self::tick_dt()).await;
+            let (state, step_effects) = ctx.into_parts();
+            self.state = Some(state);
+            match result {
+                Ok(()) => effects.extend(step_effects),
+                Err(err) => {
+                    self.state = Some(rmp_serde::from_slice(&snapshot)?);
+                    self.log_json(serde_json::json!({
+                        "hearth": "handler_error",
+                        "room": self.room_label(),
+                        "msg": err.to_string(),
+                    }));
+                }
+            }
+            // 3. Persist every N ticks, with the tick number.
+            if R::PERSIST_EVERY > 0 && self.tick % u64::from(R::PERSIST_EVERY) == 0 {
+                self.persist()?;
+            }
+        }
+
+        // Absolute schedule: consume every elapsed period, dropped ones too.
+        self.next_tick_ms = Some(next.saturating_add(due.saturating_mul(period)));
+        let seq = self.seq;
+        self.patch_joined(&before, seq, Some(self.tick), Some(now));
+        self.admin_after(
+            admin_before,
+            vec![Cause::Timer {
+                key: "tick".to_owned(),
+            }],
+            Vec::new(),
+            seq,
+        );
+        for (player, intent_seqs) in applied {
+            if let Some((socket, attachment)) = self.socket_of_player(&player) {
+                self.send_frame(
+                    &socket,
+                    &attachment,
+                    Frame::Ack {
+                        state_seq: seq,
+                        intent_seqs,
+                        tick: Some(self.tick),
+                    },
+                );
+            }
+        }
+        for (player, intent_seq, message) in rejected {
+            if let Some((socket, attachment)) = self.socket_of_player(&player) {
+                let encoding = attachment.encoding.unwrap_or(Encoding::MsgPack);
+                self.send_error(
+                    &socket,
+                    &attachment,
+                    encoding,
+                    ErrorCode::IntentRejected,
+                    message,
+                    Some(intent_seq),
+                );
+            }
+        }
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        self.apply_rest_and_kicks(rest).await?;
+        let elapsed = self.host.now_ms().saturating_sub(started);
+        if elapsed > period {
+            self.log_json(serde_json::json!({
+                "hearth": "tick_overrun",
+                "room": self.room_label(),
+                "ms": elapsed,
+            }));
+        }
+        self.report_players();
+        self.flush_outbox().await;
+        self.reschedule_alarm().await?;
+        Ok(())
+    }
+
     async fn handle_alarm(&mut self) -> Result<()> {
         if self.ensure_loaded().await? {
             self.host.set_alarm(None).await?;
             return Ok(());
+        }
+        if self.tick_due() {
+            self.tick().await?;
+            if self.state.is_none() {
+                self.host.set_alarm(None).await?;
+                return Ok(());
+            }
         }
         let now = self.host.now_ms();
         let rows = self.host.sql().exec(
@@ -1476,7 +1862,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         if self.state.is_none() {
             return Ok(());
         }
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
@@ -1498,7 +1884,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             Vec::new()
         };
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(
             admin_before,
             vec![Cause::Timer { key: key.0.clone() }],
@@ -1545,7 +1931,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             provider: attachment.provider.clone(),
             display_name: attachment.display_name.clone(),
         };
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
@@ -1574,7 +1960,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             },
         );
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(
             admin_before,
             vec![Cause::Leave {
@@ -1620,7 +2006,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             provider: held.provider.clone(),
             display_name: held.display_name.clone(),
         };
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
@@ -1636,7 +2022,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             Vec::new()
         };
         let seq = self.persist()?;
-        self.patch_joined(&before, seq);
+        self.patch_joined(&before, seq, None, None);
         self.admin_after(
             admin_before,
             vec![Cause::Leave {
@@ -1855,6 +2241,12 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             }
         }
         self.load_lobby_meta();
+        if let Some(tick) =
+            store::meta_get(self.host.sql(), "tick")?.and_then(|raw| raw.parse::<u64>().ok())
+        {
+            self.tick = tick;
+            self.last_saved_tick = tick;
+        }
         let rows = self.host.sql().exec(
             "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
             Vec::new(),
@@ -1918,6 +2310,12 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.last_saved = Some(bytes);
             self.last_saved_locked = self.locked;
         }
+        // A ticked room keeps its tick number with its state, so an eviction
+        // loses at most the unpersisted ticks.
+        if self.last_saved_tick != self.tick {
+            store::meta_put(self.host.sql(), "tick", &self.tick.to_string())?;
+            self.last_saved_tick = self.tick;
+        }
         Ok(self.seq)
     }
 
@@ -1948,15 +2346,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.host.set_alarm(None).await?;
             return Ok(());
         }
-        let rows = self
-            .host
-            .sql()
-            .exec("SELECT MIN(due_ms) AS next FROM hearth_timers", Vec::new())?;
-        let next = rows
-            .first()
-            .and_then(|row| row.get("next"))
-            .and_then(Value::as_u64);
-        self.host.set_alarm(next).await
+        self.host.set_alarm(self.next_wake()).await
     }
 
     fn take_token(&mut self, player: &PlayerId, now_ms: u64) -> bool {
@@ -2125,29 +2515,63 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(!self.joined().is_empty() || !self.held_clients()?.is_empty())
     }
 
-    fn views(&self) -> Vec<(H::Socket, Value)> {
+    fn capture_views(&self) -> CapturedViews<H::Socket> {
         let Some(state) = &self.state else {
-            return Vec::new();
+            return CapturedViews {
+                public: None,
+                sockets: Vec::new(),
+                owner: Vec::new(),
+            };
         };
-        self.joined()
-            .into_iter()
-            .map(|(socket, attachment)| (socket, state.view(&attachment.player_id)))
-            .collect()
+        let joined = self.joined();
+        let sockets = joined.iter().map(|(socket, _)| socket.clone()).collect();
+        let public = Some(state.public_view());
+        let owner = if R::State::HAS_OWNER {
+            joined
+                .into_iter()
+                .map(|(socket, attachment)| (socket, state.owner_view(&attachment.player_id)))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        CapturedViews {
+            public,
+            sockets,
+            owner,
+        }
     }
 
-    fn patch_joined(&self, before: &[(H::Socket, Value)], seq: u64) {
-        let Some(state) = &self.state else {
+    fn patch_joined(
+        &self,
+        before: &CapturedViews<H::Socket>,
+        seq: u64,
+        tick: Option<u64>,
+        t: Option<u64>,
+    ) {
+        let (Some(state), Some(public_before)) = (&self.state, &before.public) else {
             return;
         };
+        // One public diff serves every client; only owner fields are per client.
+        let public_ops = diff(public_before, &state.public_view());
         for (socket, attachment) in self.joined() {
-            let Some((_, old)) = before.iter().find(|(candidate, _)| candidate == &socket) else {
+            if !before.sockets.contains(&socket) {
                 continue;
-            };
-            let new = state.view(&attachment.player_id);
-            let ops = diff(old, &new);
-            if !ops.is_empty() {
-                self.send_frame(&socket, &attachment, Frame::Patch { seq, ops });
             }
+            let mut ops = public_ops.clone();
+            if R::State::HAS_OWNER {
+                let Some((_, owner_before)) = before
+                    .owner
+                    .iter()
+                    .find(|(candidate, _)| candidate == &socket)
+                else {
+                    continue;
+                };
+                ops.extend(diff(owner_before, &state.owner_view(&attachment.player_id)));
+            }
+            if ops.is_empty() {
+                continue;
+            }
+            self.send_frame(&socket, &attachment, Frame::Patch { seq, ops, tick, t });
         }
     }
 
@@ -2246,7 +2670,7 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
         }
         // The patch base is the loaded state, so an rpc that changes it reaches
         // the room's clients exactly like an intent does.
-        let before = self.views();
+        let before = self.capture_views();
         let admin_before = self.admin_before();
         self.chain = envelope.chain.clone();
         let roster = self.clients_roster().map_err(call_internal)?;
@@ -2266,7 +2690,7 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
                     outbox::remember(self.host.sql(), id, self.host.now_ms())
                         .map_err(call_internal)?;
                 }
-                self.patch_joined(&before, seq);
+                self.patch_joined(&before, seq, None, None);
                 self.admin_after(
                     admin_before,
                     vec![Cause::Call {

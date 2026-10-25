@@ -45,6 +45,7 @@ pub struct Ctx<R: Room> {
     effects: Vec<Effect>,
     sql: Rc<dyn Sql>,
     now_ms: u64,
+    tick: u64,
     caller: Caller,
 }
 
@@ -54,6 +55,7 @@ impl<R: Room> Ctx<R> {
         clients: Vec<Client>,
         sql: Rc<dyn Sql>,
         now_ms: u64,
+        tick: u64,
         caller: Caller,
     ) -> Self {
         Self {
@@ -62,6 +64,7 @@ impl<R: Room> Ctx<R> {
             effects: Vec::new(),
             sql,
             now_ms,
+            tick,
             caller,
         }
     }
@@ -136,6 +139,12 @@ impl<R: Room> Ctx<R> {
 
     pub fn now_ms(&self) -> u64 {
         self.now_ms
+    }
+
+    /// The simulation tick a ticked room's handler is running for. Always `0`
+    /// in event mode.
+    pub fn tick(&self) -> u64 {
+        self.tick
     }
 
     /// This room's own address.

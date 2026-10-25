@@ -1,0 +1,29 @@
+name = "hearth-arena"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-01-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+# The ticked room. `mode = "ticked"` in the macro decides the behavior; the
+# binding name here must match `binding = "ARENA"`.
+[[durable_objects.bindings]]
+name = "ARENA"
+class_name = "ArenaRoomObject"
+
+# Optional room registry: powers `hearth inspect rooms`, which the soak test uses
+# to check that a room stops ticking once every player has left.
+[[durable_objects.bindings]]
+name = "HEARTH_REGISTRY"
+class_name = "HearthRegistry"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ArenaRoomObject"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HearthRegistry"]
+
+[observability]
+enabled = true

@@ -62,6 +62,87 @@ fn view_hides_server_only_and_other_owners() {
     );
 }
 
+/// A state with no `#[sync(owner)]` field, for the `HAS_OWNER` flag.
+#[derive(HearthState, Serialize, Deserialize, Default)]
+pub struct Plain {
+    #[sync]
+    pub count: i64,
+    pub hidden: i64,
+}
+
+fn populated_match() -> Match {
+    let mut state = Match::default();
+    state.players.insert(
+        pid("a"),
+        Player {
+            name: "A".into(),
+            score: 1,
+        },
+    );
+    state.turn = pid("a");
+    state.hand.insert(pid("a"), vec![Card::Num(1)]);
+    state.hand.insert(pid("b"), vec![Card::Joker]);
+    state.deck = vec![Card::Num(9)];
+    state
+}
+
+#[test]
+fn public_view_excludes_owner_and_server_fields() {
+    let state = populated_match();
+
+    let public = state.public_view();
+    assert_eq!(public["turn"], json!("a"));
+    assert_eq!(public["players"], json!({"a": {"name": "A", "score": 1}}));
+    assert!(
+        public.get("hand").is_none(),
+        "an owner field is not public: {public}"
+    );
+    assert!(
+        public.get("deck").is_none(),
+        "a server-only field is never in a view: {public}"
+    );
+}
+
+#[test]
+fn owner_view_only_owner_fields_for_viewer() {
+    let state = populated_match();
+
+    let owner = state.owner_view(&pid("a"));
+    assert_eq!(owner, json!({"hand": {"a": [{"Num": 1}]}}));
+    assert!(
+        owner.get("players").is_none() && owner.get("turn").is_none(),
+        "public fields are not owner-scoped: {owner}"
+    );
+    assert!(owner.get("deck").is_none(), "{owner}");
+    assert_eq!(
+        state.owner_view(&pid("b")),
+        json!({"hand": {"b": ["Joker"]}})
+    );
+    assert_eq!(
+        state.owner_view(&pid("z")),
+        json!({"hand": {}}),
+        "a viewer with no owner entry gets an empty filtered map"
+    );
+}
+
+#[test]
+fn view_is_merge_of_both() {
+    let state = populated_match();
+    let viewer = pid("a");
+
+    let public = state.public_view();
+    let owner = state.owner_view(&viewer);
+    let mut merged = public.as_object().cloned().expect("a public view object");
+    merged.extend(owner.as_object().cloned().expect("an owner view object"));
+    assert_eq!(state.view(&viewer), serde_json::Value::Object(merged));
+}
+
+#[test]
+fn has_owner_flag_matches_the_fields() {
+    assert!(<Match as HearthState>::HAS_OWNER);
+    assert!(!<Plain as HearthState>::HAS_OWNER);
+}
+
 /// Same types and fields as [`Match`], but the server-only field has a
 /// different type. Equality is checked by the test below.
 mod ignores_server_only {

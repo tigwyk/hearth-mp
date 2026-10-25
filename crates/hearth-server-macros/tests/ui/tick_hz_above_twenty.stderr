@@ -1,0 +1,5 @@
+error: tick_hz must be 5..=20; above 20 Hz use a dedicated server (Handoff, v0.5)
+ --> tests/ui/tick_hz_above_twenty.rs:7:70
+  |
+7 | #[room(mode = "ticked", max_clients = 2, binding = "GAME", tick_hz = 30)]
+  |                                                                      ^^

@@ -8,12 +8,15 @@ use serde::Serialize;
 use crate::call::Target;
 use crate::Result;
 
-/// How a room runs. v0.1 ships event mode only; ticked mode arrives in v0.4.
+/// How a room runs.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     /// Wakes per message or alarm and hibernates between.
     Event,
+    /// A fixed-step simulation while at least one client is connected. The
+    /// alarm (or the adapter's loop driver) calls [`Room::on_tick`].
+    Ticked,
 }
 
 /// Compile-time room configuration, emitted by `#[hearth::room]`.
@@ -32,6 +35,12 @@ pub trait RoomConfig {
     /// one burst. Set it with the `#[hearth::room(intent_burst = N)]`
     /// attribute; at least 1.
     const INTENT_BURST: u32 = 120;
+    /// Ticked rooms only: simulation ticks per second (`5..=20`). Set it with
+    /// the `#[hearth::room(tick_hz = N)]` attribute; `0` for event rooms.
+    const TICK_HZ: u8 = 0;
+    /// Ticked rooms only: persist the state every N ticks. Set it with the
+    /// `#[hearth::room(persist_every = N)]` attribute.
+    const PERSIST_EVERY: u32 = 20;
 }
 
 /// One client. Identity comes from the gateway, never from the client's own
@@ -128,6 +137,12 @@ pub trait Room: RoomConfig + Default + 'static {
     }
 
     async fn on_dispose(&mut self, _ctx: &mut crate::Ctx<Self>) -> Result<()> {
+        Ok(())
+    }
+
+    /// Ticked rooms only: one fixed simulation step of `dt` (`1 s / TICK_HZ`).
+    /// Intents for this tick already ran, so they are visible in `ctx.state()`.
+    async fn on_tick(&mut self, _ctx: &mut crate::Ctx<Self>, _dt: Duration) -> Result<()> {
         Ok(())
     }
 }

@@ -269,7 +269,9 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
     let ident = &input.ident;
     let type_name = ident.to_string();
     let mut hash = quote!(#rt::fnv1a64(#type_name.as_bytes()));
-    let mut inserts = Vec::new();
+    let mut public_inserts = Vec::new();
+    let mut owner_inserts = Vec::new();
+    let mut has_owner = false;
     let mut described = Vec::new();
     for field in &named.named {
         check_serde_attrs(&field.attrs)?;
@@ -287,10 +289,23 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
             #rt::mix(#rt::mix(#hash, #rt::fnv1a64(#field_name.as_bytes())), #tag),
             <#ty as #rt::Schema>::HASH
         ));
-        let value = match visibility {
-            Visibility::Plain => quote!(#rt::__private::to_value(&self.#field_ident)),
-            Visibility::Owner => quote!(#rt::OwnerScoped::owner_view(&self.#field_ident, viewer)),
-        };
+        match visibility {
+            Visibility::Plain => public_inserts.push(quote!(
+                map.insert(
+                    #field_name.to_owned(),
+                    #rt::__private::to_value(&self.#field_ident),
+                );
+            )),
+            Visibility::Owner => {
+                has_owner = true;
+                owner_inserts.push(quote!(
+                    map.insert(
+                        #field_name.to_owned(),
+                        #rt::OwnerScoped::owner_view(&self.#field_ident, viewer),
+                    );
+                ));
+            }
+        }
         let vis = match visibility {
             Visibility::Plain => quote!(#rt::Vis::Public),
             Visibility::Owner => quote!(#rt::Vis::Owner),
@@ -300,7 +315,6 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
             ty: <#ty as #rt::Schema>::describe(reg),
             vis: #vis,
         }));
-        inserts.push(quote!(map.insert(#field_name.to_owned(), #value);));
     }
     Ok(quote! {
         impl #rt::Schema for #ident {
@@ -315,11 +329,20 @@ fn expand_hearth_state(input: &DeriveInput) -> syn::Result<TokenStream2> {
         }
 
         impl #rt::HearthState for #ident {
+            const HAS_OWNER: bool = #has_owner;
+
             #[allow(unused_mut)]
-            fn view(&self, viewer: &#rt::PlayerId) -> #rt::Value {
+            fn public_view(&self) -> #rt::Value {
+                let mut map = #rt::__private::Map::new();
+                #(#public_inserts)*
+                #rt::Value::Object(map)
+            }
+
+            #[allow(unused_mut)]
+            fn owner_view(&self, viewer: &#rt::PlayerId) -> #rt::Value {
                 let _ = viewer;
                 let mut map = #rt::__private::Map::new();
-                #(#inserts)*
+                #(#owner_inserts)*
                 #rt::Value::Object(map)
             }
         }

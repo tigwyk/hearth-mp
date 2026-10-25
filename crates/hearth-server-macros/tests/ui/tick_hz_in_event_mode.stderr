@@ -1,0 +1,5 @@
+error: tick_hz needs mode = "ticked"
+ --> tests/ui/tick_hz_in_event_mode.rs:7:69
+  |
+7 | #[room(mode = "event", max_clients = 2, binding = "GAME", tick_hz = 20)]
+  |                                                                     ^^

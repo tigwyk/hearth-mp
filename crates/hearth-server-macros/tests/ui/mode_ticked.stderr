@@ -1,5 +1,0 @@
-error: ticked rooms arrive in Hearth v0.4; use mode = "event"
- --> tests/ui/mode_ticked.rs:7:15
-  |
-7 | #[room(mode = "ticked")]
-  |               ^^^^^^^^

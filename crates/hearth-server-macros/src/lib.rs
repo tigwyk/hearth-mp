@@ -22,6 +22,8 @@ use syn::{Expr, ItemImpl, Lit, Meta, Token, Type};
 #[derive(Default)]
 struct RoomArgs {
     mode: Option<(String, Span)>,
+    tick_hz: Option<(u64, Span)>,
+    persist_every: Option<(u64, Span)>,
     max_clients: Option<(i64, Span)>,
     empty_grace_secs: Option<u64>,
     reconnect_grace_secs: Option<u64>,
@@ -58,19 +60,24 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
     let item_impl: ItemImpl = syn::parse2(item.clone())?;
     let args = parse_room_args(attr)?;
 
-    match args
+    let mode = args
         .mode
         .as_ref()
         .map(|(mode, _)| mode.as_str())
-        .unwrap_or("event")
-    {
-        "event" => {}
-        "ticked" => {
-            return Err(syn::Error::new(
-                args.mode.as_ref().expect("mode present").1,
-                "ticked rooms arrive in Hearth v0.4; use mode = \"event\"",
-            ))
+        .unwrap_or("event");
+    match mode {
+        "event" => {
+            if let Some((_, span)) = &args.tick_hz {
+                return Err(syn::Error::new(*span, "tick_hz needs mode = \"ticked\""));
+            }
+            if let Some((_, span)) = &args.persist_every {
+                return Err(syn::Error::new(
+                    *span,
+                    "persist_every needs mode = \"ticked\"",
+                ));
+            }
         }
+        "ticked" => {}
         "handoff" => {
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
@@ -80,7 +87,7 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
         _ => {
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
-                "mode must be \"event\"",
+                "mode must be \"event\" or \"ticked\"",
             ))
         }
     }
@@ -116,6 +123,41 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
     let intent_rate = args.intent_rate.unwrap_or(60);
     let intent_burst = args.intent_burst.unwrap_or(120);
 
+    // Ticked mode: a required tick rate in 5..=20 Hz (the ADR's ceiling) and a
+    // persist interval; event mode leaves both at the trait defaults.
+    let (mode_tokens, tick_hz, persist_every) = if mode == "ticked" {
+        let Some((hz, hz_span)) = args.tick_hz else {
+            return Err(syn::Error::new(
+                first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+                "mode = \"ticked\" needs tick_hz = N (5..=20)",
+            ));
+        };
+        if !(5..=20).contains(&hz) {
+            return Err(syn::Error::new(
+                hz_span,
+                "tick_hz must be 5..=20; above 20 Hz use a dedicated server (Handoff, v0.5)",
+            ));
+        }
+        let every = match args.persist_every {
+            Some((every, span)) => {
+                if every < 1 {
+                    return Err(syn::Error::new(span, "persist_every must be at least 1"));
+                }
+                every
+            }
+            None => 20,
+        };
+        let every = u32::try_from(every).map_err(|_| {
+            syn::Error::new(
+                first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+                "persist_every is too large",
+            )
+        })?;
+        (quote!(::hearth::server::Mode::Ticked), hz as u8, every)
+    } else {
+        (quote!(::hearth::server::Mode::Event), 0u8, 20u32)
+    };
+
     let room = self_ident(&item_impl)?;
     let self_ty = &item_impl.self_ty;
     let object = format_ident!("{room}Object");
@@ -146,7 +188,9 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
         #item_impl
 
         impl ::hearth::server::RoomConfig for #room {
-            const MODE: ::hearth::server::Mode = ::hearth::server::Mode::Event;
+            const MODE: ::hearth::server::Mode = #mode_tokens;
+            const TICK_HZ: u8 = #tick_hz;
+            const PERSIST_EVERY: u32 = #persist_every;
             const MAX_CLIENTS: u8 = #max_clients;
             const EMPTY_GRACE: ::std::time::Duration =
                 ::std::time::Duration::from_secs(#empty_grace_secs);
@@ -378,6 +422,14 @@ fn parse_room_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
                     ));
                 }
                 args.intent_rate = Some(rate);
+            }
+            "tick_hz" => {
+                let value = int_value(&meta, "tick_hz")?;
+                args.tick_hz = Some((value.base10_parse::<u64>()?, value.span()));
+            }
+            "persist_every" => {
+                let value = int_value(&meta, "persist_every")?;
+                args.persist_every = Some((value.base10_parse::<u64>()?, value.span()));
             }
             "intent_burst" => {
                 let value = int_value(&meta, "intent_burst")?;

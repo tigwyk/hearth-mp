@@ -1,0 +1,5 @@
+error: persist_every must be at least 1
+ --> tests/ui/persist_every_zero.rs:7:90
+  |
+7 | #[room(mode = "ticked", max_clients = 2, binding = "GAME", tick_hz = 20, persist_every = 0)]
+  |                                                                                          ^

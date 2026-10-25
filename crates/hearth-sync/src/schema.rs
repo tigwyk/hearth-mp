@@ -274,9 +274,30 @@ impl<V: Serialize> OwnerScoped for SyncMap<PlayerId, V> {
 
 /// Durable room state that is synchronised to clients.
 pub trait HearthState: Schema + Serialize + DeserializeOwned + Default + 'static {
+    /// Whether this state has any `#[sync(owner)]` field. The derive emits the
+    /// exact answer; the conservative default keeps hand-written impls safe.
+    const HAS_OWNER: bool = true;
+
+    /// This state's `#[sync]` (public) fields only: the part every client sees
+    /// identically, so the runtime can diff it once per handler pass.
+    fn public_view(&self) -> Value;
+
+    /// Only this state's `#[sync(owner)]` fields, already filtered to `viewer`:
+    /// one key per owner field, each holding only the viewer's own entry.
+    fn owner_view(&self, viewer: &PlayerId) -> Value;
+
     /// This state as `viewer` may see it: synced fields, with owner-scoped
     /// fields filtered to the viewer.
-    fn view(&self, viewer: &PlayerId) -> Value;
+    fn view(&self, viewer: &PlayerId) -> Value {
+        let mut map = match self.public_view() {
+            Value::Object(map) => map,
+            _ => serde_json::Map::new(),
+        };
+        if let Value::Object(owner) = self.owner_view(viewer) {
+            map.extend(owner);
+        }
+        Value::Object(map)
+    }
 
     /// The **state-only** schema hash as 16-char lowercase hex. The wire
     /// `HELLO.schema_hash` is the room-level hash covering state *and* intent;

@@ -1,0 +1,5 @@
+error: mode = "ticked" needs tick_hz = N (5..=20)
+ --> tests/ui/ticked_missing_tick_hz.rs:7:8
+  |
+7 | #[room(mode = "ticked", max_clients = 2, binding = "GAME")]
+  |        ^^^^

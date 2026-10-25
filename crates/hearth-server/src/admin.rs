@@ -29,6 +29,8 @@ pub struct InspectDoc {
     pub room: RoomName,
     pub created_ms: u64,
     pub seq: u64,
+    /// The ticked-mode tick number, `0` in event mode (`hearth_meta.tick`).
+    pub tick: u64,
     pub locked: bool,
     pub incompatible: bool,
     pub clients: Vec<InspectClient>,
