@@ -27,8 +27,12 @@ use hearth_protocol::{
     Value, WireMsg, PING_TEXT, PONG_TEXT, PROTOCOL_VERSION,
 };
 
+mod interp;
+mod predict;
 mod reconnect;
 
+pub use interp::{ClockSync, Interpolator};
+pub use predict::{Logic, Predictor};
 pub use reconnect::{Reconnect, ReconnectPolicy};
 
 /// Default outgoing message rate limit, in messages per second.
@@ -112,6 +116,8 @@ pub struct ClientCore {
     send_interval_ms: u64,
     /// Clock value of the last queued-intent send; `None` before the first one.
     last_send_ms: Option<u64>,
+    /// The newest `(tick, server_ms)` from a ticked-mode `PATCH`.
+    last_tick: Option<(u64, u64)>,
 }
 
 impl ClientCore {
@@ -130,6 +136,7 @@ impl ClientCore {
             desynced: false,
             send_interval_ms,
             last_send_ms: None,
+            last_tick: None,
         }
     }
 
@@ -165,13 +172,26 @@ impl ClientCore {
             Frame::FullState { seq, state } => {
                 self.state = state;
                 self.seq = seq;
+                // The tree was replaced, so any ticked patch that follows is
+                // newer than it regardless of the tick it carries (a room that
+                // was disposed and recreated restarts its tick count).
+                self.last_tick = None;
                 self.desynced = false;
                 Ok(vec![ClientEvent::StateReset])
             }
-            Frame::Patch { seq, ops } => Ok(self.handle_patch(seq, ops)),
+            Frame::Patch { seq, ops, tick, t } => {
+                // Ticked patches repeat the persisted state seq (it only moves
+                // on persist), so they are ordered by their tick instead.
+                let previous_tick = self.last_tick.map(|(tick, _)| tick);
+                if let (Some(tick), Some(t)) = (tick, t) {
+                    self.last_tick = Some((tick, t));
+                }
+                Ok(self.handle_patch(seq, tick, previous_tick, ops))
+            }
             Frame::Ack {
                 state_seq,
                 intent_seqs,
+                ..
             } => {
                 for seq in &intent_seqs {
                     self.in_flight.remove(seq);
@@ -204,8 +224,22 @@ impl ClientCore {
     /// A stale patch is dropped. A patch that fails to apply desyncs the
     /// client: the failed op changes nothing, later patches are ignored, and
     /// the next `FULL_STATE` recovers.
-    fn handle_patch(&mut self, seq: u64, ops: Vec<PatchOp>) -> Vec<ClientEvent> {
-        if self.desynced || seq <= self.seq {
+    ///
+    /// Event-mode patches advance `seq`, so an old one is `seq <= self.seq`.
+    /// Ticked patches carry a `tick` and repeat the persisted `seq` until the
+    /// next persist, so they are ordered by `tick` instead.
+    fn handle_patch(
+        &mut self,
+        seq: u64,
+        tick: Option<u64>,
+        previous_tick: Option<u64>,
+        ops: Vec<PatchOp>,
+    ) -> Vec<ClientEvent> {
+        let stale = match tick {
+            Some(tick) => previous_tick.is_some_and(|previous| tick <= previous),
+            None => seq <= self.seq,
+        };
+        if self.desynced || stale {
             return Vec::new();
         }
         for op in &ops {
@@ -214,7 +248,7 @@ impl ClientCore {
                 return vec![ClientEvent::Desync];
             }
         }
-        self.seq = seq;
+        self.seq = self.seq.max(seq);
         vec![ClientEvent::Patched { ops }]
     }
 
@@ -278,6 +312,12 @@ impl ClientCore {
     /// The last state sequence applied.
     pub fn seq(&self) -> u64 {
         self.seq
+    }
+
+    /// The newest `(tick, server_ms)` from a ticked-mode `PATCH`; `None` in
+    /// event rooms or before the first ticked patch.
+    pub fn last_tick(&self) -> Option<(u64, u64)> {
+        self.last_tick
     }
 
     /// The joined player id; `None` until `JOIN_OK`.

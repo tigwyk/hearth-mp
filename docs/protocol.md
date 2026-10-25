@@ -109,6 +109,14 @@ encoding. Errors: wrong `protocol` → `UNSUPPORTED_PROTOCOL` and close 4000; wr
   treat that as a desync (reconnect for a fresh `FULL_STATE`).
 - Applying an op with a bad path is a desync: drop the patched tree, emit a
   local desync signal, and wait for `FULL_STATE`.
+- **Ticked rooms only:** the frame also carries `tick` (the tick number this
+  patch is the result of) and `t` (server wall-clock milliseconds at that
+  tick). In these rooms `seq` only moves when the room persists (default every
+  20 ticks), so consecutive patches repeat it: order and dedupe by `tick`
+  instead, dropping a patch whose `tick` is not greater than the last applied
+  one and applying any patch that follows a `FULL_STATE`. Event rooms leave
+  both fields out, so a decoder must treat them as optional. `t` feeds client
+  clock sync and interpolation (see `docs/ticked.md`).
 
 ### `INTENT` — client → server
 
@@ -137,6 +145,9 @@ encoding. Errors: wrong `protocol` → `UNSUPPORTED_PROTOCOL` and close 4000; wr
   accepted and rejected intents; see `ERROR.ref_seq`). `ACK` is the client
   prediction/reconciliation hook. One `ACK` may cover several `INTENT` frames
   when they are handled together.
+- **Ticked rooms only:** `tick` is the tick at which those intents were
+  applied. The intents were buffered until that tick, so a client that predicts
+  replays its unacknowledged inputs from that tick forward.
 
 ### `EVENT` — server → client
 
@@ -259,8 +270,10 @@ reason.
    if state changed, sends one `PATCH` (state observers) and one `ACK` to the
    sender for accepted intents, plus `ERROR` frames for rejected ones.
 6. State sequence numbers (`FULL_STATE.seq` and `PATCH.seq`) are monotonic u64
-   per room and increase by one per state flush that changed anything. Intent
-   sequence numbers are per socket, assigned by the client, monotonic u32.
+   per room and increase by one per state flush that changed anything. In a
+   ticked room the tick is the per-patch version: it increases by one per tick,
+   while `PATCH.seq` stays put between persists. Intent sequence numbers are per
+   socket, assigned by the client, monotonic u32.
 7. A second socket for the same player replaces the first: the old socket is
    closed with 4009 `REPLACED`, the seat is kept, and `on_join`/`on_leave` are
    not called again. The new socket receives `JOIN_OK` with the same seat and a
@@ -273,7 +286,8 @@ reason.
 - [ ] In binary mode, check the opcode byte against the body's `op` tag.
 - [ ] Parse the schema hash as a string of 16 hex characters, never a number.
 - [ ] Apply `FULL_STATE` by replacing the tree; apply `PATCH` ops in order.
-- [ ] Ignore a `PATCH` whose `seq` is not greater than the current sequence.
+- [ ] Ignore a `PATCH` whose `seq` is not greater than the current sequence; in a
+      ticked room compare `tick` instead, and reset the comparison on `FULL_STATE`.
 - [ ] Treat a bad patch path as a desync and wait for `FULL_STATE`.
 - [ ] Batch intents (default ≤ 32 per message) and cap send rate (default ≤ 20/s).
 - [ ] Assign intent sequence numbers from 1, incrementing by exactly 1.

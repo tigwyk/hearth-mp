@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "examples/tictactoe"]
+members = [
+    "crates/*",
+    "examples/arena-logic",
+    "examples/tictactoe",
+]
 
 [workspace.package]
 version = "0.1.0"

@@ -41,6 +41,8 @@ fn sample_frames() -> Vec<Frame> {
                     insert: vec![json!(9), json!({"x": true})],
                 },
             ],
+            tick: None,
+            t: None,
         },
         Frame::Intent {
             intents: vec![
@@ -61,6 +63,7 @@ fn sample_frames() -> Vec<Frame> {
         Frame::Ack {
             state_seq: 9,
             intent_seqs: vec![1, 2],
+            tick: None,
         },
         Frame::Error {
             code: ErrorCode::BadIntent,
@@ -76,6 +79,8 @@ fn binary_frame_is_opcode_byte_then_named_msgpack() {
     let frame = Frame::Patch {
         seq: 7,
         ops: vec![],
+        tick: None,
+        t: None,
     };
     let WireMsg::Binary(bytes) = encode(&frame, Encoding::MsgPack) else {
         panic!("MsgPack encoding must be binary");

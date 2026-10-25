@@ -1,0 +1,96 @@
+[
+  {
+    "name": "mid_bracket_lerp",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [1100, 10]],
+    "render_t": 1050,
+    "expect": 5
+  },
+  {
+    "name": "array_lerp",
+    "tick_hz": 10,
+    "snapshots": [[1000, [0, 10]], [1100, [10, 20]]],
+    "render_t": 1050,
+    "expect": [5, 15]
+  },
+  {
+    "name": "string_takes_older_value",
+    "tick_hz": 10,
+    "snapshots": [[1000, "a"], [1100, "b"]],
+    "render_t": 1050,
+    "expect": "a"
+  },
+  {
+    "name": "extrapolate_within_one_period",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [1100, 10]],
+    "render_t": 1150,
+    "expect": 15
+  },
+  {
+    "name": "extrapolate_capped_at_one_period",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [1100, 10]],
+    "render_t": 1400,
+    "expect": 20
+  },
+  {
+    "name": "hold_beyond_one_period",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [1100, 10]],
+    "render_t": 5000,
+    "expect": 20
+  },
+  {
+    "name": "before_first_snapshot",
+    "tick_hz": 10,
+    "snapshots": [[1000, 5], [1100, 15]],
+    "render_t": 900,
+    "expect": 5
+  },
+  {
+    "name": "single_snapshot",
+    "tick_hz": 10,
+    "snapshots": [[1000, 42]],
+    "render_t": 1500,
+    "expect": 42
+  },
+  {
+    "name": "out_of_order_snapshot_discarded",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [1100, 10], [1050, 999]],
+    "render_t": 1050,
+    "expect": 5
+  },
+  {
+    "name": "two_second_gap_still_lerps",
+    "tick_hz": 10,
+    "snapshots": [[1000, 0], [3000, 200]],
+    "render_t": 2000,
+    "expect": 100
+  },
+  {
+    "name": "wildcard_expands_dynamic_keys",
+    "tick_hz": 10,
+    "track": ["value", "*", "pos"],
+    "sample": ["value", "a", "pos"],
+    "snapshots": [
+      [1000, {"a": {"pos": 0}, "b": {"pos": 100}}],
+      [1100, {"a": {"pos": 10}, "b": {"pos": 200}}]
+    ],
+    "render_t": 1050,
+    "expect": 5
+  },
+  {
+    "name": "wildcard_new_key_has_no_history",
+    "tick_hz": 10,
+    "track": ["value", "*", "pos"],
+    "sample": ["value", "c", "pos"],
+    "snapshots": [
+      [1000, {"a": {"pos": 0}}],
+      [1100, {"a": {"pos": 10}, "c": {"pos": 50}}]
+    ],
+    "render_t": 1050,
+    "expect": null
+  }
+]

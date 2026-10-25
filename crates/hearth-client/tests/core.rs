@@ -66,6 +66,8 @@ fn full_state_then_patch_updates_state_and_seq() {
         &mut core,
         &Frame::Patch {
             seq: 5,
+            tick: None,
+            t: None,
             ops: ops.clone(),
         },
         Encoding::MsgPack,
@@ -91,6 +93,8 @@ fn stale_patch_ignored() {
         &mut core,
         &Frame::Patch {
             seq: 3,
+            tick: None,
+            t: None,
             ops: vec![PatchOp::Set {
                 path: vec![json!("x")],
                 value: json!(2),
@@ -105,6 +109,8 @@ fn stale_patch_ignored() {
         &mut core,
         &Frame::Patch {
             seq: 5,
+            tick: None,
+            t: None,
             ops: vec![PatchOp::Del {
                 path: vec![json!("x")],
             }],
@@ -115,6 +121,141 @@ fn stale_patch_ignored() {
 
     assert_eq!(core.seq(), 5);
     assert_eq!(core.state(), &json!({"x": 1}));
+}
+
+#[test]
+fn ticked_patches_repeat_seq_and_still_apply() {
+    let mut core = ClientCore::new(config(Encoding::Json));
+    recv(
+        &mut core,
+        &Frame::FullState {
+            seq: 7,
+            state: json!({"x": 0}),
+        },
+        Encoding::Json,
+    );
+
+    // Ticked patches keep the persisted state seq until the next persist, so
+    // they are ordered by `tick`: every one must apply.
+    for (tick, value) in [(10u64, 1), (11, 2)] {
+        let ops = vec![PatchOp::Set {
+            path: vec![json!("x")],
+            value: json!(value),
+        }];
+        let events = recv(
+            &mut core,
+            &Frame::Patch {
+                seq: 7,
+                tick: Some(tick),
+                t: Some(1_000 + tick),
+                ops: ops.clone(),
+            },
+            Encoding::Json,
+        );
+        assert_eq!(events, vec![ClientEvent::Patched { ops }]);
+    }
+    assert_eq!(core.state(), &json!({"x": 2}));
+    assert_eq!(core.last_tick(), Some((11, 1_011)));
+
+    // A repeated tick is stale, even though the persisted seq did not change.
+    let repeated = recv(
+        &mut core,
+        &Frame::Patch {
+            seq: 7,
+            tick: Some(11),
+            t: Some(1_011),
+            ops: vec![PatchOp::Set {
+                path: vec![json!("x")],
+                value: json!(9),
+            }],
+        },
+        Encoding::Json,
+    );
+    assert!(repeated.is_empty(), "a repeated tick emits no event");
+    assert_eq!(core.state(), &json!({"x": 2}));
+
+    // The first ticked patch after a join has no previous tick to compare.
+    let mut fresh = ClientCore::new(config(Encoding::Json));
+    recv(
+        &mut fresh,
+        &Frame::FullState {
+            seq: 7,
+            state: json!({"x": 0}),
+        },
+        Encoding::Json,
+    );
+    let ops = vec![PatchOp::Set {
+        path: vec![json!("x")],
+        value: json!(3),
+    }];
+    let events = recv(
+        &mut fresh,
+        &Frame::Patch {
+            seq: 7,
+            tick: Some(4),
+            t: Some(900),
+            ops: ops.clone(),
+        },
+        Encoding::Json,
+    );
+    assert_eq!(events, vec![ClientEvent::Patched { ops }]);
+}
+
+#[test]
+fn full_state_resets_tick_ordering() {
+    let mut core = ClientCore::new(config(Encoding::Json));
+    for (tick, seq) in [(10u64, 1), (11, 2)] {
+        recv(
+            &mut core,
+            &Frame::FullState {
+                seq,
+                state: json!({"x": 0}),
+            },
+            Encoding::Json,
+        );
+        let ops = vec![PatchOp::Set {
+            path: vec![json!("x")],
+            value: json!(tick),
+        }];
+        let events = recv(
+            &mut core,
+            &Frame::Patch {
+                seq,
+                tick: Some(tick),
+                t: Some(1_000),
+                ops: ops.clone(),
+            },
+            Encoding::Json,
+        );
+        assert_eq!(events, vec![ClientEvent::Patched { ops }]);
+    }
+
+    // A room that was disposed and recreated restarts its tick count; the
+    // FULL_STATE that follows the rejoin clears the old high-water tick.
+    recv(
+        &mut core,
+        &Frame::FullState {
+            seq: 1,
+            state: json!({"x": 0}),
+        },
+        Encoding::Json,
+    );
+    assert_eq!(core.last_tick(), None);
+    let ops = vec![PatchOp::Set {
+        path: vec![json!("x")],
+        value: json!(5),
+    }];
+    let events = recv(
+        &mut core,
+        &Frame::Patch {
+            seq: 1,
+            tick: Some(1),
+            t: Some(9_000),
+            ops: ops.clone(),
+        },
+        Encoding::Json,
+    );
+    assert_eq!(events, vec![ClientEvent::Patched { ops }]);
 }
 
 #[test]
@@ -133,6 +274,8 @@ fn bad_patch_path_emits_desync_then_full_state_recovers() {
         &mut core,
         &Frame::Patch {
             seq: 2,
+            tick: None,
+            t: None,
             ops: vec![PatchOp::Del {
                 path: vec![json!("missing")],
             }],
@@ -152,6 +295,8 @@ fn bad_patch_path_emits_desync_then_full_state_recovers() {
         &mut core,
         &Frame::Patch {
             seq: 3,
+            tick: None,
+            t: None,
             ops: vec![PatchOp::Set {
                 path: vec![json!("a")],
                 value: json!(9),
@@ -182,6 +327,8 @@ fn bad_patch_path_emits_desync_then_full_state_recovers() {
         &mut core,
         &Frame::Patch {
             seq: 10,
+            tick: None,
+            t: None,
             ops: ops.clone(),
         },
         Encoding::MsgPack,
@@ -341,6 +488,8 @@ fn exercise(encoding: Encoding) {
         &mut core,
         &Frame::Patch {
             seq: 2,
+            tick: None,
+            t: None,
             ops: ops.clone(),
         },
         encoding,
@@ -353,6 +502,7 @@ fn exercise(encoding: Encoding) {
     let events = recv(
         &mut core,
         &Frame::Ack {
+            tick: None,
             state_seq: 2,
             intent_seqs: vec![1],
         },
@@ -488,6 +638,7 @@ fn unacked_intents_reported_on_disconnect() {
     recv(
         &mut core,
         &Frame::Ack {
+            tick: None,
             state_seq: 1,
             intent_seqs: vec![1],
         },
@@ -559,6 +710,7 @@ fn no_event_when_nothing_in_flight() {
     recv(
         &mut core,
         &Frame::Ack {
+            tick: None,
             state_seq: 1,
             intent_seqs: vec![1],
         },

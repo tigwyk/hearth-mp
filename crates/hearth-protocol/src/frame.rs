@@ -143,6 +143,12 @@ pub enum Frame {
     Patch {
         seq: u64,
         ops: Vec<PatchOp>,
+        /// The tick this patch is the result of (ticked rooms only).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tick: Option<u64>,
+        /// Server wall-clock milliseconds at that tick (ticked rooms only).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        t: Option<u64>,
     },
     Intent {
         intents: Vec<IntentMsg>,
@@ -154,6 +160,9 @@ pub enum Frame {
     Ack {
         state_seq: u64,
         intent_seqs: Vec<u32>,
+        /// The tick that applied these intents (ticked rooms only).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tick: Option<u64>,
     },
     Error {
         code: ErrorCode,

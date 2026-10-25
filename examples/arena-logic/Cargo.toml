@@ -1,0 +1,14 @@
+[package]
+name = "arena-logic"
+description = "Shared deterministic arena simulation for the Hearth v0.4 ticked/prediction sample."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-protocol.workspace = true
+# Only the `Logic` trait (and `PlayerId` re-export) is needed for prediction.
+hearth-client.workspace = true
+serde.workspace = true
