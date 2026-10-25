@@ -1,0 +1,18 @@
+[package]
+name = "hearth-gateway"
+description = "Hearth v0.1 Gateway Worker library: anonymous auth, token verification and room routing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-protocol.workspace = true
+worker.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
