@@ -1,5 +1,4 @@
-## Hand-written fixture for `tests/typed_runtime.gd`; see typed_fixture_board.gd.
-class_name TypedFixturePlayer
+## Standing object-path fixture player; exercised by `tests/typed_object_path.gd`.
 extends HearthObject
 
 signal score_changed(value)

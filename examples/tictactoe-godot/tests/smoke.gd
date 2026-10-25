@@ -1,15 +1,20 @@
 extends SceneTree
-## End-to-end smoke test for the Hearth Godot client (plan Task 10 Step 4).
+## End-to-end smoke test for the Hearth Godot client (plan Task 7 Step 5).
 ##
-## Needs the sample server from Task 9 (`cd examples/tictactoe; npx wrangler dev`)
-## and the project imported once so the GDExtension is loaded. Two clients log
-## in, join the same room, X wins the top row, and both state views must agree.
+## Needs the sample server (`cd examples/tictactoe; npx wrangler dev`) and the
+## typed classes generated from the server crate:
+##
+##   hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+##
+## Two clients log in, join the same room, X wins the top row, and both typed
+## state views must agree.
 ##
 ##   $env:HEARTH_URL="http://127.0.0.1:8787"
-##   $env:HEARTH_SCHEMA=(Invoke-RestMethod $env:HEARTH_URL/schema/tictactoe).schema_hash
 ##   godot --headless --path examples/tictactoe-godot -s tests/smoke.gd
 ##
 ## Set HEARTH_FORCE_WEB=1 to run the same test through the pure-GDScript backend.
+## The schema hash comes from the generated state class, so `HEARTH_SCHEMA` is no
+## longer needed (it stays supported as an optional override).
 
 const HearthClient = preload("res://addons/hearth/hearth_client.gd")
 const ROOM_TYPE := "tictactoe"
@@ -36,10 +41,10 @@ func _watchdog() -> void:
 
 func _run() -> void:
 	var url := OS.get_environment("HEARTH_URL")
-	var schema := OS.get_environment("HEARTH_SCHEMA")
-	if url.is_empty() or schema.is_empty():
-		_fail("set HEARTH_URL and HEARTH_SCHEMA")
+	if url.is_empty():
+		_fail("set HEARTH_URL")
 		return
+	var schema_override := OS.get_environment("HEARTH_SCHEMA")
 
 	_a = HearthClient.new()
 	_b = HearthClient.new()
@@ -49,7 +54,9 @@ func _run() -> void:
 	var run_id := Time.get_ticks_usec()
 	for client in [_a, _b]:
 		client.server_url = url
-		client.schema_hash = schema
+		client.use_schema(TicTacToeBoard)
+		if not schema_override.is_empty():
+			client.schema_hash = schema_override
 		client.device_id_override = "smoke-%d-%s" % [run_id, "a" if client == _a else "b"]
 		client.error.connect(_on_error)
 		root.add_child(client)
@@ -76,41 +83,91 @@ func _run() -> void:
 	_a.join(ROOM_TYPE, room)
 	_b.join(ROOM_TYPE, room)
 
-	if not await _wait_until(func() -> bool: return String(_a.state.get("status", "")) == "Playing"):
-		_fail("game did not start (status %s)" % _a.state.get("status"))
+	if not await _wait_until(func() -> bool: return _variant(_a) == TicTacToeStatus.PLAYING):
+		_fail("game did not start (status %s)" % _status_text(_a))
 		return
 
-	# First joiner is X. Read the mark map so a connection race cannot make the
-	# test depend on join order.
-	var marks: Dictionary = _a.state.get("marks", {})
-	var x_client: Node = _a if int(marks.get(_a.player_id, 0)) == 1 else _b
+	# First joiner is X. Read the typed marks map so a connection race cannot
+	# make the test depend on join order.
+	var x_client: Node = _a if _mark(_a, _a.player_id) == 1 else _b
 	var o_client: Node = _b if x_client == _a else _a
-	if int(marks.get(x_client.player_id, 0)) != 1:
-		_fail("could not determine which client is X (marks %s)" % marks)
+	if _mark(x_client, x_client.player_id) != 1:
+		_fail(
+			"could not determine which client is X (marks a=%d b=%d)"
+			% [_mark(_a, _a.player_id), _mark(_b, _b.player_id)]
+		)
 		return
 
 	var moves := [[x_client, 0], [o_client, 3], [x_client, 1], [o_client, 4], [x_client, 2]]
 	for move in moves:
 		var client: Node = move[0]
-		var seq: int = client.send_intent({"Place": {"cell": move[1]}})
+		var seq: int = client.send_intent(TicTacToeIntents.place(move[1]))
 		if not await _wait_until(func() -> bool: return _has_ack(client, seq)):
 			_fail("no ACK for intent seq %d" % seq)
 			return
 
-	var expected := {"Won": x_client.player_id}
 	if not await _wait_until(
 		func() -> bool:
-			return _a.state.get("status") == expected and _b.state.get("status") == expected
+			return _won(_a, x_client.player_id) and _won(_b, x_client.player_id)
 	):
 		_fail(
 			"winning status did not reach both clients: a=%s b=%s expected=%s"
-			% [_a.state.get("status"), _b.state.get("status"), expected]
+			% [_status_text(_a), _status_text(_b), x_client.player_id]
 		)
 		return
+
+	# Assert through the typed API on both mirrors: enum variant/value, the
+	# typed marks map and the leaf turn.
+	for client in [_a, _b]:
+		var status: TicTacToeStatus = _status(client)
+		if status == null or status.variant != TicTacToeStatus.WON:
+			_fail("typed status is not Won on one client: %s" % _status_text(client))
+			return
+		if String(status.value) != String(x_client.player_id):
+			_fail("typed winner is %s, expected %s" % [String(status.value), x_client.player_id])
+			return
+		if _mark(client, x_client.player_id) != 1 or _mark(client, o_client.player_id) != 2:
+			_fail(
+				"typed marks are wrong: x=%d o=%d"
+				% [_mark(client, x_client.player_id), _mark(client, o_client.player_id)]
+			)
+			return
+		if String(client.state.turn) != String(x_client.player_id):
+			_fail("typed turn is %s, expected winner %s" % [String(client.state.turn), x_client.player_id])
+			return
 
 	_finished = true
 	print("smoke: ok (room %s, winner %s, backend %s)" % [room, x_client.player_id, _backend_name()])
 	quit(0)
+
+
+func _status(client) -> TicTacToeStatus:
+	var state = client.state
+	if state == null or state is Dictionary:
+		return null
+	return state.status
+
+
+func _variant(client) -> String:
+	var status: TicTacToeStatus = _status(client)
+	return "" if status == null else String(status.variant)
+
+
+func _status_text(client) -> String:
+	var status: TicTacToeStatus = _status(client)
+	return "" if status == null else "%s(%s)" % [String(status.variant), String(status.value)]
+
+
+func _won(client, winner_id: String) -> bool:
+	var status: TicTacToeStatus = _status(client)
+	return status != null and status.variant == TicTacToeStatus.WON and String(status.value) == winner_id
+
+
+func _mark(client, player_id: String) -> int:
+	var state = client.state
+	if state == null or state is Dictionary or state.marks == null:
+		return 0
+	return int(state.marks.get_item(player_id))
 
 
 func _on_acked(_state_seq: int, intent_seqs: Array, client: Node) -> void:

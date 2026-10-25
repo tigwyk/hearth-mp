@@ -4,26 +4,32 @@ extends Control
 ## Flow: anonymous login -> create (or join) a room -> click cells. The board is
 ## ordinary synced state, so the server's patch keeps every client in step.
 ##
+## The typed classes under `res://hearth/` are generated from the server crate
+## (see the README):
+##
+##   hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+##
 ## Run `scripts/sync-addon.ps1` first so `res://addons/hearth` exists.
 
 const ROOM_TYPE := "tictactoe"
-const SCHEMA_PATH := "/schema/tictactoe"
 
 var _buttons: Array[Button] = []
 var _status_label: Label
 var _room_edit: LineEdit
 var _busy := false
+var _signals_bound := false
 
 
 func _ready() -> void:
+	# Sets the schema hash from TicTacToeBoard.SCHEMA_HASH and creates the typed
+	# state mirror; the v0.1 code fetched the hash from GET /schema/tictactoe.
+	Hearth.use_schema(TicTacToeBoard)
 	_build_ui()
 	Hearth.joined.connect(_on_joined)
-	Hearth.state_reset.connect(_render)
-	Hearth.patched.connect(_on_patched)
+	Hearth.state_reset.connect(_on_state_reset)
 	Hearth.error.connect(_on_error)
 	Hearth.disconnected.connect(_on_disconnected)
-	if Hearth.schema_hash.is_empty():
-		Hearth.schema_hash = await _fetch_schema()
+	_bind_state_signals()
 	_render()
 
 
@@ -65,6 +71,26 @@ func _build_ui() -> void:
 		_buttons.append(button)
 
 
+## Bind the typed state signals once the mirror exists. `use_schema` creates the
+## root, but its HearthMap/HearthList fields are created on the first reload, so
+## this also runs from the first `state_reset`.
+func _bind_state_signals() -> void:
+	if _signals_bound:
+		return
+	var state = Hearth.state
+	if state == null or state is Dictionary or state.cells == null:
+		return
+	state.cells.changed.connect(_render_cells)
+	state.status_changed.connect(_on_state_field_changed)
+	state.turn_changed.connect(_on_state_field_changed)
+	_signals_bound = true
+
+
+## Typed field signals carry the new value; the label only needs a re-render.
+func _on_state_field_changed(_value) -> void:
+	_render_status()
+
+
 func _on_create_pressed() -> void:
 	if _busy:
 		return
@@ -92,7 +118,7 @@ func _on_join_pressed() -> void:
 
 
 func _on_cell_pressed(cell: int) -> void:
-	if Hearth.send_intent({"Place": {"cell": cell}}) == 0:
+	if Hearth.send_intent(TicTacToeIntents.place(cell)) == 0:
 		_status_label.text = "intent could not be converted"
 
 
@@ -100,7 +126,8 @@ func _on_joined(joined_player_id: String, joined_seat: int) -> void:
 	_status_label.text = "joined as %s (seat %d)" % [joined_player_id, joined_seat]
 
 
-func _on_patched(_ops: Array) -> void:
+func _on_state_reset() -> void:
+	_bind_state_signals()
 	_render()
 
 
@@ -113,45 +140,51 @@ func _on_disconnected(code: int, reason: String) -> void:
 
 
 func _render() -> void:
-	var cells: Array = Hearth.state.get("cells", [])
-	var status = Hearth.state.get("status", "Waiting")
-	var my_turn: bool = status == "Playing" and String(Hearth.state.get("turn", "")) == Hearth.player_id
+	_render_cells()
+	_render_status()
+
+
+func _render_cells() -> void:
+	var state = Hearth.state
+	if state == null or state is Dictionary or state.cells == null:
+		return
+	var cells: HearthList = state.cells
+	var my_turn := _is_my_turn()
 	for cell in _buttons.size():
-		var mark := int(cells[cell]) if cell < cells.size() else 0
+		var mark := int(cells.at(cell)) if cell < cells.size() else 0
 		_buttons[cell].text = ["", "X", "O"][clampi(mark, 0, 2)]
 		_buttons[cell].disabled = not my_turn or mark != 0
-	_status_label.text = _status_text()
 
 
-func _status_text() -> String:
-	var status = Hearth.state.get("status", "Waiting")
-	match typeof(status):
-		TYPE_DICTIONARY:
-			if status.has("Won"):
-				var winner := String(status["Won"])
-				return "you won!" if winner == Hearth.player_id else "won by " + winner
-			if status.has("Draw"):
-				return "draw"
-			return "unknown status"
-		TYPE_STRING:
-			if status == "Waiting":
-				return "waiting for a second player"
-			if status == "Playing":
-				var your_turn := String(Hearth.state.get("turn", "")) == Hearth.player_id
-				return "your turn" if your_turn else "opponent's turn"
-	return "waiting"
+func _render_status() -> void:
+	var status: TicTacToeStatus = _status()
+	var text := "waiting"
+	if status != null:
+		if status.variant == TicTacToeStatus.WAITING:
+			text = "waiting for a second player"
+		elif status.variant == TicTacToeStatus.PLAYING:
+			text = "your turn" if _is_my_turn() else "opponent's turn"
+		elif status.variant == TicTacToeStatus.WON:
+			if String(status.value) == Hearth.player_id:
+				text = "you won!"
+			else:
+				text = "won by %s" % String(status.value)
+		elif status.variant == TicTacToeStatus.DRAW:
+			text = "draw"
+	_status_label.text = text
 
 
-func _fetch_schema() -> String:
-	var request := HTTPRequest.new()
-	add_child(request)
-	var url := Hearth.server_url.trim_suffix("/") + SCHEMA_PATH
-	if request.request(url) != OK:
-		request.queue_free()
-		return ""
-	var completed: Array = await request.request_completed
-	request.queue_free()
-	var parsed = JSON.parse_string((completed[3] as PackedByteArray).get_string_from_utf8())
-	if typeof(parsed) == TYPE_DICTIONARY:
-		return String(parsed.get("schema_hash", ""))
-	return ""
+func _status() -> TicTacToeStatus:
+	var state = Hearth.state
+	if state == null or state is Dictionary:
+		return null
+	return state.status
+
+
+func _is_my_turn() -> bool:
+	var status: TicTacToeStatus = _status()
+	return (
+		status != null
+		and status.variant == TicTacToeStatus.PLAYING
+		and String(Hearth.state.turn) == Hearth.player_id
+	)

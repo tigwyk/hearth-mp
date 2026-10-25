@@ -33,18 +33,48 @@ hearth new my-game && cd my-game
    ```
 
 The room type is the name you passed to `hearth new` in kebab case (`my-game`
-above). Clients log in anonymously and fetch the schema hash from the gateway:
-`POST /auth/anonymous`, `POST /rooms/<room-type>`, `GET /schema/<room-type>`,
-then upgrade `GET /rooms/<room-type>/<room-name>` to a WebSocket.
+above). Clients log in anonymously (`POST /auth/anonymous`), mint a room
+(`POST /rooms/<room-type>`), then upgrade
+`GET /rooms/<room-type>/<room-name>` to a WebSocket. The schema hash guards
+against stale clients: `GET /schema/<room-type>` exposes it for hand-written
+clients, and the Godot codegen below embeds it in a typed class.
 
 `hearth dev` and `hearth deploy` shell out to wrangler; install it with
 `npm i -g wrangler`. `hearth new` takes `--hearth-path <repo>` to generate path
 dependencies against a local checkout instead of the published crates.
 
-Godot: copy `godot/addons/hearth` into your project's `addons/` directory. The
-`Hearth` autoload exposes `login_anonymous`, `create_room`, `join`,
-`send_intent`, `leave` and a `state` dictionary, keyed by the same room type
-string; the tic-tac-toe Godot sample wires them up.
+## Godot
+
+Copy `godot/addons/hearth` into your project's `addons/` directory, then generate
+typed state classes from the server crate so the client's schema hash can never
+drift:
+
+```sh
+hearth codegen --godot my-godot-project/hearth --manifest-path my-game/Cargo.toml
+```
+
+The generated classes are emitted from the server crate's exported `SchemaDoc`
+(the `hearth_schema` JSON the room macro writes); re-run the command after every
+schema change. Naming is the room name plus the Rust type name, so room
+`TicTacToe` with state `Board` gives `TicTacToeBoard`. Use that class as the
+schema and render from the typed state:
+
+```gdscript
+func _ready() -> void:
+	Hearth.use_schema(TicTacToeBoard)   # typed state + embedded schema hash
+	Hearth.state.cells.changed.connect(_render_board)
+	Hearth.state.marks.item_added.connect(_on_mark_added)
+	Hearth.state.status_changed.connect(_render_status)
+	...
+	Hearth.send_intent(TicTacToeIntents.place(4))
+```
+
+`Hearth.state` is the typed mirror after `use_schema`: one signal per leaf,
+enum or option field (`status_changed`), `HearthMap`/`HearthList` signals for
+containers (`item_added`/`item_removed`/`item_changed`, `changed`), and enums
+expose `variant`/`value`. Without a schema, `Hearth.state` stays the raw
+dictionary. The `Hearth` autoload also exposes `login_anonymous`, `create_room`,
+`join`, `send_intent` and `leave`; the tic-tac-toe Godot sample wires them up.
 
 ## A room
 
