@@ -1,0 +1,17 @@
+[package]
+name = "tick-bench"
+description = "Hearth v0.4 Task 1: alarm-driven vs in-isolate-loop tick driver benchmark Worker."
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Its own workspace: a standalone Worker benchmark that only depends on
+# `worker`, deliberately kept out of the framework workspace build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+worker = "0.8.7"
+serde = { version = "1.0.229", features = ["derive"] }

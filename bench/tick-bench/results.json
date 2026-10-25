@@ -1,0 +1,280 @@
+{
+  "generated_at": "2026-10-25T22:27:45.535Z",
+  "url": "http://127.0.0.1:8787",
+  "secs": 30,
+  "script_name": "hearth-tick-bench",
+  "window": {
+    "started_at": "2026-10-25T22:27:12.408Z",
+    "ended_at": "2026-10-25T22:27:45.481Z"
+  },
+  "runs": [
+    {
+      "driver": "alarm",
+      "hz": 10,
+      "work_us": 0,
+      "name": "alarm-10-0-mvoeeakk-b70va3",
+      "server": {
+        "ticks": 300,
+        "expected": 300,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 12,
+          "p95": 16,
+          "p99": 25,
+          "max": 59
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 300,
+        "expected": 300,
+        "interval_ms": {
+          "p50": 100.672,
+          "p95": 106.369,
+          "p99": 117.627,
+          "max": 148.936,
+          "mean": 100.003
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 10,
+      "work_us": 2000,
+      "name": "alarm-10-2000-mvoeeakk-djsrdy",
+      "server": {
+        "ticks": 300,
+        "expected": 300,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 25,
+          "p95": 32,
+          "p99": 34,
+          "max": 52
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 300,
+        "expected": 300,
+        "interval_ms": {
+          "p50": 96.151,
+          "p95": 111.596,
+          "p99": 121.995,
+          "max": 132.538,
+          "mean": 99.989
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 20,
+      "work_us": 0,
+      "name": "alarm-20-0-mvoeeakk-jr5gmz",
+      "server": {
+        "ticks": 598,
+        "expected": 600,
+        "missed": 2,
+        "interval_err_ms": {
+          "p50": 25,
+          "p95": 32,
+          "p99": 34,
+          "max": 42
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 598,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 48.544,
+          "p95": 63.182,
+          "p99": 74.575,
+          "max": 95.162,
+          "mean": 50.16
+        },
+        "drop_ratio": 0.003
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 20,
+      "work_us": 2000,
+      "name": "alarm-20-2000-mvoeeakk-bpmlus",
+      "server": {
+        "ticks": 598,
+        "expected": 600,
+        "missed": 2,
+        "interval_err_ms": {
+          "p50": 24,
+          "p95": 31,
+          "p99": 33,
+          "max": 42
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 598,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 48.82,
+          "p95": 63.698,
+          "p99": 76.66,
+          "max": 90.615,
+          "mean": 50.158
+        },
+        "drop_ratio": 0.003
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 10,
+      "work_us": 0,
+      "name": "loop-10-0-mvoeeakk-9bq2ns",
+      "server": {
+        "ticks": 300,
+        "expected": 300,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 8,
+          "p95": 15,
+          "p99": 16,
+          "max": 22
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 300,
+        "expected": 300,
+        "interval_ms": {
+          "p50": 95.04,
+          "p95": 112.112,
+          "p99": 113.91,
+          "max": 114.095,
+          "mean": 100.03
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 10,
+      "work_us": 2000,
+      "name": "loop-10-2000-mvoeeakk-34o13f",
+      "server": {
+        "ticks": 300,
+        "expected": 300,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 8,
+          "p95": 14,
+          "p99": 15,
+          "max": 21
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 300,
+        "expected": 300,
+        "interval_ms": {
+          "p50": 95.049,
+          "p95": 112.057,
+          "p99": 113.913,
+          "max": 113.915,
+          "mean": 100.03
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 20,
+      "work_us": 0,
+      "name": "loop-20-0-mvoeeakk-0byjjr",
+      "server": {
+        "ticks": 600,
+        "expected": 600,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 9,
+          "p95": 16,
+          "p99": 17,
+          "max": 38
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 600,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 48.066,
+          "p95": 65.818,
+          "p99": 67.284,
+          "max": 74.88,
+          "mean": 50.004
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 20,
+      "work_us": 2000,
+      "name": "loop-20-2000-mvoeeakk-5lwbyl",
+      "server": {
+        "ticks": 600,
+        "expected": 600,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 9,
+          "p95": 15,
+          "p99": 15,
+          "max": 36
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 600,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 48.472,
+          "p95": 63.022,
+          "p99": 64.988,
+          "max": 74.882,
+          "mean": 50.004
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    }
+  ],
+  "analytics": {
+    "skipped": "set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to query the GraphQL Analytics API",
+    "estimate": {
+      "memory_gb": 0.128,
+      "per_driver": {
+        "alarm": {
+          "durable_objects": 4,
+          "wall_seconds": 120,
+          "estimated_duration_gb_s": 15.36,
+          "requests_estimate": 1808
+        },
+        "loop": {
+          "durable_objects": 4,
+          "wall_seconds": 120,
+          "estimated_duration_gb_s": 15.36,
+          "requests_estimate": 1812
+        }
+      }
+    }
+  }
+}
