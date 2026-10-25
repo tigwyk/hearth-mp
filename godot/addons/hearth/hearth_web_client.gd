@@ -4,6 +4,11 @@ extends Node
 ## Same methods and signals as the `HearthNative` GDExtension class, so
 ## `hearth_client.gd` can swap the backend without changing game code.
 ##
+## A dropped socket is retried with `hearth_reconnect.gd` until the grace window
+## is spent. Intents that were in flight at the drop are reported
+## (`intents_unconfirmed`) and never resent; queued intents wait for the next
+## `JOIN_OK`.
+##
 ## The state tree comes from `JSON.parse_string`, so all numbers are floats;
 ## patch paths are applied by `hearth_patch.gd` with the same semantics as the
 ## Rust reference.
@@ -15,8 +20,12 @@ signal acked(state_seq: int, intent_seqs: Array)
 signal event(name: String, data: Variant)
 signal error(code: String, message: String, ref_seq: int)
 signal disconnected(code: int, reason: String)
+signal reconnecting(attempt: int, retry_in_ms: int)
+signal reconnected()
+signal intents_unconfirmed(seqs: Array)
 
 const Patch = preload("res://addons/hearth/hearth_patch.gd")
+const Reconnect = preload("res://addons/hearth/hearth_reconnect.gd")
 
 const PROTOCOL_VERSION := 1
 const MAX_MSGS_PER_SEC := 20
@@ -24,6 +33,7 @@ const MAX_INTENTS_PER_MSG := 32
 const PING_INTERVAL_MS := 20000
 
 var _peer: WebSocketPeer = null
+var _url := ""
 var _schema_hash := ""
 var _opts: Dictionary = {}
 var _state = {}
@@ -31,30 +41,33 @@ var _state_seq := 0
 var _player_id := ""
 var _next_intent_seq := 1
 var _pending: Array = []
+var _in_flight: Array[int] = []
+var _awaiting_join := false
 var _last_send_ms := -100000
 var _last_ping_ms := 0
 var _hello_sent := false
 var _desynced := false
-var _close_reported := false
+var _first_drop_ms := -1
+var _attempt := 0
+var _retry_at_ms := -1
+var _resuming := false
 
 
 func connect_to_room(url: String, schema_hash: String, opts: Dictionary) -> void:
+	_url = url
 	_schema_hash = schema_hash
 	_opts = opts
 	_state = {}
 	_state_seq = 0
+	_player_id = ""
 	_next_intent_seq = 1
 	_pending.clear()
+	_in_flight.clear()
 	_desynced = false
-	_hello_sent = false
-	_close_reported = false
+	_awaiting_join = false
 	_last_send_ms = -100000
-	_last_ping_ms = Time.get_ticks_msec()
-	_peer = WebSocketPeer.new()
-	var error_code := _peer.connect_to_url(url)
-	if error_code != OK:
-		_peer = null
-		_emit_error("BAD_FRAME", "WebSocketPeer.connect_to_url failed (%d)" % error_code, -1)
+	_cancel_reconnect()
+	_open_socket()
 
 
 func send_intent(intent) -> int:
@@ -65,6 +78,7 @@ func send_intent(intent) -> int:
 
 
 func leave() -> void:
+	_cancel_reconnect()
 	if _peer != null and _peer.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		_send({"op": "LEAVE"})
 		_peer.close()
@@ -79,11 +93,25 @@ func get_player_id() -> String:
 	return _player_id
 
 
-func _process(_delta: float) -> void:
-	if _peer == null:
+## Test seam: drop the socket locally and handle it like an abnormal (1006)
+## close. Debug builds only.
+func _debug_drop() -> void:
+	if not OS.is_debug_build() or _peer == null:
 		return
-	_peer.poll()
+	_peer.close()
+	_peer = null
+	_handle_drop(1006, "")
+
+
+func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()
+	if _peer == null:
+		if _retry_at_ms < 0 or now < _retry_at_ms:
+			return
+		if not _open_socket():
+			_handle_drop(1006, "")
+			return
+	_peer.poll()
 	match _peer.get_ready_state():
 		WebSocketPeer.STATE_OPEN:
 			if not _hello_sent:
@@ -108,19 +136,66 @@ func _process(_delta: float) -> void:
 			var code := _peer.get_close_code()
 			var reason := _peer.get_close_reason()
 			_peer = null
-			if not _close_reported:
-				_close_reported = true
-				disconnected.emit(code, reason)
+			# A socket that never close-framed reports an invalid code.
+			_handle_drop(code if code >= 1000 and code <= 4999 else 1006, reason)
+
+
+func _open_socket() -> bool:
+	_retry_at_ms = -1
+	_hello_sent = false
+	_last_ping_ms = Time.get_ticks_msec()
+	_peer = WebSocketPeer.new()
+	var error_code := _peer.connect_to_url(_url)
+	if error_code != OK:
+		_peer = null
+		_emit_error("BAD_FRAME", "WebSocketPeer.connect_to_url failed (%d)" % error_code, -1)
+		return false
+	return true
+
+
+func _handle_drop(code: int, reason: String) -> void:
+	_awaiting_join = true
+	_report_unconfirmed()
+	if _first_drop_ms < 0:
+		_first_drop_ms = Time.get_ticks_msec()
+	var now := Time.get_ticks_msec()
+	var retry_at: int = Reconnect.decide(code, _first_drop_ms, _attempt, now)
+	if retry_at < 0:
+		_cancel_reconnect()
+		disconnected.emit(code, reason)
+		return
+	_resuming = not _player_id.is_empty()
+	_retry_at_ms = retry_at
+	reconnecting.emit(_attempt, retry_at - now)
+	_attempt += 1
+
+
+func _report_unconfirmed() -> void:
+	if _in_flight.is_empty():
+		return
+	var seqs: Array = _in_flight.duplicate()
+	seqs.sort()
+	_in_flight.clear()
+	intents_unconfirmed.emit(seqs)
+
+
+func _cancel_reconnect() -> void:
+	_first_drop_ms = -1
+	_attempt = 0
+	_retry_at_ms = -1
+	_resuming = false
 
 
 func _flush(now: int) -> void:
-	if _pending.is_empty():
+	if _awaiting_join or _pending.is_empty():
 		return
 	if now - _last_send_ms < int(1000 / MAX_MSGS_PER_SEC):
 		return
 	var batch := _pending.slice(0, mini(MAX_INTENTS_PER_MSG, _pending.size()))
 	_pending = _pending.slice(batch.size())
 	_last_send_ms = now
+	for message in batch:
+		_in_flight.append(int(message.get("seq", 0)))
 	_send({"op": "INTENT", "intents": batch})
 
 
@@ -143,7 +218,12 @@ func _handle_text(text: String) -> void:
 	match String(frame.get("op", "")):
 		"JOIN_OK":
 			_player_id = String(frame.get("player_id", ""))
+			_awaiting_join = false
+			var was_resuming := _resuming
+			_cancel_reconnect()
 			joined.emit(_player_id, int(frame.get("seat", 0)))
+			if was_resuming:
+				reconnected.emit()
 		"FULL_STATE":
 			_state = frame.get("state", {})
 			_state_seq = int(frame.get("seq", 0))
@@ -152,6 +232,8 @@ func _handle_text(text: String) -> void:
 		"PATCH":
 			_handle_patch(frame)
 		"ACK":
+			for seq in frame.get("intent_seqs", []):
+				_in_flight.erase(int(seq))
 			acked.emit(int(frame.get("state_seq", 0)), frame.get("intent_seqs", []))
 		"EVENT":
 			event.emit(String(frame.get("name", "")), frame.get("data"))
@@ -159,6 +241,7 @@ func _handle_text(text: String) -> void:
 			var ref_seq := -1
 			if frame.get("ref_seq") != null:
 				ref_seq = int(frame["ref_seq"])
+				_in_flight.erase(ref_seq)
 			_emit_error(String(frame.get("code", "INTERNAL")), String(frame.get("message", "")), ref_seq)
 		_:
 			_emit_error("BAD_FRAME", "unknown server frame op", -1)

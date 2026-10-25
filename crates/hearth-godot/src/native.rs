@@ -1,14 +1,19 @@
 //! `HearthNative`: GDExtension node that drives [`hearth_client::ClientCore`]
 //! over Godot's built-in `WebSocketPeer` (MsgPack encoding).
 //!
+//! A dropped socket is retried with [`hearth_client::ReconnectPolicy`] until the
+//! grace window is spent. Intents that were in flight at the drop are reported
+//! (`intents_unconfirmed`) and never resent; queued intents wait for the next
+//! `JOIN_OK`.
+//!
 //! Every call in this module needs a running Godot engine. The JSON <-> Variant
 //! helpers live in [`crate::convert`] and stay engine-free for tests.
 
 use godot::classes::web_socket_peer::State;
-use godot::classes::{INode, Node, Time, WebSocketPeer};
+use godot::classes::{INode, Node, Os, Time, WebSocketPeer};
 use godot::global::Error as GodotError;
 use godot::prelude::*;
-use hearth_client::{ClientConfig, ClientCore, ClientEvent};
+use hearth_client::{ClientConfig, ClientCore, ClientEvent, Reconnect, ReconnectPolicy};
 use hearth_protocol::{Encoding, ErrorCode, WireMsg};
 use serde_json::Value;
 
@@ -22,9 +27,20 @@ pub struct HearthNative {
     base: Base<Node>,
     core: ClientCore,
     peer: Option<Gd<WebSocketPeer>>,
+    /// Room URL (the auth token is already in its query) for reconnects.
+    url: String,
     opts: Value,
     hello_sent: bool,
-    close_reported: bool,
+    /// Retry policy shared with the GDScript client.
+    policy: ReconnectPolicy,
+    /// Clock value of the first drop in the current outage.
+    first_drop_ms: Option<u64>,
+    /// Retries already scheduled in the current outage.
+    attempt: u32,
+    /// Clock value when the next retry is due; `None` when not retrying.
+    retry_at_ms: Option<u64>,
+    /// The next `JOIN_OK` is a resume, so it emits `reconnected`.
+    resuming: bool,
 }
 
 #[godot_api]
@@ -34,9 +50,14 @@ impl INode for HearthNative {
             base,
             core: ClientCore::new(ClientConfig::new(String::new(), Encoding::MsgPack)),
             peer: None,
+            url: String::new(),
             opts: Value::Null,
             hello_sent: false,
-            close_reported: false,
+            policy: ReconnectPolicy::default(),
+            first_drop_ms: None,
+            attempt: 0,
+            retry_at_ms: None,
+            resuming: false,
         }
     }
 
@@ -71,8 +92,23 @@ impl HearthNative {
     #[signal]
     fn error(code: GString, message: GString, ref_seq: i64);
 
+    /// The socket gave up: the close was deliberate or fatal, or the grace
+    /// window is spent. Recoverable drops emit `reconnecting` instead.
     #[signal]
     fn disconnected(code: i64, reason: GString);
+
+    /// A retry is scheduled. `attempt` is 0-based; `retry_in_ms` is from now.
+    #[signal]
+    fn reconnecting(attempt: i32, retry_in_ms: i64);
+
+    /// A retry joined the room again.
+    #[signal]
+    fn reconnected();
+
+    /// Intents sent before the drop whose fate the server may or may not have
+    /// decided. Sorted ascending; reported once per drop, never resent.
+    #[signal]
+    fn intents_unconfirmed(seqs: VarArray);
 
     /// Open the room WebSocket (`ws://` or `wss://`, token already in the URL)
     /// and start the MsgPack handshake.
@@ -84,18 +120,9 @@ impl HearthNative {
             schema_hash.to_string(),
             Encoding::MsgPack,
         ));
-        self.hello_sent = false;
-        self.close_reported = false;
-
-        let mut peer = WebSocketPeer::new_gd();
-        let error = peer.connect_to_url(&url);
-        if error != GodotError::OK {
-            let message = format!("WebSocketPeer.connect_to_url failed ({error:?})");
-            self.emit_error("BAD_FRAME", &message, -1);
-            self.peer = None;
-            return;
-        }
-        self.peer = Some(peer);
+        self.url = url.to_string();
+        self.cancel_reconnect();
+        self.open_socket();
     }
 
     /// Queue one intent, returning its client-assigned sequence number. `0` means
@@ -111,16 +138,32 @@ impl HearthNative {
         }
     }
 
-    /// Send `LEAVE` and close the socket. The `disconnected` signal follows the
-    /// normal close path.
+    /// Send `LEAVE` and close the socket. Retries stop; `disconnected` does not
+    /// fire for a deliberate leave.
     #[func]
     fn leave(&mut self) {
+        self.cancel_reconnect();
         if let Some(mut peer) = self.peer.clone() {
             let leave = self.core.leave();
             send_frame(&mut peer, &leave);
             peer.close();
         }
         self.peer = None;
+    }
+
+    /// Test seam: drop the socket locally and handle it like an abnormal (1006)
+    /// close. Debug builds only.
+    #[func]
+    fn _debug_drop(&mut self) {
+        if !Os::singleton().is_debug_build() {
+            return;
+        }
+        let Some(mut peer) = self.peer.take() else {
+            return;
+        };
+        peer.close();
+        let now_ms = Time::singleton().get_ticks_msec();
+        self.handle_drop(1006, String::new(), now_ms);
     }
 
     /// The current local state view (sync fields only); `{}` before join.
@@ -142,9 +185,13 @@ impl HearthNative {
 }
 
 impl HearthNative {
-    /// Poll the socket once per frame: read packets, send `HELLO`/queued intents.
+    /// Poll the socket once per frame: read packets, send `HELLO`/queued
+    /// intents, and run the reconnect timer.
     fn pump(&mut self) {
         let now_ms = Time::singleton().get_ticks_msec();
+        if self.peer.is_none() && !self.maybe_retry(now_ms) {
+            return;
+        }
         let Some(mut peer) = self.peer.clone() else {
             return;
         };
@@ -165,8 +212,7 @@ impl HearthNative {
                     } else {
                         WireMsg::Binary(packet.to_vec())
                     };
-                    let result = self.core.handle(&message);
-                    match result {
+                    match self.core.handle(&message) {
                         Ok(events) => self.emit_events(events),
                         Err(error) => {
                             let message = format!("bad server frame: {error:?}");
@@ -180,25 +226,98 @@ impl HearthNative {
                 }
             }
             State::CLOSED => {
+                let code = socket_close_code(&peer);
+                let reason = peer.get_close_reason().to_string();
                 self.peer = None;
-                if !self.close_reported {
-                    self.close_reported = true;
-                    let code = i64::from(peer.get_close_code());
-                    let reason = peer.get_close_reason();
-                    self.signals().disconnected().emit(code, &reason);
-                }
+                self.handle_drop(code, reason, now_ms);
             }
             State::CONNECTING | State::CLOSING => {}
             _ => {}
         }
     }
 
+    /// Open a socket to [`Self::url`] and start the handshake. On failure an
+    /// `error` signal is emitted and no socket is kept.
+    fn open_socket(&mut self) -> bool {
+        self.hello_sent = false;
+        let mut peer = WebSocketPeer::new_gd();
+        let error = peer.connect_to_url(&self.url);
+        if error != GodotError::OK {
+            let message = format!("WebSocketPeer.connect_to_url failed ({error:?})");
+            self.emit_error("BAD_FRAME", &message, -1);
+            self.peer = None;
+            return false;
+        }
+        self.peer = Some(peer);
+        true
+    }
+
+    /// Open the socket when a scheduled retry is due. Returns whether a socket
+    /// now exists.
+    fn maybe_retry(&mut self, now_ms: u64) -> bool {
+        let Some(at) = self.retry_at_ms else {
+            return false;
+        };
+        if now_ms < at {
+            return false;
+        }
+        self.retry_at_ms = None;
+        if self.open_socket() {
+            return true;
+        }
+        // The retry could not even open a socket: treat that as another drop so
+        // the backoff keeps growing.
+        self.handle_drop(1006, String::new(), now_ms);
+        false
+    }
+
+    /// Handle a dropped socket: report intents whose fate is unknown, then
+    /// schedule a retry (`reconnecting`) or give up (`disconnected`).
+    fn handle_drop(&mut self, code: u16, reason: String, now_ms: u64) {
+        let events = self.core.on_disconnected();
+        self.emit_events(events);
+
+        let first_drop_ms = *self.first_drop_ms.get_or_insert(now_ms);
+        match self
+            .policy
+            .decide(code, first_drop_ms, self.attempt, now_ms)
+        {
+            Reconnect::GiveUp => {
+                self.cancel_reconnect();
+                self.signals()
+                    .disconnected()
+                    .emit(i64::from(code), &GString::from(reason.as_str()));
+            }
+            Reconnect::RetryAt(at) => {
+                self.resuming = self.core.player_id().is_some();
+                self.retry_at_ms = Some(at);
+                let attempt = self.attempt as i32;
+                let retry_in_ms = at.saturating_sub(now_ms) as i64;
+                self.signals().reconnecting().emit(attempt, retry_in_ms);
+                self.attempt += 1;
+            }
+        }
+    }
+
+    /// Forget the current outage (a join succeeded, left, or gave up).
+    fn cancel_reconnect(&mut self) {
+        self.first_drop_ms = None;
+        self.attempt = 0;
+        self.retry_at_ms = None;
+        self.resuming = false;
+    }
+
     fn emit_events(&mut self, events: Vec<ClientEvent>) {
         for event in events {
             match event {
                 ClientEvent::Joined { player_id, seat } => {
+                    let resuming = self.resuming;
+                    self.cancel_reconnect();
                     let player_id = GString::from(player_id.0.as_str());
                     self.signals().joined().emit(&player_id, i32::from(seat));
+                    if resuming {
+                        self.signals().reconnected().emit();
+                    }
                 }
                 ClientEvent::StateReset => self.signals().state_reset().emit(),
                 ClientEvent::Patched { ops } => {
@@ -240,6 +359,13 @@ impl HearthNative {
                     "patch failed to apply; waiting for FULL_STATE",
                     -1,
                 ),
+                ClientEvent::IntentsUnconfirmed { seqs } => {
+                    let mut array = VarArray::new();
+                    for seq in seqs {
+                        array.push(i64::from(seq));
+                    }
+                    self.signals().intents_unconfirmed().emit(&array);
+                }
             }
         }
     }
@@ -248,6 +374,17 @@ impl HearthNative {
         let code = GString::from(code);
         let message = GString::from(message);
         self.signals().error().emit(&code, &message, ref_seq);
+    }
+}
+
+/// The socket's close code, mapped to 1006 (abnormal) when the engine reports no
+/// clean close frame.
+fn socket_close_code(peer: &Gd<WebSocketPeer>) -> u16 {
+    let code = peer.get_close_code();
+    if (1000..=4999).contains(&code) {
+        code as u16
+    } else {
+        1006
     }
 }
 
