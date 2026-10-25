@@ -4,6 +4,7 @@
 //! Room behaviour is pure Rust behind [`Host`], so every runtime test runs
 //! natively in `hearth-test`.
 
+pub mod admin;
 pub mod ctx;
 pub mod host;
 pub mod room;
@@ -13,8 +14,9 @@ pub mod schema;
 #[cfg(feature = "worker")]
 pub mod worker;
 
+pub use admin::{Cause, InspectClient, InspectDoc, TailMsg};
 pub use ctx::Ctx;
-pub use host::{Attachment, Host, Sql, SqlValue};
+pub use host::{Attachment, Host, RoomName, RoomReport, Sql, SqlValue};
 pub use room::{Client, JoinOpts, Leave, Mode, Room, RoomConfig, TimerKey};
 pub use runtime::RoomRuntime;
 pub use schema::{schema_doc, schema_hash, schema_hash_hex, SchemaDoc, HEARTH_SCHEMA_VERSION};

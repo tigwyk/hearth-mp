@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use hearth_protocol::WireMsg;
-use hearth_server::{Attachment, Host, Result, Sql, SqlValue};
+use hearth_server::{Attachment, Host, Result, RoomReport, Sql, SqlValue};
 use serde_json::Value;
 
 /// Socket identity handed out by [`MemHost`].
@@ -37,6 +37,10 @@ struct Inner {
     journal: RefCell<Vec<MemEvent>>,
     alarm: Cell<Option<u64>>,
     db: RefCell<rusqlite::Connection>,
+    reports: RefCell<Vec<RoomReport>>,
+    logs: RefCell<Vec<String>>,
+    fail_reports: Cell<bool>,
+    full_state_count: Cell<usize>,
 }
 
 /// A [`Host`] backed by an in-memory SQLite database and fake sockets.
@@ -61,6 +65,10 @@ impl MemHost {
                 db: RefCell::new(
                     rusqlite::Connection::open_in_memory().expect("open an in-memory SQLite db"),
                 ),
+                reports: RefCell::new(Vec::new()),
+                logs: RefCell::new(Vec::new()),
+                fail_reports: Cell::new(false),
+                full_state_count: Cell::new(0),
             }),
         }
     }
@@ -71,6 +79,32 @@ impl MemHost {
         self.inner.next_socket.set(socket + 1);
         self.inner.sockets.borrow_mut().push(socket);
         socket
+    }
+
+    /// The room's SQLite, without importing [`Host`]. `Registry` tests use this.
+    pub fn sql(&self) -> &dyn Sql {
+        self
+    }
+
+    /// Every report the runtime sent, in order.
+    pub fn reports(&self) -> Vec<RoomReport> {
+        self.inner.reports.borrow().clone()
+    }
+
+    /// Every JSON log line the runtime emitted, in order.
+    pub fn logs(&self) -> Vec<String> {
+        self.inner.logs.borrow().clone()
+    }
+
+    /// Make `Host::report` fail, so tests can prove a registry outage never
+    /// affects gameplay.
+    pub fn fail_reports(&self, on: bool) {
+        self.inner.fail_reports.set(on);
+    }
+
+    /// How many unfiltered full-state renders the admin tail asked for.
+    pub fn full_state_count(&self) -> usize {
+        self.inner.full_state_count.get()
     }
 
     /// Move the virtual clock, without firing alarms.
@@ -176,6 +210,24 @@ impl Host for MemHost {
             db.execute_batch(&format!("DROP TABLE IF EXISTS \"{table}\""))?;
         }
         Ok(())
+    }
+
+    async fn report(&self, report: RoomReport) -> Result<()> {
+        if self.inner.fail_reports.get() {
+            anyhow::bail!("the registry is unavailable (injected failure)");
+        }
+        self.inner.reports.borrow_mut().push(report);
+        Ok(())
+    }
+
+    fn log_line(&self, json: &str) {
+        self.inner.logs.borrow_mut().push(json.to_owned());
+    }
+
+    fn count_full_state(&self) {
+        self.inner
+            .full_state_count
+            .set(self.inner.full_state_count.get() + 1);
     }
 }
 

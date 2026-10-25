@@ -4,8 +4,9 @@ use hearth_protocol::{
 };
 use hearth_sync::{diff, HearthState};
 
+use crate::admin::{Cause, InspectClient, InspectDoc, TailMsg};
 use crate::ctx::{Ctx, Effect};
-use crate::host::{Attachment, Host, SqlValue};
+use crate::host::{Attachment, Host, RoomName, RoomReport, SqlValue};
 use crate::room::{Client, JoinOpts, Leave, Room, TimerKey};
 use crate::Result;
 
@@ -30,6 +31,8 @@ const CREATE_TIMERS_TABLE: &str =
     "CREATE TABLE IF NOT EXISTS hearth_timers (key TEXT PRIMARY KEY, due_ms INTEGER NOT NULL)";
 const CREATE_HELD_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_held (\
     player_id TEXT PRIMARY KEY, seat INTEGER NOT NULL, until_ms INTEGER NOT NULL)";
+const CREATE_META_TABLE: &str =
+    "CREATE TABLE IF NOT EXISTS hearth_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
 
 /// Event-mode room runtime. One instance lives behind the room's async mutex;
 /// `new` after hibernation rebuilds everything from the [`Host`] (SQLite and
@@ -44,6 +47,16 @@ pub struct RoomRuntime<R: Room, H: Host> {
     last_saved_locked: bool,
     incompatible: bool,
     buckets: Vec<(PlayerId, TokenBucket)>,
+    /// The room's identity and creation time, persisted in `hearth_meta`.
+    identity: Option<RoomName>,
+    created_ms: u64,
+    /// Whether this runtime instance created `hearth_meta` (so it has never
+    /// reported `Open`).
+    meta_created_here: bool,
+    /// Registry report bookkeeping: `Open` was sent, and the last reported
+    /// seated count (live + held).
+    open_reported: bool,
+    last_players: Option<u8>,
 }
 
 struct TokenBucket {
@@ -63,6 +76,11 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             last_saved_locked: false,
             incompatible: false,
             buckets: Vec::new(),
+            identity: None,
+            created_ms: 0,
+            meta_created_here: false,
+            open_reported: false,
+            last_players: None,
         }
     }
 
@@ -80,7 +98,18 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
 
     /// Register a newly accepted socket. A second socket for a player replaces
     /// the old one: it is closed with `REPLACED` and the seat is carried over.
-    pub async fn connect(&mut self, socket: H::Socket, player: PlayerId) {
+    ///
+    /// The first connect ever also persists the room's identity and creation
+    /// time in `hearth_meta`, so reports and inspect work after a hibernation
+    /// without another connect.
+    pub async fn connect(&mut self, socket: H::Socket, player: PlayerId, room: RoomName) {
+        if let Err(err) = self.remember_room(&room) {
+            self.log_json(serde_json::json!({
+                "hearth": "meta_error",
+                "room": self.room_label(),
+                "msg": err.to_string(),
+            }));
+        }
         let mut kept_seat = None;
         for existing in self.host.sockets() {
             if existing == socket {
@@ -102,6 +131,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                             player_id: player.clone(),
                             seat: None,
                             encoding: None,
+                            admin: false,
                         },
                     );
                     self.host
@@ -115,8 +145,452 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 player_id: player,
                 seat: kept_seat,
                 encoding: None,
+                admin: false,
             },
         );
+    }
+
+    /// Persist the room's identity on the first connect ever and adopt the
+    /// stored (stable) values on every later connect.
+    fn remember_room(&mut self, room: &RoomName) -> Result<()> {
+        let existed = self.has_table("hearth_meta")?;
+        self.host.sql().exec(CREATE_META_TABLE, Vec::new())?;
+        let created_ms = self.host.now_ms().to_string();
+        for (key, value) in [
+            ("room_type", room.room_type.as_str()),
+            ("name", room.name.as_str()),
+            ("created_ms", created_ms.as_str()),
+        ] {
+            self.host.sql().exec(
+                "INSERT OR IGNORE INTO hearth_meta (key, value) VALUES (?, ?)",
+                vec![
+                    SqlValue::Text(key.to_owned()),
+                    SqlValue::Text(value.to_owned()),
+                ],
+            )?;
+        }
+        if !existed {
+            self.meta_created_here = true;
+        }
+        if self.identity.is_none() {
+            if let Some((stored, created_ms)) = self.read_meta()? {
+                self.identity = Some(stored);
+                self.created_ms = created_ms;
+            }
+        }
+        Ok(())
+    }
+
+    /// Register an admin tail socket: it gets a snapshot of every full-state
+    /// change and never becomes a player, a seat or a reason to stay awake.
+    pub fn connect_admin(&mut self, socket: H::Socket) {
+        self.host.set_attachment(
+            &socket,
+            &Attachment {
+                player_id: PlayerId("admin".to_owned()),
+                seat: None,
+                encoding: None,
+                admin: true,
+            },
+        );
+    }
+
+    /// The read-only admin view of this room, or `None` when the room never
+    /// existed. Checks `sqlite_master` first and never creates or writes
+    /// anything.
+    pub fn inspect(&mut self) -> Result<Option<InspectDoc>> {
+        if !self.has_table("hearth_meta")? {
+            return Ok(None);
+        }
+        let Some((room, created_ms)) = self.read_meta()? else {
+            return Ok(None);
+        };
+        let mut seq = 0;
+        let mut locked = false;
+        let mut state_bytes = 0;
+        let mut incompatible = self.incompatible;
+        let mut state = Some(serde_json::to_value(R::State::default())?);
+        if self.has_table("hearth_state")? {
+            let rows = self.host.sql().exec(
+                "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
+                Vec::new(),
+            )?;
+            if let Some(row) = rows.into_iter().next() {
+                seq = row.get("seq").and_then(Value::as_u64).unwrap_or(0);
+                locked = row.get("locked").and_then(Value::as_i64).unwrap_or(0) != 0;
+                let data = json_to_bytes(row.get("data"))?;
+                state_bytes = data.len();
+                match rmp_serde::from_slice::<R::State>(&data) {
+                    Ok(decoded) => state = Some(serde_json::to_value(&decoded)?),
+                    Err(_) => {
+                        incompatible = true;
+                        state = None;
+                    }
+                }
+            }
+        }
+        let clients = self.inspect_clients()?;
+        let timers = if self.has_table("hearth_timers")? {
+            self.host
+                .sql()
+                .exec(
+                    "SELECT key, due_ms FROM hearth_timers ORDER BY key",
+                    Vec::new(),
+                )?
+                .into_iter()
+                .filter_map(|row| {
+                    let key = row.get("key").and_then(Value::as_str)?.to_owned();
+                    let due = row.get("due_ms").and_then(Value::as_u64)?;
+                    Some((key, due))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Ok(Some(InspectDoc {
+            room,
+            created_ms,
+            seq,
+            locked,
+            incompatible,
+            clients,
+            timers,
+            state,
+            state_bytes,
+        }))
+    }
+
+    /// Admin force-dispose: works for compatible and incompatible rooms, and is
+    /// a no-op (`false`) for a room that never existed. Runs `on_dispose` only
+    /// when the persisted state decodes; errors are logged and ignored.
+    pub async fn force_dispose(&mut self) -> Result<bool> {
+        if !self.has_table("hearth_meta")? {
+            return Ok(false);
+        }
+        if self.identity.is_none() {
+            if let Some((room, created_ms)) = self.read_meta()? {
+                self.identity = Some(room);
+                self.created_ms = created_ms;
+            }
+        }
+        let room = self.room_or_unknown();
+        let label = self.room_label();
+
+        let mut persisted: Option<R::State> = Some(R::State::default());
+        let mut incompatible = self.incompatible;
+        if self.has_table("hearth_state")? {
+            let rows = self.host.sql().exec(
+                "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
+                Vec::new(),
+            )?;
+            if let Some(row) = rows.into_iter().next() {
+                let data = json_to_bytes(row.get("data"))?;
+                match rmp_serde::from_slice::<R::State>(&data) {
+                    Ok(state) => persisted = Some(state),
+                    Err(_) => {
+                        persisted = None;
+                        incompatible = true;
+                    }
+                }
+            }
+        }
+        if incompatible && !self.incompatible {
+            self.incompatible = true;
+            self.log_json(serde_json::json!({
+                "hearth": "state_incompatible",
+                "room": label,
+            }));
+        }
+
+        let admin_before = self.admin_before_state(persisted.as_ref());
+        if !incompatible {
+            if let Some(state) = persisted {
+                let roster = self.admin_roster()?;
+                let sql = self.host.sql_handle();
+                let now = self.host.now_ms();
+                let mut ctx = Ctx::new(state, roster, sql, now);
+                if let Err(err) = self.room.on_dispose(&mut ctx).await {
+                    self.log_json(serde_json::json!({
+                        "hearth": "handler_error",
+                        "room": label,
+                        "msg": err.to_string(),
+                    }));
+                }
+                let _ = ctx.into_parts();
+            }
+        }
+
+        // The room is gone from here on, so the tail's "after" state is absent.
+        self.state = None;
+        self.admin_after(admin_before, vec![Cause::Dispose], Vec::new(), self.seq);
+        for socket in self.host.sockets() {
+            self.host.close(&socket, close::DISPOSED, "disposed");
+        }
+        self.host.wipe().await?;
+        self.reset_after_dispose();
+        self.host.set_alarm(None).await?;
+        self.log_json(serde_json::json!({
+            "hearth": "dispose",
+            "room": label,
+        }));
+        self.send_report(RoomReport::Disposed { room }).await;
+        Ok(true)
+    }
+
+    async fn report_players(&mut self) {
+        if !self.open_reported {
+            return;
+        }
+        let Ok(players) = self.occupied() else {
+            return;
+        };
+        let players = players as u8;
+        if self.last_players == Some(players) {
+            return;
+        }
+        self.last_players = Some(players);
+        self.send_report(RoomReport::Players {
+            room: self.room_or_unknown(),
+            players,
+        })
+        .await;
+    }
+
+    async fn report_open(&mut self) {
+        if self.open_reported {
+            return;
+        }
+        let Ok(players) = self.occupied() else {
+            return;
+        };
+        self.open_reported = true;
+        self.last_players = Some(players as u8);
+        self.send_report(RoomReport::Open {
+            room: self.room_or_unknown(),
+            created_ms: self.created_ms,
+            players: players as u8,
+        })
+        .await;
+    }
+
+    /// Reports never propagate: a registry outage only shows up in the logs.
+    async fn send_report(&self, report: RoomReport) {
+        if let Err(err) = self.host.report(report).await {
+            self.log_json(serde_json::json!({
+                "hearth": "report_error",
+                "room": self.room_label(),
+                "msg": err.to_string(),
+            }));
+        }
+    }
+
+    fn log_json(&self, line: serde_json::Value) {
+        self.host
+            .log_line(&serde_json::to_string(&line).unwrap_or_default());
+    }
+
+    fn room_or_unknown(&self) -> RoomName {
+        self.identity.clone().unwrap_or_else(|| RoomName {
+            room_type: String::new(),
+            name: String::new(),
+        })
+    }
+
+    fn room_label(&self) -> String {
+        match &self.identity {
+            Some(room) => format!("{}/{}", room.room_type, room.name),
+            None => String::new(),
+        }
+    }
+
+    fn reset_after_dispose(&mut self) {
+        self.state = None;
+        self.seq = 0;
+        self.locked = false;
+        self.last_saved = None;
+        self.last_saved_locked = false;
+        self.incompatible = false;
+        self.buckets.clear();
+        self.identity = None;
+        self.created_ms = 0;
+        self.meta_created_here = false;
+        self.open_reported = false;
+        self.last_players = None;
+    }
+
+    /// The admin tail's view of a state value, counting the render for the
+    /// no-tail no-extra-work test.
+    fn full_state_json(&self) -> Result<Value> {
+        let Some(state) = &self.state else {
+            return Ok(Value::Null);
+        };
+        self.host.count_full_state();
+        Ok(serde_json::to_value(state)?)
+    }
+
+    fn admin_sockets(&self) -> Vec<H::Socket> {
+        self.host
+            .sockets()
+            .into_iter()
+            .filter(|socket| {
+                self.host
+                    .attachment(socket)
+                    .is_some_and(|attachment| attachment.admin)
+            })
+            .collect()
+    }
+
+    /// Full unfiltered state before a handler pass, or `None` when no admin
+    /// tail is attached (so a room without a tail does no extra work).
+    fn admin_before(&self) -> Option<Value> {
+        if self.admin_sockets().is_empty() {
+            return None;
+        }
+        self.full_state_json().ok()
+    }
+
+    fn admin_before_state(&self, state: Option<&R::State>) -> Option<Value> {
+        if self.admin_sockets().is_empty() {
+            return None;
+        }
+        let Some(state) = state else {
+            return Some(Value::Null);
+        };
+        self.host.count_full_state();
+        serde_json::to_value(state).ok()
+    }
+
+    /// Send one admin-tail frame when the pass changed the full server state or
+    /// rejected intents.
+    fn admin_after(&self, before: Option<Value>, cause: Vec<Cause>, rejected: Vec<u32>, seq: u64) {
+        let Some(before) = before else {
+            return;
+        };
+        let sockets = self.admin_sockets();
+        if sockets.is_empty() {
+            return;
+        }
+        let Ok(after) = self.full_state_json() else {
+            return;
+        };
+        let ops = diff(&before, &after);
+        if ops.is_empty() && rejected.is_empty() {
+            return;
+        }
+        let msg = TailMsg {
+            seq,
+            cause,
+            ops,
+            rejected,
+        };
+        let Ok(text) = serde_json::to_string(&msg) else {
+            return;
+        };
+        for socket in sockets {
+            self.host.send(&socket, WireMsg::Text(text.clone()));
+        }
+    }
+
+    /// Whether a table exists, without creating it.
+    fn has_table(&self, name: &str) -> Result<bool> {
+        let rows = self.host.sql().exec(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            vec![SqlValue::Text(name.to_owned())],
+        )?;
+        Ok(!rows.is_empty())
+    }
+
+    /// The persisted room identity, without creating anything.
+    fn read_meta(&self) -> Result<Option<(RoomName, u64)>> {
+        let rows = self
+            .host
+            .sql()
+            .exec("SELECT key, value FROM hearth_meta", Vec::new())?;
+        let mut room_type = None;
+        let mut name = None;
+        let mut created_ms = None;
+        for row in rows {
+            let Some(key) = row.get("key").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(value) = row.get("value").and_then(Value::as_str) else {
+                continue;
+            };
+            match key {
+                "room_type" => room_type = Some(value.to_owned()),
+                "name" => name = Some(value.to_owned()),
+                "created_ms" => created_ms = value.parse::<u64>().ok(),
+                _ => {}
+            }
+        }
+        match (room_type, name, created_ms) {
+            (Some(room_type), Some(name), Some(created_ms)) => {
+                Ok(Some((RoomName { room_type, name }, created_ms)))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Live seats plus held seats, tolerating a room whose tables do not exist
+    /// yet (a connect-only room can be force-disposed).
+    fn admin_roster(&self) -> Result<Vec<Client>> {
+        let mut roster: Vec<Client> = self
+            .joined()
+            .into_iter()
+            .map(|(_, attachment)| Client {
+                player_id: attachment.player_id,
+                seat: attachment.seat.unwrap_or(0),
+                connected: true,
+            })
+            .collect();
+        if self.has_table("hearth_held")? {
+            roster.extend(
+                self.held_rows()?
+                    .into_iter()
+                    .map(|(player_id, seat)| Client {
+                        player_id,
+                        seat,
+                        connected: false,
+                    }),
+            );
+        }
+        Ok(roster)
+    }
+
+    /// The inspect document's seat list: live sockets then held seats.
+    fn inspect_clients(&self) -> Result<Vec<InspectClient>> {
+        let mut clients: Vec<InspectClient> = self
+            .joined()
+            .into_iter()
+            .map(|(_, attachment)| InspectClient {
+                player_id: attachment.player_id,
+                seat: attachment.seat.unwrap_or(0),
+                connected: true,
+                held_until_ms: None,
+            })
+            .collect();
+        if self.has_table("hearth_held")? {
+            let rows = self.host.sql().exec(
+                "SELECT player_id, seat, until_ms FROM hearth_held ORDER BY player_id",
+                Vec::new(),
+            )?;
+            for row in rows {
+                let Some(player) = row.get("player_id").and_then(Value::as_str) else {
+                    continue;
+                };
+                let Some(seat) = row.get("seat").and_then(Value::as_u64) else {
+                    continue;
+                };
+                let until = row.get("until_ms").and_then(Value::as_u64);
+                clients.push(InspectClient {
+                    player_id: PlayerId(player.to_owned()),
+                    seat: seat as u8,
+                    connected: false,
+                    held_until_ms: until,
+                });
+            }
+        }
+        Ok(clients)
     }
 
     pub async fn message(&mut self, socket: H::Socket, msg: WireMsg) {
@@ -144,6 +618,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let Some(attachment) = self.host.attachment(&socket) else {
             return Ok(());
         };
+        if attachment.admin {
+            // A tail socket never speaks; its close is handled separately.
+            return Ok(());
+        }
         let wire_encoding = match &msg {
             WireMsg::Binary(_) => Encoding::MsgPack,
             WireMsg::Text(_) => Encoding::Json,
@@ -349,8 +827,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         };
         let before = self.views();
         let mut effects = Vec::new();
+        let mut admin_before = None;
 
         if replacement_seat.is_none() {
+            admin_before = self.admin_before();
             let roster = self.clients_roster()?;
             let snapshot = self.snapshot()?;
             let state = self.state.take().expect("state loaded");
@@ -361,13 +841,21 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             let (state, ctx_effects) = ctx.into_parts();
             self.state = Some(state);
             if let Err(err) = result {
+                let message = err.to_string();
                 self.state = Some(rmp_serde::from_slice(&snapshot)?);
+                self.log_json(serde_json::json!({
+                    "hearth": "handler_error",
+                    "room": self.room_label(),
+                    "player": attachment.player_id.0,
+                    "msg": message,
+                }));
                 self.host.set_attachment(
                     &socket,
                     &Attachment {
                         player_id: attachment.player_id.clone(),
                         seat: None,
                         encoding: Some(wire_encoding),
+                        admin: false,
                     },
                 );
                 self.send_error(
@@ -375,7 +863,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                     &attachment,
                     wire_encoding,
                     ErrorCode::JoinRejected,
-                    err.to_string(),
+                    message,
                     None,
                 );
                 self.host
@@ -389,6 +877,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             player_id: attachment.player_id.clone(),
             seat: Some(seat),
             encoding: Some(wire_encoding),
+            admin: false,
         };
         self.host.set_attachment(&socket, &joined_attachment);
         // A join during the empty-room grace period cancels the dispose.
@@ -415,9 +904,27 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             Frame::FullState { seq, state: view },
         );
 
+        if replacement_seat.is_none() {
+            self.admin_after(
+                admin_before,
+                vec![Cause::Join {
+                    player: who.player_id.clone(),
+                }],
+                Vec::new(),
+                seq,
+            );
+            self.report_open().await;
+            self.log_json(serde_json::json!({
+                "hearth": "join",
+                "room": self.room_label(),
+                "player": who.player_id.0,
+            }));
+        }
+
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -440,6 +947,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             player_id: attachment.player_id.clone(),
             seat: Some(seat),
             encoding: Some(wire_encoding),
+            admin: false,
         };
         self.host.set_attachment(&socket, &joined_attachment);
         let view = self
@@ -465,6 +973,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         );
 
         let before = self.views();
+        let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
@@ -482,9 +991,18 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         };
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Reconnect {
+                player: who.player_id.clone(),
+            }],
+            Vec::new(),
+            seq,
+        );
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -515,7 +1033,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             connected: true,
         };
         let before = self.views();
+        let admin_before = self.admin_before();
         let mut effects: Vec<Effect> = Vec::new();
+        let mut causes: Vec<Cause> = Vec::new();
+        let mut rejected: Vec<u32> = Vec::new();
         let mut accepted: Vec<u32> = Vec::new();
         let mut errors: Vec<(ErrorCode, String, Option<u32>)> = Vec::new();
         let mut rate_limited = false;
@@ -523,6 +1044,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         for intent_msg in intents {
             let now = self.host.now_ms();
             if !self.take_token(&attachment.player_id, now) {
+                rejected.push(intent_msg.seq);
                 errors.push((
                     ErrorCode::RateLimited,
                     "intent rate limit exceeded".to_string(),
@@ -532,6 +1054,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 break;
             }
             let Ok(intent) = serde_json::from_value::<R::Intent>(intent_msg.intent) else {
+                rejected.push(intent_msg.seq);
                 errors.push((
                     ErrorCode::BadIntent,
                     "intent did not decode".to_string(),
@@ -551,10 +1074,21 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             match result {
                 Ok(()) => {
                     accepted.push(intent_msg.seq);
+                    causes.push(Cause::Intent {
+                        player: who.player_id.clone(),
+                        intent_seq: intent_msg.seq,
+                    });
                     effects.extend(ctx_effects);
                 }
                 Err(err) => {
+                    rejected.push(intent_msg.seq);
                     self.state = Some(rmp_serde::from_slice(&snapshot)?);
+                    self.log_json(serde_json::json!({
+                        "hearth": "handler_error",
+                        "room": self.room_label(),
+                        "player": who.player_id.0,
+                        "msg": err.to_string(),
+                    }));
                     errors.push((
                         ErrorCode::IntentRejected,
                         err.to_string(),
@@ -566,6 +1100,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
 
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(admin_before, causes, rejected, seq);
         for (code, message, ref_seq) in errors {
             self.send_error(&socket, &attachment, fallback, code, message, ref_seq);
         }
@@ -588,6 +1123,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 .close(&socket, close::RATE_LIMITED, "rate limited");
         }
         self.apply_rest_and_kicks(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -595,6 +1131,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let Some(attachment) = self.host.attachment(&socket) else {
             return Ok(());
         };
+        if attachment.admin {
+            // An admin tail just detaches: no leave, no hold, no report.
+            return Ok(());
+        }
         let joined = attachment.seat.is_some() && attachment.encoding.is_some();
         if joined {
             if R::RECONNECT_GRACE.is_zero() {
@@ -609,6 +1149,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                     player_id: attachment.player_id,
                     seat: None,
                     encoding: None,
+                    admin: false,
                 },
             );
         }
@@ -647,6 +1188,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 player_id: player.clone(),
                 seat: None,
                 encoding: None,
+                admin: false,
             },
         );
         let who = Client {
@@ -655,6 +1197,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             connected: false,
         };
         let before = self.views();
+        let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
@@ -672,9 +1215,18 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         };
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Disconnect {
+                player: who.player_id.clone(),
+            }],
+            Vec::new(),
+            seq,
+        );
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -731,13 +1283,14 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             return Ok(());
         }
         let before = self.views();
+        let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
         let sql = self.host.sql_handle();
         let now = self.host.now_ms();
         let mut ctx = Ctx::new(state, roster, sql, now);
-        let result = self.room.on_timer(&mut ctx, key).await;
+        let result = self.room.on_timer(&mut ctx, key.clone()).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
         let effects = if result.is_ok() {
@@ -745,13 +1298,25 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         } else {
             // A failed timer handler is not retried: the row is already gone.
             self.state = Some(rmp_serde::from_slice(&snapshot)?);
+            self.log_json(serde_json::json!({
+                "hearth": "handler_error",
+                "room": self.room_label(),
+                "msg": result.expect_err("timer handler failed").to_string(),
+            }));
             Vec::new()
         };
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Timer { key: key.0.clone() }],
+            Vec::new(),
+            seq,
+        );
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         self.apply_rest_and_kicks(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -774,6 +1339,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                     player_id: attachment.player_id,
                     seat: None,
                     encoding: None,
+                    admin: false,
                 },
             );
             return Ok(());
@@ -784,6 +1350,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             connected: false,
         };
         let before = self.views();
+        let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
@@ -807,16 +1374,32 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 player_id: attachment.player_id,
                 seat: None,
                 encoding: None,
+                admin: false,
             },
         );
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Leave {
+                player: who.player_id.clone(),
+            }],
+            Vec::new(),
+            seq,
+        );
+        self.log_json(serde_json::json!({
+            "hearth": "leave",
+            "room": self.room_label(),
+            "player": who.player_id.0,
+            "reason": leave_reason(reason),
+        }));
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         if !self.any_live_or_held()? {
             self.start_empty_timer()?;
         }
         self.apply_rest(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -840,6 +1423,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             connected: false,
         };
         let before = self.views();
+        let admin_before = self.admin_before();
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
@@ -857,6 +1441,20 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         };
         let seq = self.persist()?;
         self.patch_joined(&before, seq);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Leave {
+                player: who.player_id.clone(),
+            }],
+            Vec::new(),
+            seq,
+        );
+        self.log_json(serde_json::json!({
+            "hearth": "leave",
+            "room": self.room_label(),
+            "player": who.player_id.0,
+            "reason": leave_reason(reason),
+        }));
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         if !self.any_live_or_held()? {
@@ -865,6 +1463,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             self.timer_set(EMPTY_TIMER, due)?;
         }
         self.apply_rest(rest).await?;
+        self.report_players().await;
         Ok(())
     }
 
@@ -890,25 +1489,36 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             // Never save or wipe once persisted state is known incompatible.
             return Ok(());
         }
+        let room = self.room_or_unknown();
+        let label = self.room_label();
+        let admin_before = self.admin_before();
         if let Some(state) = self.state.take() {
             let roster = self.clients_roster()?;
             let sql = self.host.sql_handle();
             let now = self.host.now_ms();
             let mut ctx = Ctx::new(state, roster, sql, now);
-            let _ = self.room.on_dispose(&mut ctx).await;
+            if let Err(err) = self.room.on_dispose(&mut ctx).await {
+                self.log_json(serde_json::json!({
+                    "hearth": "handler_error",
+                    "room": label,
+                    "msg": err.to_string(),
+                }));
+            }
             let _ = ctx.into_parts();
         }
+        let seq = self.seq;
         self.host.wipe().await?;
+        self.admin_after(admin_before, vec![Cause::Dispose], Vec::new(), seq);
         for socket in self.host.sockets() {
             self.host.close(&socket, close::DISPOSED, "disposed");
         }
-        self.state = None;
-        self.seq = 0;
-        self.locked = false;
-        self.last_saved = None;
-        self.last_saved_locked = false;
-        self.buckets.clear();
+        self.reset_after_dispose();
         self.host.set_alarm(None).await?;
+        self.log_json(serde_json::json!({
+            "hearth": "dispose",
+            "room": label,
+        }));
+        self.send_report(RoomReport::Disposed { room }).await;
         Ok(())
     }
 
@@ -980,9 +1590,23 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         if self.incompatible {
             return Ok(true);
         }
+        let had_meta = self.has_table("hearth_meta")?;
         self.host.sql().exec(CREATE_STATE_TABLE, Vec::new())?;
         self.host.sql().exec(CREATE_TIMERS_TABLE, Vec::new())?;
         self.host.sql().exec(CREATE_HELD_TABLE, Vec::new())?;
+        self.host.sql().exec(CREATE_META_TABLE, Vec::new())?;
+        if self.identity.is_none() {
+            if let Some((room, created_ms)) = self.read_meta()? {
+                self.identity = Some(room);
+                self.created_ms = created_ms;
+                // A runtime that did not create the meta row is waking up over
+                // an existing room, whose `Open` already reached the registry.
+                if had_meta && !self.meta_created_here && !self.open_reported {
+                    self.open_reported = true;
+                    self.last_players = self.occupied().ok().map(|players| players as u8);
+                }
+            }
+        }
         let rows = self.host.sql().exec(
             "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
             Vec::new(),
@@ -1001,6 +1625,10 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 }
                 Err(_) => {
                     self.incompatible = true;
+                    self.log_json(serde_json::json!({
+                        "hearth": "state_incompatible",
+                        "room": self.room_label(),
+                    }));
                 }
             }
         } else {
@@ -1305,6 +1933,14 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
 
 fn grace_timer_key(player: &PlayerId) -> String {
     format!("{GRACE_TIMER_PREFIX}{}", player.0)
+}
+
+fn leave_reason(reason: Leave) -> &'static str {
+    match reason {
+        Leave::Closed => "closed",
+        Leave::Left => "left",
+        Leave::Kicked => "kicked",
+    }
 }
 
 fn split_events(effects: Vec<Effect>) -> (Vec<Effect>, Vec<Effect>) {

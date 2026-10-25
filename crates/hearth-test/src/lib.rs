@@ -15,7 +15,9 @@ use std::time::Duration;
 use futures::executor::block_on;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
-use hearth_server::{schema_hash_hex, Host, Room, RoomRuntime, Sql};
+use hearth_server::{
+    schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomReport, RoomRuntime, Sql,
+};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
 
@@ -31,6 +33,13 @@ pub struct TestClient {
     pub closed: Option<(u16, String)>,
 }
 
+/// One client seat as an admin tail socket sees itself: no client core.
+struct AdminTail {
+    socket: Socket,
+    messages: Vec<Value>,
+    closed: Option<(u16, String)>,
+}
+
 /// A room plus its clients and environment.
 pub struct TestRoom<R: Room> {
     host: MemHost,
@@ -39,6 +48,8 @@ pub struct TestRoom<R: Room> {
     sockets: Vec<Socket>,
     /// The player and encoding behind each client, so `resume` can reconnect.
     players: Vec<(PlayerId, Encoding)>,
+    /// Admin tail sockets, addressed by the `C` values `tail` returns.
+    tails: Vec<AdminTail>,
 }
 
 impl<R: Room> TestRoom<R> {
@@ -49,6 +60,16 @@ impl<R: Room> TestRoom<R> {
             clients: Vec::new(),
             sockets: Vec::new(),
             players: Vec::new(),
+            tails: Vec::new(),
+        }
+    }
+
+    /// This harness room's identity, reported to the registry and stored in
+    /// `hearth_meta` on the first connect.
+    pub fn room_name(&self) -> RoomName {
+        RoomName {
+            room_type: "counter".to_owned(),
+            name: "r1".to_owned(),
         }
     }
 
@@ -60,8 +81,9 @@ impl<R: Room> TestRoom<R> {
     /// Join a client with a fresh `HELLO` in `encoding`.
     pub fn join_with(&mut self, player: &str, encoding: Encoding, opts: Value) -> C {
         let player = PlayerId(player.to_owned());
+        let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player));
+        block_on(self.runtime().connect(socket, player, room));
         let hello = self.clients[index].core.hello(opts);
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -71,8 +93,9 @@ impl<R: Room> TestRoom<R> {
     /// Register a socket and a client core without sending `HELLO`.
     pub fn connect_raw(&mut self, player: &str) -> C {
         let player = PlayerId(player.to_owned());
+        let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), Encoding::MsgPack);
-        block_on(self.runtime().connect(socket, player));
+        block_on(self.runtime().connect(socket, player, room));
         self.pump();
         C(index)
     }
@@ -120,8 +143,9 @@ impl<R: Room> TestRoom<R> {
     /// Reconnect `c`'s player on a new socket with a fresh `HELLO`.
     pub fn resume(&mut self, c: C) -> C {
         let (player, encoding) = self.players[c.0].clone();
+        let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player));
+        block_on(self.runtime().connect(socket, player, room));
         let hello = self.clients[index].core.hello(serde_json::json!({}));
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -179,6 +203,65 @@ impl<R: Room> TestRoom<R> {
         self.host.sql()
     }
 
+    /// Every registry report the room sent, in order.
+    pub fn reports(&self) -> Vec<RoomReport> {
+        self.host.reports()
+    }
+
+    /// Every JSON log line the room emitted, in order.
+    pub fn logs(&self) -> Vec<String> {
+        self.host.logs()
+    }
+
+    /// Make `Host::report` fail, so tests can prove a registry outage never
+    /// affects gameplay.
+    pub fn fail_reports(&mut self, on: bool) {
+        self.host.fail_reports(on);
+    }
+
+    /// How many unfiltered full-state renders the admin tail asked for.
+    pub fn full_state_count(&self) -> usize {
+        self.host.full_state_count()
+    }
+
+    /// The read-only admin view, or `None` when the room never existed.
+    pub fn inspect(&mut self) -> Option<InspectDoc> {
+        self.runtime()
+            .inspect()
+            .expect("inspect reads the room's SQLite")
+    }
+
+    /// Force-dispose the room; `false` when it never existed.
+    pub fn force_dispose(&mut self) -> bool {
+        let disposed = block_on(self.runtime().force_dispose()).expect("force-dispose succeeds");
+        self.pump();
+        disposed
+    }
+
+    /// Open an admin tail socket. Its `C` indexes the tail list, not the clients.
+    pub fn tail(&mut self) -> C {
+        let socket = self.host.open_socket();
+        self.runtime().connect_admin(socket);
+        self.pump();
+        let index = self.tails.len();
+        self.tails.push(AdminTail {
+            socket,
+            messages: Vec::new(),
+            closed: None,
+        });
+        C(index)
+    }
+
+    /// The decoded JSON text frames an admin tail received so far.
+    pub fn tail_msgs(&self, c: C) -> Vec<Value> {
+        self.tails[c.0].messages.clone()
+    }
+
+    /// The close code the server sent an admin tail, if it was closed.
+    pub fn tail_closed(&self, c: C) -> Option<(u16, String)> {
+        self.tails[c.0].closed.clone()
+    }
+
     fn spawn_client(&mut self, player: PlayerId, encoding: Encoding) -> (usize, Socket) {
         let socket = self.host.open_socket();
         let mut config = ClientConfig::new(schema_hash_hex::<R>(), encoding);
@@ -217,22 +300,36 @@ impl<R: Room> TestRoom<R> {
         self.pump();
     }
 
-    /// Feed every frame and close the runtime produced into the matching client.
+    /// Feed every frame and close the runtime produced into the matching client
+    /// or admin tail.
     fn pump(&mut self) {
         for event in self.host.take_journal() {
             match event {
                 MemEvent::Sent { socket, msg } => {
-                    let Some(index) = self
+                    if let Some(index) = self
                         .sockets
                         .iter()
                         .position(|candidate| *candidate == socket)
+                    {
+                        match self.clients[index].core.handle(&msg) {
+                            Ok(events) => self.clients[index].events.extend(events),
+                            Err(err) => {
+                                panic!("client {index} could not decode a server frame: {err:?}")
+                            }
+                        }
+                        continue;
+                    }
+                    let Some(index) = self.tails.iter().position(|tail| tail.socket == socket)
                     else {
                         continue;
                     };
-                    match self.clients[index].core.handle(&msg) {
-                        Ok(events) => self.clients[index].events.extend(events),
-                        Err(err) => {
-                            panic!("client {index} could not decode a server frame: {err:?}")
+                    match msg {
+                        WireMsg::Text(text) => match serde_json::from_str::<Value>(&text) {
+                            Ok(value) => self.tails[index].messages.push(value),
+                            Err(err) => panic!("admin tail {index} got non-JSON text: {err}"),
+                        },
+                        WireMsg::Binary(_) => {
+                            panic!("admin tail {index} got a binary frame")
                         }
                     }
                 }
@@ -241,14 +338,17 @@ impl<R: Room> TestRoom<R> {
                     code,
                     reason,
                 } => {
-                    let Some(index) = self
+                    if let Some(index) = self
                         .sockets
                         .iter()
                         .position(|candidate| *candidate == socket)
-                    else {
+                    {
+                        self.clients[index].closed = Some((code, reason));
                         continue;
-                    };
-                    self.clients[index].closed = Some((code, reason));
+                    }
+                    if let Some(index) = self.tails.iter().position(|tail| tail.socket == socket) {
+                        self.tails[index].closed = Some((code, reason));
+                    }
                 }
             }
         }

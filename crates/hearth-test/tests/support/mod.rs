@@ -2,6 +2,7 @@
 //! the reconnect tests of v0.2a Task 1).
 #![allow(dead_code)]
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use hearth_client::ClientEvent;
@@ -177,6 +178,50 @@ counter_room!(CounterRoom, Duration::from_secs(30));
 // The v0.1 room: no reconnect grace, so a socket close calls `on_leave` at
 // once. Used by the v0.1 tests that assumed immediate leave on close.
 counter_room!(GraceZeroRoom, Duration::ZERO);
+
+/// Counts [`ProbeDisposeRoom::on_dispose`] calls. `on_dispose` has no other
+/// observable side effect before force-dispose wipes storage, so the admin tests
+/// assert on this counter (reset it before use; only this room touches it).
+pub static PROBE_DISPOSE_CALLS: AtomicU32 = AtomicU32::new(0);
+
+/// A minimal room whose `on_dispose` is observable.
+#[derive(Default)]
+pub struct ProbeDisposeRoom;
+
+impl RoomConfig for ProbeDisposeRoom {
+    const MODE: Mode = Mode::Event;
+    const MAX_CLIENTS: u8 = 2;
+    const RECONNECT_GRACE: Duration = Duration::ZERO;
+}
+
+impl Room for ProbeDisposeRoom {
+    type State = CState;
+    type Intent = CIntent;
+
+    async fn on_join(&mut self, ctx: &mut Ctx<Self>, who: &Client, _opts: JoinOpts) -> Result<()> {
+        ctx.state().seats.insert(who.player_id.clone(), who.seat);
+        Ok(())
+    }
+
+    async fn on_intent(
+        &mut self,
+        _ctx: &mut Ctx<Self>,
+        _who: &Client,
+        _intent: Self::Intent,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn on_leave(&mut self, ctx: &mut Ctx<Self>, who: &Client, _reason: Leave) -> Result<()> {
+        ctx.state().seats.remove(&who.player_id);
+        Ok(())
+    }
+
+    async fn on_dispose(&mut self, _ctx: &mut Ctx<Self>) -> Result<()> {
+        PROBE_DISPOSE_CALLS.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
 
 /// The schema hash a client must send in `HELLO` to join a [`CounterRoom`].
 pub fn schema_hash() -> String {

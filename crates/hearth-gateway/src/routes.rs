@@ -1,7 +1,7 @@
 //! HTTP surface: anonymous auth, room minting, schema lookup and WebSocket routing.
 
 use serde::Deserialize;
-use worker::{Env, Method, Request, Response, Result};
+use worker::{Env, Headers, Method, Request, RequestInit, Response, Result};
 
 use crate::auth::{
     anonymous_player_id, issue_token, mint_room_name, valid_room_name, verify_token,
@@ -22,6 +22,12 @@ const MIN_SECRET_BYTES: usize = 32;
 const SECRET_HELP: &str =
     "HEARTH_SECRET is not set (min 32 bytes); run: wrangler secret put HEARTH_SECRET";
 const PLAYER_HEADER: &str = "X-Hearth-Player-Id";
+/// The room's type and name, as one `"<type>/<name>"` header. The gateway builds
+/// this itself, so a player can never choose it.
+const ROOM_HEADER: &str = "X-Hearth-Room";
+/// The Durable Object's internal connect path. The gateway builds the URL, so no
+/// client path or query reaches the room.
+const CONNECT_URL: &str = "https://room/__hearth/connect";
 
 #[derive(Deserialize)]
 struct AnonymousBody {
@@ -152,16 +158,28 @@ async fn connect(
         return Response::error("expected a websocket upgrade", 426);
     }
 
+    // Build the room's request here instead of forwarding the client's: the room
+    // only ever sees `https://room/__hearth/connect`, and the player identity and
+    // room name come from verified values, never from client headers.
+    let headers = Headers::new();
+    for (name, value) in req.headers().entries() {
+        if name.eq_ignore_ascii_case("host") || name.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
+        headers.set(&name, &value)?;
+    }
+    headers.set(PLAYER_HEADER, &player.0)?;
+    headers.set(ROOM_HEADER, &format!("{room_type}/{name}"))?;
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get).with_headers(headers);
+    let outgoing = Request::new_with_init(CONNECT_URL, &init)?;
+
     let namespace = env.durable_object(route.binding)?;
     let id = namespace.id_from_name(name)?;
     let stub = match location_hint(req.cf().and_then(|cf| cf.continent())) {
         Some(hint) => id.get_stub_with_location_hint(hint)?,
         None => id.get_stub()?,
     };
-
-    // Review focus 1: replace any client-supplied player id with the verified one.
-    let mut outgoing = req.clone_mut()?;
-    outgoing.headers_mut()?.set(PLAYER_HEADER, &player.0)?;
     stub.fetch_with_request(outgoing).await
 }
 

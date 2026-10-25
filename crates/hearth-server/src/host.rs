@@ -32,6 +32,36 @@ pub struct Attachment {
     pub player_id: PlayerId,
     pub seat: Option<u8>,
     pub encoding: Option<hearth_protocol::Encoding>,
+    /// An admin tail socket: never a seat, never a client, never keeps the room
+    /// alive. Defaulted so attachments written before v0.2c still decode.
+    #[serde(default)]
+    pub admin: bool,
+}
+
+/// A Durable Object room's identity: its type (`"tictactoe"`) and its name.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct RoomName {
+    pub room_type: String,
+    pub name: String,
+}
+
+/// What a room tells the registry about itself. `players` counts seated players,
+/// both live and held across a reconnect.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RoomReport {
+    Open {
+        room: RoomName,
+        created_ms: u64,
+        players: u8,
+    },
+    Players {
+        room: RoomName,
+        players: u8,
+    },
+    Disposed {
+        room: RoomName,
+    },
 }
 
 /// Everything the runtime needs from its environment. The production
@@ -54,4 +84,18 @@ pub trait Host {
 
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()>;
     async fn wipe(&self) -> Result<()>;
+
+    /// Report a room lifecycle change to the registry. The runtime logs an
+    /// error with [`Host::log_line`] and otherwise ignores it: a registry
+    /// outage must never affect gameplay.
+    async fn report(&self, _report: RoomReport) -> Result<()> {
+        Ok(())
+    }
+
+    /// Append one structured JSON line to the deployment's logs.
+    fn log_line(&self, _json: &str) {}
+
+    /// Count one unfiltered full-state render done for the admin tail. Tests
+    /// override it to prove that a room with no admin socket does no extra work.
+    fn count_full_state(&self) {}
 }
