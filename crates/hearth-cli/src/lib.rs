@@ -1,10 +1,12 @@
-//! `hearth new`, `hearth codegen`, `hearth dev` and `hearth deploy`.
+//! `hearth new`, `hearth codegen`, `hearth dev`, `hearth deploy` and
+//! `hearth inspect`.
 //!
 //! Arguments are parsed with `std::env::args` (no clap). `cargo hearth ...`
 //! invokes this binary as `cargo-hearth hearth ...`, so a leading `hearth`
 //! argument is stripped first.
 
 pub mod codegen;
+pub mod inspect;
 
 use std::env;
 use std::fs;
@@ -13,7 +15,9 @@ use std::path::Path;
 use std::process::{self, Command};
 
 const USAGE: &str = "usage: hearth new <name> [--hearth-path <dir>] | \
-hearth codegen --godot <out_dir> [--manifest-path <Cargo.toml>] | hearth dev | hearth deploy";
+hearth codegen --godot <out_dir> [--manifest-path <Cargo.toml>] | hearth dev | hearth deploy | \
+hearth inspect rooms [--type T] [--all] | hearth inspect room <type>/<name> | \
+hearth inspect dispose <type>/<name> [--yes] | hearth inspect tail <type>/<name> [--ops]";
 
 const TEMPLATES: &[(&str, &str)] = &[
     ("Cargo.toml", include_str!("../templates/Cargo.toml.tmpl")),
@@ -39,6 +43,7 @@ pub fn run() -> i32 {
         Some("codegen") => codegen::run(&args[1..]),
         Some("dev") => wrangler_cmd("dev", &args[1..]),
         Some("deploy") => wrangler_cmd("deploy", &args[1..]),
+        Some("inspect") => inspect::run(&args[1..]),
         _ => usage(),
     };
     code

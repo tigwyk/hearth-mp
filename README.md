@@ -150,6 +150,9 @@ changes, events and timers are rolled back.
 - [Wire protocol v1](docs/protocol.md): frames, opcodes, patch ops, handshake.
 - [Limits and when not to use Hearth](docs/limits.md): the hard line, per-mode
   cost profile, memory/CPU budgets, JSON number precision.
+- [Admin and observability](docs/admin.md): `hearth inspect` (list rooms, inspect
+  full state, force-dispose, tail patches), the `/admin/*` JSON API, and Workers
+  Logs events.
 - [v0.1 implementation plan](docs/superpowers/plans/2026-10-25-hearth-v0.1-event-rooms.md)
 
 ## Licence
