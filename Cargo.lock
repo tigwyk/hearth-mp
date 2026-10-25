@@ -644,7 +644,9 @@ version = "0.1.0"
 dependencies = [
  "hearth-server",
  "hearth-sync",
+ "serde",
  "serde_json",
+ "toml",
  "tungstenite",
  "ureq",
 ]
@@ -662,6 +664,7 @@ name = "hearth-gateway"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "futures",
  "getrandom 0.2.17",
  "hearth-matchmaker",
  "hearth-protocol",
