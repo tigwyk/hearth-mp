@@ -47,4 +47,5 @@ hearth-test = { path = "crates/hearth-test", version = "0.1.0" }
 hearth-cli = { path = "crates/hearth-cli", version = "0.1.0" }
 hearth-godot = { path = "crates/hearth-godot", version = "0.1.0" }
 hearth-admin = { path = "crates/hearth-admin", version = "0.1.0" }
+hearth-matchmaker = { path = "crates/hearth-matchmaker", version = "0.1.0" }
 tictactoe = { path = "examples/tictactoe", version = "0.1.0" }

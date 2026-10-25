@@ -5,7 +5,7 @@ mod support;
 
 use std::time::Duration;
 
-use hearth_protocol::{close, encode, Encoding, Frame};
+use hearth_protocol::{close, encode, Encoding, Frame, PlayerId};
 use hearth_server::{Room as RoomTrait, RoomName, RoomReport, SqlValue};
 use hearth_test::world::{RoomRef, ServiceRef, TestWorld};
 use hearth_test::TestRoom;
@@ -16,6 +16,11 @@ type Room = TestRoom<CounterRoom>;
 
 fn new_room() -> Room {
     TestRoom::new()
+}
+
+/// One seated player's id.
+fn pid(name: &str) -> PlayerId {
+    PlayerId(name.to_owned())
 }
 
 fn room_name() -> RoomName {
@@ -80,14 +85,20 @@ fn first_join_reports_open_then_players() {
     let open = RoomReport::Open {
         room: room_name(),
         created_ms: 0,
-        players: 1,
+        players: vec![pid("a")],
+        capacity: 2,
+        locked: false,
+        metadata: json!(null),
     };
     assert_eq!(reports(&mut world, &registry), vec![open.clone()]);
 
     let _b = world.join(&room, "b", json!({}));
     let players = RoomReport::Players {
         room: room_name(),
-        players: 2,
+        players: vec![pid("a"), pid("b")],
+        capacity: 2,
+        locked: false,
+        metadata: json!(null),
     };
     assert_eq!(reports(&mut world, &registry), vec![open, players]);
 
@@ -118,7 +129,10 @@ fn drop_keeps_count_held_then_expiry_reports() {
         reports(&mut world, &registry).last(),
         Some(&RoomReport::Players {
             room: room_name(),
-            players: 1,
+            players: vec![pid("b")],
+            capacity: 2,
+            locked: false,
+            metadata: json!(null),
         }),
         "grace expiry reports the smaller seated count: {:?}",
         reports(&mut world, &registry)
@@ -137,7 +151,10 @@ fn dispose_reports_disposed() {
             RoomReport::Open {
                 room: room_name(),
                 created_ms: 0,
-                players: 1,
+                players: vec![pid("a")],
+                capacity: 2,
+                locked: false,
+                metadata: json!(null),
             },
             RoomReport::Disposed { room: room_name() },
         ]

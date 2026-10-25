@@ -82,7 +82,7 @@ impl<R: Room> TestRoom<R> {
         let player = PlayerId(player.to_owned());
         let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player, room));
+        block_on(self.runtime().connect(socket, player, room, None));
         let hello = self.clients[index].core.hello(opts);
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -94,7 +94,7 @@ impl<R: Room> TestRoom<R> {
         let player = PlayerId(player.to_owned());
         let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), Encoding::MsgPack);
-        block_on(self.runtime().connect(socket, player, room));
+        block_on(self.runtime().connect(socket, player, room, None));
         self.pump();
         C(index)
     }
@@ -144,7 +144,7 @@ impl<R: Room> TestRoom<R> {
         let (player, encoding) = self.players[c.0].clone();
         let room = self.room_name();
         let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player, room));
+        block_on(self.runtime().connect(socket, player, room, None));
         let hello = self.clients[index].core.hello(serde_json::json!({}));
         block_on(self.runtime().message(socket, hello));
         self.pump();

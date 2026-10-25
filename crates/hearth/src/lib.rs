@@ -51,12 +51,14 @@
 pub use anyhow;
 pub use hearth_admin as admin;
 pub use hearth_admin::registry_object;
+pub use hearth_matchmaker as matchmaker;
+pub use hearth_matchmaker::matchmaker_object;
 pub use hearth_protocol as protocol;
 pub use hearth_protocol::PlayerId;
 pub use hearth_server as server;
 pub use hearth_server::{
     schema_doc, schema_hash, schema_hash_hex, CallError, Callable, Client, Ctx, Envelope, JoinOpts,
-    Leave, Result, Room, RoomRpc, SchemaDoc, Service, ServiceCtx, Target, TimerKey,
+    Leave, PlayerService, Result, Room, RoomRpc, SchemaDoc, Service, ServiceCtx, Target, TimerKey,
 };
 pub use hearth_server_macros::{room, service};
 pub use hearth_sync as sync;

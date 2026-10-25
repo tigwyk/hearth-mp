@@ -26,6 +26,8 @@ pub(crate) enum Effect {
     Kick(PlayerId),
     Lock,
     Dispose,
+    /// Store the room's lobby metadata, so the matchmaker can list it.
+    SetMetadata(Value),
     /// A durable fire-after-commit call, written to the outbox with the state.
     Notify {
         binding: String,
@@ -118,6 +120,13 @@ impl<R: Room> Ctx<R> {
     /// Refuse new joins until the room empties or is unlocked by a later plan.
     pub fn lock(&mut self) {
         self.effects.push(Effect::Lock);
+    }
+
+    /// The lobby metadata the matchmaker lists this room with (a mode, a map,
+    /// a player count). Stored in `hearth_meta`, and a change re-reports the
+    /// room.
+    pub fn set_metadata(&mut self, metadata: impl Serialize) {
+        self.effects.push(Effect::SetMetadata(to_json(metadata)));
     }
 
     /// Wipe storage and release the room after this handler.

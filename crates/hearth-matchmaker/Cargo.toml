@@ -1,0 +1,20 @@
+[package]
+name = "hearth-matchmaker"
+description = "Hearth v0.3a matchmaker: quick-join with seat reservations, pools and a lobby listing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-server.workspace = true
+hearth-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+hearth-test.workspace = true
+hearth-client.workspace = true
+anyhow.workspace = true

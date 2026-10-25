@@ -1,7 +1,7 @@
 //! `Registry` logic against the in-memory SQLite behind `MemHost`.
 
 use hearth_admin::{Registry, RoomRow};
-use hearth_server::{RoomName, RoomReport};
+use hearth_server::{PlayerId, RoomName, RoomReport};
 use hearth_test::MemHost;
 
 fn room(room_type: &str, name: &str) -> RoomName {
@@ -11,16 +11,30 @@ fn room(room_type: &str, name: &str) -> RoomName {
     }
 }
 
+/// `count` seated players, so report constructors stay short.
+fn seated(count: u8) -> Vec<PlayerId> {
+    (0..count).map(|n| PlayerId(format!("p{n}"))).collect()
+}
+
 fn opened(room: RoomName, created_ms: u64, players: u8) -> RoomReport {
     RoomReport::Open {
         room,
         created_ms,
-        players,
+        players: seated(players),
+        capacity: 2,
+        locked: false,
+        metadata: serde_json::Value::Null,
     }
 }
 
 fn players(room: RoomName, players: u8) -> RoomReport {
-    RoomReport::Players { room, players }
+    RoomReport::Players {
+        room,
+        players: seated(players),
+        capacity: 2,
+        locked: false,
+        metadata: serde_json::Value::Null,
+    }
 }
 
 fn disposed(room: RoomName) -> RoomReport {

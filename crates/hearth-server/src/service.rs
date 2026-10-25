@@ -46,6 +46,17 @@ pub trait Service: Default + 'static {
     }
 }
 
+/// A service that stores one player's data and shows that player their own view.
+///
+/// Bind it like any service (`#[hearth::service(binding = "PLAYER", player)]`)
+/// and the gateway's `GET /me` calls the player DO's internal
+/// `GET /__hearth/view`, which returns exactly [`PlayerService::client_view`].
+pub trait PlayerService: Service {
+    /// The caller's own view of their state. Never include another player's data:
+    /// `/me` returns this verbatim.
+    fn client_view(state: &Self::State) -> Value;
+}
+
 /// A service handler's capabilities: state, SQL, timers and object-to-object
 /// calls. State changes and timer effects are applied only when the handler
 /// returns `Ok`; a failed handler rolls the state back and drops its effects.
@@ -380,6 +391,7 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
                 | Effect::Kick(_)
                 | Effect::Lock
                 | Effect::Dispose
+                | Effect::SetMetadata(_)
                 | Effect::Notify { .. } => {}
             }
         }

@@ -186,8 +186,8 @@ fn msg_id(me: &Target, id: i64, first_ms: u64) -> String {
 }
 
 fn backoff_ms(attempts: u32) -> u64 {
-    let shift = attempts.min(8);
-    (1000u64 << shift).min(MAX_BACKOFF_MS)
+    // Exponential, reaching the 5 minute cap at the ninth retry.
+    (1000u64 << attempts.min(20)).min(MAX_BACKOFF_MS)
 }
 
 fn delete(sql: &dyn Sql, id: i64) -> Result<()> {

@@ -69,8 +69,11 @@ impl<'a> Registry<'a> {
                 room,
                 created_ms,
                 players,
-            } => self.upsert(room, *players, *created_ms, now_ms),
-            RoomReport::Players { room, players } => self.upsert(room, *players, now_ms, now_ms),
+                ..
+            } => self.upsert(room, players.len() as u8, *created_ms, now_ms),
+            RoomReport::Players { room, players, .. } => {
+                self.upsert(room, players.len() as u8, now_ms, now_ms)
+            }
             RoomReport::Disposed { room } => {
                 self.sql.exec(
                     DELETE_ROOM,

@@ -68,6 +68,18 @@ pub(crate) fn meta_get(sql: &dyn Sql, key: &str) -> Result<Option<String>> {
         .map(str::to_owned))
 }
 
+/// Overwrite one `hearth_meta` value.
+pub(crate) fn meta_put(sql: &dyn Sql, key: &str, value: &str) -> Result<()> {
+    sql.exec(
+        "INSERT OR REPLACE INTO hearth_meta (key, value) VALUES (?, ?)",
+        vec![
+            SqlValue::Text(key.to_owned()),
+            SqlValue::Text(value.to_owned()),
+        ],
+    )?;
+    Ok(())
+}
+
 /// Write one `hearth_meta` value without overwriting a stored one.
 pub(crate) fn meta_put_if_absent(sql: &dyn Sql, key: &str, value: &str) -> Result<()> {
     sql.exec(

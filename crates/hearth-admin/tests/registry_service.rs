@@ -3,7 +3,7 @@
 
 use hearth_admin::registry::RegistryService;
 use hearth_admin::RoomRow;
-use hearth_server::{RoomName, RoomReport};
+use hearth_server::{PlayerId, RoomName, RoomReport};
 use hearth_test::world::TestWorld;
 use serde_json::json;
 
@@ -11,6 +11,34 @@ fn room(name: &str) -> RoomName {
     RoomName {
         room_type: "tictactoe".to_owned(),
         name: name.to_owned(),
+    }
+}
+
+fn seated(players: &[&str]) -> Vec<PlayerId> {
+    players
+        .iter()
+        .map(|id| PlayerId((*id).to_owned()))
+        .collect()
+}
+
+fn open(room: RoomName, players: &[&str]) -> RoomReport {
+    RoomReport::Open {
+        room,
+        created_ms: 0,
+        players: seated(players),
+        capacity: 2,
+        locked: false,
+        metadata: serde_json::Value::Null,
+    }
+}
+
+fn players(room: RoomName, players: &[&str]) -> RoomReport {
+    RoomReport::Players {
+        room,
+        players: seated(players),
+        capacity: 2,
+        locked: false,
+        metadata: serde_json::Value::Null,
     }
 }
 
@@ -35,23 +63,10 @@ fn registry_service_applies_reports() {
     world.add_service::<RegistryService>("global");
 
     world
-        .call::<RegistryService>(
-            "global",
-            RoomReport::Open {
-                room: room("r1"),
-                created_ms: 0,
-                players: 1,
-            },
-        )
+        .call::<RegistryService>("global", open(room("r1"), &["a"]))
         .expect("open is applied");
     world
-        .call::<RegistryService>(
-            "global",
-            RoomReport::Players {
-                room: room("r1"),
-                players: 2,
-            },
-        )
+        .call::<RegistryService>("global", players(room("r1"), &["a", "b"]))
         .expect("players is applied");
 
     let rows = list_rows(&world);
@@ -70,14 +85,7 @@ fn registry_service_is_deduplicated_by_the_inbox() {
     let mut world = TestWorld::new();
     world.add_service::<RegistryService>("global");
     world
-        .call::<RegistryService>(
-            "global",
-            RoomReport::Open {
-                room: room("r1"),
-                created_ms: 0,
-                players: 1,
-            },
-        )
+        .call::<RegistryService>("global", open(room("r1"), &["a"]))
         .expect("open is applied");
 
     // Re-sending the same envelope is a no-op: the service deduplicates it.

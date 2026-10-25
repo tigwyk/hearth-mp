@@ -22,10 +22,11 @@ pub mod worker;
 pub use admin::{Cause, InspectClient, InspectDoc, TailMsg};
 pub use call::{CallError, Callable, Envelope, Target};
 pub use ctx::Ctx;
+pub use hearth_protocol::PlayerId;
 pub use host::{Attachment, Host, RoomName, RoomReport, Sql, SqlValue};
 pub use room::{Client, JoinOpts, Leave, Mode, Room, RoomConfig, RoomRpc, TimerKey};
 pub use runtime::RoomRuntime;
 pub use schema::{schema_doc, schema_hash, schema_hash_hex, SchemaDoc, HEARTH_SCHEMA_VERSION};
-pub use service::{Service, ServiceCtx, ServiceRuntime};
+pub use service::{PlayerService, Service, ServiceCtx, ServiceRuntime};
 
 pub type Result<T> = anyhow::Result<T>;

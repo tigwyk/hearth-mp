@@ -26,6 +26,9 @@ const USER_TIMER_PREFIX: &str = "u:";
 const REGISTRY_BINDING: &str = "HEARTH_REGISTRY";
 /// The single registry instance (the v0.2c shortcut, unchanged).
 const REGISTRY_NAME: &str = "global";
+/// Binding of the optional matchmaker. A room whose gateway told it which
+/// matchmaker pools it also reports there.
+const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
 
 /// Per-player intent bucket: capacity 120 intents, refill 60/s. Hibernation
 /// resets the bucket, which is intended: a room only hibernates when quiet.
@@ -54,14 +57,22 @@ pub struct RoomRuntime<R: Room, H: Host> {
     /// reported `Open`).
     meta_created_here: bool,
     /// Registry report bookkeeping: `Open` was sent, and the last reported
-    /// seated count (live + held).
+    /// lobby snapshot.
     open_reported: bool,
-    last_players: Option<u8>,
+    last_lobby: Option<Lobby>,
+    /// `ctx.set_metadata`'s value, persisted in `hearth_meta`.
+    metadata: Option<Value>,
+    /// The matchmaker instance (`"type:region"`) that pools this room, if any.
+    mm: Option<String>,
     /// The call chain of the pass in progress, empty for every non-call pass.
     chain: Vec<Target>,
     /// The name a call's header gave this room, used before identity is known.
     call_name: String,
 }
+
+/// The fields a lobby report carries: seated players, capacity, lock and the
+/// room's own metadata.
+type Lobby = (Vec<PlayerId>, u8, bool, Value);
 
 struct TokenBucket {
     tokens: f64,
@@ -85,7 +96,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             created_ms: 0,
             meta_created_here: false,
             open_reported: false,
-            last_players: None,
+            last_lobby: None,
+            metadata: None,
+            mm: None,
             chain: Vec::new(),
             call_name: String::new(),
         }
@@ -142,13 +155,28 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     /// The first connect ever also persists the room's identity and creation
     /// time in `hearth_meta`, so reports and inspect work after a hibernation
     /// without another connect.
-    pub async fn connect(&mut self, socket: H::Socket, player: PlayerId, room: RoomName) {
+    pub async fn connect(
+        &mut self,
+        socket: H::Socket,
+        player: PlayerId,
+        room: RoomName,
+        matchmaker: Option<String>,
+    ) {
         if let Err(err) = self.remember_room(&room) {
             self.log_json(serde_json::json!({
                 "hearth": "meta_error",
                 "room": self.room_label(),
                 "msg": err.to_string(),
             }));
+        }
+        if let Some(mm) = matchmaker {
+            if let Err(err) = self.set_matchmaker(&mm) {
+                self.log_json(serde_json::json!({
+                    "hearth": "meta_error",
+                    "room": self.room_label(),
+                    "msg": err.to_string(),
+                }));
+            }
         }
         let mut kept_seat = None;
         for existing in self.host.sockets() {
@@ -379,21 +407,49 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(true)
     }
 
+    /// The room's current lobby snapshot: seated players, capacity, lock and
+    /// metadata. A report goes out only when this changes.
+    fn lobby_snapshot(&self) -> Option<Lobby> {
+        let players = self.occupied_players().ok()?;
+        Some((
+            players,
+            R::MAX_CLIENTS,
+            self.locked,
+            self.metadata.clone().unwrap_or(Value::Null),
+        ))
+    }
+
+    /// Live and held seats, sorted by player id so a drop (live -> held) does
+    /// not reorder the roster, and the registry sees only real changes.
+    fn occupied_players(&self) -> Result<Vec<PlayerId>> {
+        let mut players: Vec<PlayerId> = self
+            .joined()
+            .into_iter()
+            .map(|(_, attachment)| attachment.player_id)
+            .collect();
+        players.extend(self.held_rows()?.into_iter().map(|(player, _)| player));
+        players.sort_by(|left, right| left.0.cmp(&right.0));
+        Ok(players)
+    }
+
     fn report_players(&mut self) {
         if !self.open_reported {
             return;
         }
-        let Ok(players) = self.occupied() else {
+        let Some(lobby) = self.lobby_snapshot() else {
             return;
         };
-        let players = players as u8;
-        if self.last_players == Some(players) {
+        if self.last_lobby.as_ref() == Some(&lobby) {
             return;
         }
-        self.last_players = Some(players);
+        self.last_lobby = Some(lobby.clone());
+        let (players, capacity, locked, metadata) = lobby;
         self.queue_report(RoomReport::Players {
             room: self.room_or_unknown(),
             players,
+            capacity,
+            locked,
+            metadata,
         });
     }
 
@@ -401,43 +457,51 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         if self.open_reported {
             return;
         }
-        let Ok(players) = self.occupied() else {
+        let Some(lobby) = self.lobby_snapshot() else {
             return;
         };
         self.open_reported = true;
-        self.last_players = Some(players as u8);
+        self.last_lobby = Some(lobby.clone());
+        let (players, capacity, locked, metadata) = lobby;
         self.queue_report(RoomReport::Open {
             room: self.room_or_unknown(),
             created_ms: self.created_ms,
-            players: players as u8,
+            players,
+            capacity,
+            locked,
+            metadata,
         });
     }
 
-    /// Queue a report as a durable notify to the registry. The registry is
-    /// optional: without its binding a room never reports, and a registry
-    /// outage only shows up in the logs and the outbox.
+    /// Queue one report to the registry and, when this room is pooled by a
+    /// matchmaker, to that matchmaker too. Reports are durable outbox rows, so
+    /// an outage delays them instead of losing them.
     fn queue_report(&self, report: RoomReport) {
-        if !self.host.has_binding(REGISTRY_BINDING) {
-            return;
-        }
         let Ok(body) = serde_json::to_value(&report) else {
             return;
         };
-        if let Err(err) = outbox::enqueue(
-            self.host.sql(),
-            REGISTRY_BINDING,
-            REGISTRY_NAME,
-            &body,
-            self.host.now_ms(),
-        ) {
+        self.enqueue_report(REGISTRY_BINDING, REGISTRY_NAME, &body);
+        if let Some(mm) = &self.mm {
+            // The matchmaker is a Service, so the report rides in its `Report`
+            // variant; the registry service takes the bare report.
+            self.enqueue_report(MATCHMAKER_BINDING, mm, &serde_json::json!({"Report": body}));
+        }
+    }
+
+    fn enqueue_report(&self, binding: &str, name: &str, body: &Value) {
+        if !self.host.has_binding(binding) {
+            return;
+        }
+        if let Err(err) = outbox::enqueue(self.host.sql(), binding, name, body, self.host.now_ms())
+        {
             self.log_json(serde_json::json!({
                 "hearth": "report_error",
                 "room": self.room_label(),
+                "binding": binding,
                 "msg": err.to_string(),
             }));
         }
     }
-
     /// The end of every handler pass: report the seated count, then deliver
     /// whatever committed notifies are pending.
     async fn finish_pass(&mut self) {
@@ -505,7 +569,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.created_ms = 0;
         self.meta_created_here = false;
         self.open_reported = false;
-        self.last_players = None;
+        self.last_lobby = None;
+        self.metadata = None;
+        self.mm = None;
         self.chain.clear();
         self.call_name.clear();
     }
@@ -1633,6 +1699,14 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                     self.locked = true;
                     self.persist()?;
                 }
+                Effect::SetMetadata(metadata) => {
+                    store::meta_put(
+                        self.host.sql(),
+                        "metadata",
+                        &serde_json::to_string(&metadata)?,
+                    )?;
+                    self.metadata = Some(metadata);
+                }
                 Effect::Dispose => dispose = true,
                 // Events are delivered by the caller, notify rows were written
                 // above; nested kicks are not supported in v0.1.
@@ -1679,6 +1753,28 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(())
     }
 
+    /// Remember which matchmaker pools this room. The gateway sets it on the
+    /// first connect; tests use it directly.
+    pub fn set_matchmaker(&mut self, mm: &str) -> Result<()> {
+        store::meta_put_if_absent(self.host.sql(), "mm", mm)?;
+        self.mm = Some(mm.to_owned());
+        Ok(())
+    }
+
+    /// Load the metadata and matchmaker values persisted in `hearth_meta`.
+    fn load_lobby_meta(&mut self) {
+        if self.metadata.is_none() {
+            if let Ok(Some(text)) = store::meta_get(self.host.sql(), "metadata") {
+                self.metadata = serde_json::from_str(&text).ok();
+            }
+        }
+        if self.mm.is_none() {
+            if let Ok(Some(mm)) = store::meta_get(self.host.sql(), "mm") {
+                self.mm = Some(mm);
+            }
+        }
+    }
+
     async fn ensure_loaded(&mut self) -> Result<bool> {
         if self.state.is_some() {
             return Ok(self.incompatible);
@@ -1704,10 +1800,11 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 // an existing room, whose `Open` already reached the registry.
                 if had_meta && !self.meta_created_here && !self.open_reported {
                     self.open_reported = true;
-                    self.last_players = self.occupied().ok().map(|players| players as u8);
+                    self.last_lobby = self.lobby_snapshot();
                 }
             }
         }
+        self.load_lobby_meta();
         let rows = self.host.sql().exec(
             "SELECT seq, locked, data FROM hearth_state WHERE id = 0",
             Vec::new(),

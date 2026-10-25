@@ -15,6 +15,7 @@ worker = ["hearth-server/worker"]
 [dependencies]
 anyhow.workspace = true
 hearth-admin.workspace = true
+hearth-matchmaker.workspace = true
 hearth-protocol.workspace = true
 hearth-sync.workspace = true
 hearth-server.workspace = true

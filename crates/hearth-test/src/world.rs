@@ -95,6 +95,8 @@ trait AnyObject {
     ) -> LocalBoxFuture<'a, ()>;
     fn connect_admin(&mut self, socket: usize) -> LocalBoxFuture<'_, ()>;
     fn message(&mut self, socket: usize, msg: WireMsg) -> LocalBoxFuture<'_, ()>;
+    /// Point this room at a matchmaker instance, as the gateway's header does.
+    fn set_matchmaker(&mut self, mm: &str);
     fn close(&mut self, socket: usize) -> LocalBoxFuture<'_, ()>;
     fn alarm(&mut self) -> LocalBoxFuture<'_, ()>;
     fn force_dispose(&mut self) -> LocalBoxFuture<'_, bool>;
@@ -124,7 +126,7 @@ impl<R: Room> AnyObject for RoomSlot<R> {
         player: PlayerId,
         room: RoomName,
     ) -> LocalBoxFuture<'a, ()> {
-        Box::pin(async move { self.rt.connect(socket, player, room).await })
+        Box::pin(async move { self.rt.connect(socket, player, room, None).await })
     }
 
     fn connect_admin(&mut self, socket: usize) -> LocalBoxFuture<'_, ()> {
@@ -133,6 +135,10 @@ impl<R: Room> AnyObject for RoomSlot<R> {
 
     fn message(&mut self, socket: usize, msg: WireMsg) -> LocalBoxFuture<'_, ()> {
         Box::pin(async move { self.rt.message(socket, msg).await })
+    }
+
+    fn set_matchmaker(&mut self, mm: &str) {
+        let _ = self.rt.set_matchmaker(mm);
     }
 
     fn close(&mut self, socket: usize) -> LocalBoxFuture<'_, ()> {
@@ -203,6 +209,8 @@ impl<S: Service> AnyObject for ServiceSlot<S> {
     fn message(&mut self, _socket: usize, _msg: WireMsg) -> LocalBoxFuture<'_, ()> {
         Box::pin(async {})
     }
+
+    fn set_matchmaker(&mut self, _mm: &str) {}
 
     fn close(&mut self, _socket: usize) -> LocalBoxFuture<'_, ()> {
         Box::pin(async {})
@@ -562,6 +570,14 @@ impl TestWorld {
         });
         self.inner.close_socket(socket, 1006, "abnormal closure");
         self.pump();
+    }
+
+    /// Point a test room at a matchmaker instance, as the gateway does.
+    pub fn set_matchmaker(&mut self, room: &RoomRef, mm: &str) {
+        self.with_object(&room.key, |obj| {
+            obj.set_matchmaker(mm);
+            Box::pin(async {})
+        });
     }
 
     /// Move the virtual clock and fire every due alarm.

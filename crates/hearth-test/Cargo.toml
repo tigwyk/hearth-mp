@@ -18,3 +18,6 @@ futures.workspace = true
 rusqlite.workspace = true
 fastrand.workspace = true
 anyhow.workspace = true
+
+[dev-dependencies]
+hearth-matchmaker.workspace = true

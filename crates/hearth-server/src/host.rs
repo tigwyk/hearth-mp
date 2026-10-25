@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use hearth_protocol::{PlayerId, WireMsg};
+use hearth_protocol::{PlayerId, Value, WireMsg};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
@@ -45,19 +45,28 @@ pub struct RoomName {
     pub name: String,
 }
 
-/// What a room tells the registry about itself. `players` counts seated players,
-/// both live and held across a reconnect.
+/// What a room tells the registry and the matchmaker about itself.
+///
+/// `players` is the seated roster, live and held across a reconnect: the count
+/// is its length. `metadata` is the room's `ctx.set_metadata` value, which the
+/// matchmaker echoes in its lobby listing.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RoomReport {
     Open {
         room: RoomName,
         created_ms: u64,
-        players: u8,
+        players: Vec<PlayerId>,
+        capacity: u8,
+        locked: bool,
+        metadata: Value,
     },
     Players {
         room: RoomName,
-        players: u8,
+        players: Vec<PlayerId>,
+        capacity: u8,
+        locked: bool,
+        metadata: Value,
     },
     Disposed {
         room: RoomName,

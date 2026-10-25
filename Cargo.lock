@@ -618,6 +618,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "hearth-admin",
+ "hearth-matchmaker",
  "hearth-protocol",
  "hearth-server",
  "hearth-server-macros",
@@ -662,7 +663,9 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.2.17",
+ "hearth-matchmaker",
  "hearth-protocol",
+ "hearth-server",
  "hmac",
  "serde",
  "serde_json",
@@ -677,6 +680,20 @@ dependencies = [
  "godot",
  "hearth-client",
  "hearth-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "hearth-matchmaker"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "getrandom 0.2.17",
+ "hearth-client",
+ "hearth-protocol",
+ "hearth-server",
+ "hearth-test",
+ "serde",
  "serde_json",
 ]
 
@@ -748,6 +765,7 @@ dependencies = [
  "fastrand",
  "futures",
  "hearth-client",
+ "hearth-matchmaker",
  "hearth-protocol",
  "hearth-server",
  "hearth-sync",
