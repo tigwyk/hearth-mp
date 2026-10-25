@@ -45,6 +45,8 @@ var raw_state: Dictionary = {}
 var state = {}
 ## Verified player id from `JOIN_OK`; `""` before login.
 var player_id: String = ""
+## Display name from the last provider login; `""` when the provider gave none.
+var display_name: String = ""
 ## Assigned seat from `JOIN_OK`; `-1` before join.
 var seat: int = -1
 ## Test seam: when set, `login_anonymous()` uses this as the device id instead of
@@ -62,6 +64,8 @@ const _DEVICE_ID_PATH := "user://hearth_device_id"
 const _MATCH_ATTEMPTS := 4
 ## How long `quick_join` waits for a matchmade room's JOIN_OK or ERROR.
 const _JOIN_TIMEOUT_MS := 10000
+## HTTP attempts per call when the gateway answers 429: the first try plus 2.
+const _MAX_ATTEMPTS_PER_REQUEST := 3
 
 
 func _ready() -> void:
@@ -101,6 +105,7 @@ func _create_backend() -> Node:
 func login_anonymous() -> void:
 	_token = ""
 	player_id = ""
+	display_name = ""
 	var response: Dictionary = await _post("/auth/anonymous", JSON.stringify({"device_id": _device_id()}), false)
 	if response.is_empty():
 		return
@@ -110,6 +115,53 @@ func login_anonymous() -> void:
 		return
 	_token = String(parsed["token"])
 	player_id = String(parsed.get("player_id", ""))
+
+
+## Sign in with a signed JWT from the game's own backend (`POST /auth/jwt`).
+func login_jwt(jwt: String) -> bool:
+	return await _login("jwt", "jwt", jwt)
+
+
+## Sign in with a Steam `GetAuthTicketForWebApi` session ticket, hex-encoded.
+func login_steam(ticket_hex: String) -> bool:
+	return await _login("steam", "ticket", ticket_hex)
+
+
+## Sign in with an itch.io API key (`ITCHIO_API_KEY` by default).
+func login_itch(api_key := OS.get_environment("ITCHIO_API_KEY")) -> bool:
+	return await _login("itch", "api_key", api_key)
+
+
+## Sign in with a Discord OAuth authorization code.
+func login_discord(code: String) -> bool:
+	return await _login("discord", "code", code)
+
+
+## Shared provider login: exchange one external credential for the Hearth token
+## every later call uses. Returns false and emits the mapped `error` code on
+## failure (401 `AUTH_REJECTED`, 404 `AUTH_DISABLED`, 502 `AUTH_UPSTREAM`, or
+## `RATE_LIMITED` once the HTTP helper's retries are used up).
+func _login(provider: String, field: String, credential: String) -> bool:
+	_token = ""
+	player_id = ""
+	display_name = ""
+	var response: Dictionary = await _post(
+		"/auth/" + provider,
+		JSON.stringify({field: credential}),
+		false,
+		{401: "AUTH_REJECTED", 404: "AUTH_DISABLED", 502: "AUTH_UPSTREAM"},
+	)
+	if response.is_empty():
+		return false
+	var parsed = JSON.parse_string(String(response.get("body", "")))
+	if typeof(parsed) != TYPE_DICTIONARY or String(parsed.get("token", "")).is_empty():
+		_emit_error("AUTH_FAILED", "POST /auth/%s did not return a token" % provider, -1)
+		return false
+	_token = String(parsed["token"])
+	player_id = String(parsed.get("player_id", ""))
+	var name = parsed.get("display_name")
+	display_name = "" if name == null else String(name)
+	return true
 
 
 ## Mint a room name for `room_type`. Awaits the HTTP round trip and returns the
@@ -269,41 +321,71 @@ func _room_url(room_type: String, room: String) -> String:
 	return base + "/rooms/" + room_type + "/" + room + "?token=" + _token
 
 
-func _post(path: String, body: String, authenticated: bool) -> Dictionary:
-	return await _request(HTTPClient.METHOD_POST, path, body, authenticated)
+func _post(
+	path: String, body: String, authenticated: bool, error_codes := {}
+) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, path, body, authenticated, error_codes)
 
 
 func _http_get(path: String, authenticated: bool) -> Dictionary:
 	return await _request(HTTPClient.METHOD_GET, path, "", authenticated)
 
 
+## One HTTP round trip. A 429 is retried at most twice, after the `Retry-After`
+## seconds, and only once those are used up emits `RATE_LIMITED`; `error_codes`
+## maps other HTTP statuses to the calling endpoint's `error` code
+## (`HTTP_<status>` when absent), so callers like the provider logins can report
+## `AUTH_REJECTED` instead of `HTTP_401`.
 func _request(
-	method: HTTPClient.Method, path: String, body: String, authenticated: bool
+	method: HTTPClient.Method,
+	path: String,
+	body: String,
+	authenticated: bool,
+	error_codes := {},
 ) -> Dictionary:
-	var request := HTTPRequest.new()
-	add_child(request)
-	var headers := PackedStringArray(["Content-Type: application/json"])
-	if authenticated:
-		headers.append("Authorization: Bearer " + _token)
-	var error_code := request.request(
-		server_url.trim_suffix("/") + path, headers, method, body
-	)
-	if error_code != OK:
+	for attempt in _MAX_ATTEMPTS_PER_REQUEST:
+		var request := HTTPRequest.new()
+		add_child(request)
+		var headers := PackedStringArray(["Content-Type: application/json"])
+		if authenticated:
+			headers.append("Authorization: Bearer " + _token)
+		var error_code := request.request(
+			server_url.trim_suffix("/") + path, headers, method, body
+		)
+		if error_code != OK:
+			request.queue_free()
+			_emit_error("HTTP_FAILED", "HTTPRequest.request failed (%d)" % error_code, -1)
+			return {}
+		var completed: Array = await request.request_completed
 		request.queue_free()
-		_emit_error("HTTP_FAILED", "HTTPRequest.request failed (%d)" % error_code, -1)
-		return {}
-	var completed: Array = await request.request_completed
-	request.queue_free()
-	var result: int = completed[0]
-	var status: int = completed[1]
-	var text: String = (completed[3] as PackedByteArray).get_string_from_utf8()
-	if result != HTTPRequest.RESULT_SUCCESS:
-		_emit_error("HTTP_FAILED", "HTTPRequest failed (result %d)" % result, -1)
-		return {}
-	if status < 200 or status >= 300:
-		_emit_error("HTTP_%d" % status, text, -1)
-		return {}
-	return {"status": status, "body": text}
+		var result: int = completed[0]
+		var status: int = completed[1]
+		var text: String = (completed[3] as PackedByteArray).get_string_from_utf8()
+		if result != HTTPRequest.RESULT_SUCCESS:
+			_emit_error("HTTP_FAILED", "HTTPRequest failed (result %d)" % result, -1)
+			return {}
+		if status == 429 and attempt + 1 < _MAX_ATTEMPTS_PER_REQUEST:
+			await get_tree().create_timer(_retry_after_seconds(completed[2])).timeout
+			continue
+		if status < 200 or status >= 300:
+			var code := "HTTP_%d" % status
+			if status == 429:
+				code = "RATE_LIMITED"
+			elif error_codes.has(status):
+				code = String(error_codes[status])
+			_emit_error(code, text, -1)
+			return {}
+		return {"status": status, "body": text}
+	return {}
+
+
+## The whole seconds in a `Retry-After` response header (1 when absent/bad).
+func _retry_after_seconds(headers: PackedStringArray) -> int:
+	for header in headers:
+		var separator := header.find(":")
+		if separator > 0 and header.substr(0, separator).strip_edges().to_lower() == "retry-after":
+			return maxi(1, int(header.substr(separator + 1).strip_edges()))
+	return 1
 
 
 func _device_id() -> String:
