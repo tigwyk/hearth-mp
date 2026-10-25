@@ -58,6 +58,10 @@ var _token: String = ""
 const _WEB_CLIENT = preload("res://addons/hearth/hearth_web_client.gd")
 const _PATCH = preload("res://addons/hearth/hearth_patch.gd")
 const _DEVICE_ID_PATH := "user://hearth_device_id"
+## `POST /match` attempts per `quick_join`: the first try plus 3 retries.
+const _MATCH_ATTEMPTS := 4
+## How long `quick_join` waits for a matchmade room's JOIN_OK or ERROR.
+const _JOIN_TIMEOUT_MS := 10000
 
 
 func _ready() -> void:
@@ -121,6 +125,76 @@ func create_room(room_type: String) -> String:
 	return String(parsed.get("room", ""))
 
 
+## Quick-join a matchmade room: `POST /match/{room_type}`, then `join()` the
+## room it returns. `pool` groups rooms that should be matched together. When the
+## room answers `ROOM_FULL` before `joined`, it asks the matchmaker again up to 3
+## times, then emits `error("MATCH_FAILED", ...)`. `opts` is passed through to the
+## room's `on_join`.
+func quick_join(room_type: String, pool := "default", opts := {}) -> void:
+	for _attempt in _MATCH_ATTEMPTS:
+		var response: Dictionary = await _post(
+			"/match/" + room_type, JSON.stringify({"pool": pool}), true
+		)
+		if response.is_empty():
+			return
+		var parsed = JSON.parse_string(String(response.get("body", "")))
+		var room := ""
+		if typeof(parsed) == TYPE_DICTIONARY:
+			room = String(parsed.get("room", ""))
+		if room.is_empty():
+			_emit_error("MATCH_FAILED", "POST /match/%s did not return a room" % room_type, -1)
+			return
+		var outcome := await _join_and_wait(room_type, room, opts)
+		if outcome == "joined":
+			return
+		if outcome != "ROOM_FULL":
+			# The room's own error was already emitted; only a timeout has none.
+			if outcome == "TIMEOUT":
+				_emit_error("MATCH_FAILED", "joining %s timed out" % room, -1)
+			return
+	_emit_error("MATCH_FAILED", "no room after %d match attempts" % _MATCH_ATTEMPTS, -1)
+
+
+## The open rooms of one pool: `GET /lobby/{room_type}`. Each entry is
+## `{"name", "players", "capacity", "metadata"}`; `[]` on failure (an `error`
+## signal is emitted).
+func list_rooms(room_type: String, pool := "default", limit := 20) -> Array:
+	var response: Dictionary = await _http_get(
+		"/lobby/%s?pool=%s&limit=%d" % [room_type, pool, limit], true
+	)
+	if response.is_empty():
+		return []
+	var parsed = JSON.parse_string(String(response.get("body", "")))
+	if typeof(parsed) != TYPE_DICTIONARY or typeof(parsed.get("rooms")) != TYPE_ARRAY:
+		_emit_error("BAD_RESPONSE", "GET /lobby/%s did not return a rooms array" % room_type, -1)
+		return []
+	var rooms: Array = []
+	for room in parsed["rooms"]:
+		if typeof(room) != TYPE_DICTIONARY:
+			continue
+		rooms.append({
+			"name": String(room.get("name", "")),
+			"players": int(room.get("players", 0)),
+			"capacity": int(room.get("capacity", 0)),
+			"metadata": room.get("metadata"),
+		})
+	return rooms
+
+
+## The caller's own player data: `GET /me`. Returns the JSON view as a
+## Dictionary, or `{}` on failure (an `error` signal is emitted, including
+## `HTTP_501` when the player service is not configured).
+func get_me() -> Dictionary:
+	var response: Dictionary = await _http_get("/me", true)
+	if response.is_empty():
+		return {}
+	var parsed = JSON.parse_string(String(response.get("body", "")))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		_emit_error("BAD_RESPONSE", "GET /me did not return a JSON object", -1)
+		return {}
+	return parsed
+
+
 ## Connect to a room. `opts` is passed through to the room's `on_join`.
 func join(room_type: String, room: String, opts := {}) -> void:
 	if _backend == null:
@@ -130,6 +204,28 @@ func join(room_type: String, room: String, opts := {}) -> void:
 		_emit_error("NOT_LOGGED_IN", "call login_anonymous() first", -1)
 		return
 	_backend.connect_to_room(_room_url(room_type, room), schema_hash, opts)
+
+
+## `join()` and wait for its first outcome: `"joined"`, the error code the room
+## answered (`"ROOM_FULL"`, ...), or `"TIMEOUT"`.
+func _join_and_wait(room_type: String, room: String, opts: Dictionary) -> String:
+	var outcome := {"done": false, "code": ""}
+	var on_joined := func(_joined_player_id: String, _joined_seat: int) -> void:
+		outcome["done"] = true
+	var on_error := func(code: String, _message: String, _ref_seq: int) -> void:
+		outcome["done"] = true
+		outcome["code"] = code
+	joined.connect(on_joined)
+	error.connect(on_error)
+	join(room_type, room, opts)
+	var deadline := Time.get_ticks_msec() + _JOIN_TIMEOUT_MS
+	while not bool(outcome["done"]) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	joined.disconnect(on_joined)
+	error.disconnect(on_error)
+	if not bool(outcome["done"]):
+		return "TIMEOUT"
+	return "joined" if String(outcome["code"]).is_empty() else String(outcome["code"])
 
 
 ## Enable the typed state mirror (plan v0.2a Task 6). `root_class` is a
@@ -174,12 +270,24 @@ func _room_url(room_type: String, room: String) -> String:
 
 
 func _post(path: String, body: String, authenticated: bool) -> Dictionary:
+	return await _request(HTTPClient.METHOD_POST, path, body, authenticated)
+
+
+func _http_get(path: String, authenticated: bool) -> Dictionary:
+	return await _request(HTTPClient.METHOD_GET, path, "", authenticated)
+
+
+func _request(
+	method: HTTPClient.Method, path: String, body: String, authenticated: bool
+) -> Dictionary:
 	var request := HTTPRequest.new()
 	add_child(request)
 	var headers := PackedStringArray(["Content-Type: application/json"])
 	if authenticated:
 		headers.append("Authorization: Bearer " + _token)
-	var error_code := request.request(server_url.trim_suffix("/") + path, headers, HTTPClient.METHOD_POST, body)
+	var error_code := request.request(
+		server_url.trim_suffix("/") + path, headers, method, body
+	)
 	if error_code != OK:
 		request.queue_free()
 		_emit_error("HTTP_FAILED", "HTTPRequest.request failed (%d)" % error_code, -1)

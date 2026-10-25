@@ -59,6 +59,10 @@ func _build_ui() -> void:
 	join_button.text = "Join"
 	join_button.pressed.connect(_on_join_pressed)
 	row.add_child(join_button)
+	var quick_button := Button.new()
+	quick_button.text = "Quick play"
+	quick_button.pressed.connect(_on_quick_play_pressed)
+	row.add_child(quick_button)
 
 	var grid := GridContainer.new()
 	grid.columns = 3
@@ -114,6 +118,17 @@ func _on_join_pressed() -> void:
 	await Hearth.login_anonymous()
 	if not Hearth.player_id.is_empty():
 		Hearth.join(ROOM_TYPE, room)
+	_busy = false
+
+
+## Matchmade game: the server picks (or mints) a room and seats us in it.
+func _on_quick_play_pressed() -> void:
+	if _busy:
+		return
+	_busy = true
+	await Hearth.login_anonymous()
+	if not Hearth.player_id.is_empty():
+		await Hearth.quick_join(ROOM_TYPE)
 	_busy = false
 
 
