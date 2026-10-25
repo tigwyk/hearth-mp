@@ -3,7 +3,9 @@ use std::time::Duration;
 use hearth_protocol::{PlayerId, Value};
 use hearth_sync::{HearthState, Schema};
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
+use crate::call::Target;
 use crate::Result;
 
 /// How a room runs. v0.1 ships event mode only; ticked mode arrives in v0.4.
@@ -116,4 +118,34 @@ pub trait Room: RoomConfig + Default + 'static {
     async fn on_dispose(&mut self, _ctx: &mut crate::Ctx<Self>) -> Result<()> {
         Ok(())
     }
+}
+
+/// A room that also accepts object-to-object calls.
+///
+/// Write it as its own impl block and add the `rpc` flag to the room attribute:
+///
+/// ```ignore
+/// #[hearth::room(mode = "event", max_clients = 2, binding = "TICTACTOE", rpc)]
+/// impl Room for TicTacToe { /* ... */ }
+///
+/// impl RoomRpc for TicTacToe {
+///     type Rpc = TttRpc;
+///     type Reply = Value;
+///     async fn on_call(&mut self, ctx: &mut Ctx<Self>, from: &Target, rpc: TttRpc) -> Result<Value> { /* ... */ }
+/// }
+/// ```
+///
+/// `on_call` runs as a normal handler pass, so whatever it changes is patched
+/// to the room's clients.
+#[allow(async_fn_in_trait)]
+pub trait RoomRpc: Room {
+    type Rpc: Serialize + DeserializeOwned;
+    type Reply: Serialize + DeserializeOwned;
+
+    async fn on_call(
+        &mut self,
+        ctx: &mut crate::Ctx<Self>,
+        from: &Target,
+        rpc: Self::Rpc,
+    ) -> Result<Self::Reply>;
 }

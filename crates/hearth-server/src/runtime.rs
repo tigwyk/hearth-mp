@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use hearth_protocol::{
     close, decode, encode, Encoding, ErrorCode, Frame, IntentMsg, PlayerId, Value, WireMsg,
     MAX_FRAME_BYTES, PING_TEXT, PONG_TEXT, PROTOCOL_VERSION,
@@ -5,9 +7,11 @@ use hearth_protocol::{
 use hearth_sync::{diff, HearthState};
 
 use crate::admin::{Cause, InspectClient, InspectDoc, TailMsg};
+use crate::call::{rpc_from_value, rpc_to_value, CallError, Caller, Envelope, HostCaller, Target};
 use crate::ctx::{Ctx, Effect};
 use crate::host::{Attachment, Host, RoomName, RoomReport, SqlValue};
-use crate::room::{Client, JoinOpts, Leave, Room, TimerKey};
+use crate::room::{Client, JoinOpts, Leave, Room, RoomRpc, TimerKey};
+use crate::store;
 use crate::Result;
 
 /// Internal key for the empty-room grace timer. User timers are stored under a
@@ -22,23 +26,13 @@ const USER_TIMER_PREFIX: &str = "u:";
 const INTENT_BUCKET_CAPACITY: f64 = 120.0;
 const INTENT_REFILL_PER_MS: f64 = 60.0 / 1000.0;
 
-const CREATE_STATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_state (\
-    id INTEGER PRIMARY KEY CHECK (id = 0), \
-    seq INTEGER NOT NULL, \
-    locked INTEGER NOT NULL, \
-    data BLOB NOT NULL)";
-const CREATE_TIMERS_TABLE: &str =
-    "CREATE TABLE IF NOT EXISTS hearth_timers (key TEXT PRIMARY KEY, due_ms INTEGER NOT NULL)";
-const CREATE_HELD_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_held (\
-    player_id TEXT PRIMARY KEY, seat INTEGER NOT NULL, until_ms INTEGER NOT NULL)";
-const CREATE_META_TABLE: &str =
-    "CREATE TABLE IF NOT EXISTS hearth_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
-
 /// Event-mode room runtime. One instance lives behind the room's async mutex;
 /// `new` after hibernation rebuilds everything from the [`Host`] (SQLite and
 /// socket attachments).
 pub struct RoomRuntime<R: Room, H: Host> {
-    host: H,
+    host: Rc<H>,
+    /// The Durable Object binding this room class is deployed as.
+    binding: &'static str,
     room: R,
     state: Option<R::State>,
     seq: u64,
@@ -57,6 +51,10 @@ pub struct RoomRuntime<R: Room, H: Host> {
     /// seated count (live + held).
     open_reported: bool,
     last_players: Option<u8>,
+    /// The call chain of the pass in progress, empty for every non-call pass.
+    chain: Vec<Target>,
+    /// The name a call's header gave this room, used before identity is known.
+    call_name: String,
 }
 
 struct TokenBucket {
@@ -64,10 +62,11 @@ struct TokenBucket {
     last_ms: u64,
 }
 
-impl<R: Room, H: Host> RoomRuntime<R, H> {
-    pub fn new(host: H) -> Self {
+impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
+    pub fn new(host: H, binding: &'static str) -> Self {
         Self {
-            host,
+            host: Rc::new(host),
+            binding,
             room: R::default(),
             state: None,
             seq: 0,
@@ -81,11 +80,13 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             meta_created_here: false,
             open_reported: false,
             last_players: None,
+            chain: Vec::new(),
+            call_name: String::new(),
         }
     }
 
     pub fn host(&self) -> &H {
-        &self.host
+        self.host.as_ref()
     }
 
     pub fn state(&self) -> Option<&R::State> {
@@ -94,6 +95,39 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
 
     pub fn seq(&self) -> u64 {
         self.seq
+    }
+
+    /// The room's own address: its class binding plus its persisted name.
+    fn me(&self) -> Target {
+        let name = match &self.identity {
+            Some(room) => room.name.clone(),
+            None => self.call_name.clone(),
+        };
+        Target::new(self.binding, name)
+    }
+
+    /// A fresh call handle for `Ctx`: this room's address, the chain of the
+    /// pass in progress (empty except inside an `on_call`) and the host.
+    fn caller(&self) -> Caller {
+        Caller::new(
+            self.me(),
+            self.chain.clone(),
+            Rc::new(HostCaller {
+                host: Rc::clone(&self.host),
+            }),
+        )
+    }
+
+    fn make_ctx(&self, state: R::State, roster: Vec<Client>) -> Ctx<R> {
+        let sql = self.host.sql_handle();
+        let now = self.host.now_ms();
+        Ctx::new(state, roster, sql, now, self.caller())
+    }
+
+    /// Persist the room's identity without a connect. Test worlds and the
+    /// matchmaker need a named room before any socket exists.
+    pub fn remember_identity(&mut self, room: &RoomName) -> Result<()> {
+        self.remember_room(room)
     }
 
     /// Register a newly accepted socket. A second socket for a player replaces
@@ -154,7 +188,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
     /// stored (stable) values on every later connect.
     fn remember_room(&mut self, room: &RoomName) -> Result<()> {
         let existed = self.has_table("hearth_meta")?;
-        self.host.sql().exec(CREATE_META_TABLE, Vec::new())?;
+        self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
         let created_ms = self.host.now_ms().to_string();
         for (key, value) in [
             ("room_type", room.room_type.as_str()),
@@ -218,7 +252,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             if let Some(row) = rows.into_iter().next() {
                 seq = row.get("seq").and_then(Value::as_u64).unwrap_or(0);
                 locked = row.get("locked").and_then(Value::as_i64).unwrap_or(0) != 0;
-                let data = json_to_bytes(row.get("data"))?;
+                let data = store::json_to_bytes(row.get("data"))?;
                 state_bytes = data.len();
                 match rmp_serde::from_slice::<R::State>(&data) {
                     Ok(decoded) => state = Some(serde_json::to_value(&decoded)?),
@@ -284,7 +318,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 Vec::new(),
             )?;
             if let Some(row) = rows.into_iter().next() {
-                let data = json_to_bytes(row.get("data"))?;
+                let data = store::json_to_bytes(row.get("data"))?;
                 match rmp_serde::from_slice::<R::State>(&data) {
                     Ok(state) => persisted = Some(state),
                     Err(_) => {
@@ -306,9 +340,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         if !incompatible {
             if let Some(state) = persisted {
                 let roster = self.admin_roster()?;
-                let sql = self.host.sql_handle();
-                let now = self.host.now_ms();
-                let mut ctx = Ctx::new(state, roster, sql, now);
+                let mut ctx = self.make_ctx(state, roster);
                 if let Err(err) = self.room.on_dispose(&mut ctx).await {
                     self.log_json(serde_json::json!({
                         "hearth": "handler_error",
@@ -416,6 +448,8 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         self.meta_created_here = false;
         self.open_reported = false;
         self.last_players = None;
+        self.chain.clear();
+        self.call_name.clear();
     }
 
     /// The admin tail's view of a state value, counting the render for the
@@ -834,9 +868,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             let roster = self.clients_roster()?;
             let snapshot = self.snapshot()?;
             let state = self.state.take().expect("state loaded");
-            let sql = self.host.sql_handle();
-            let now = self.host.now_ms();
-            let mut ctx = Ctx::new(state, roster, sql, now);
+            let mut ctx = self.make_ctx(state, roster);
             let result = self.room.on_join(&mut ctx, &who, JoinOpts(opts)).await;
             let (state, ctx_effects) = ctx.into_parts();
             self.state = Some(state);
@@ -977,9 +1009,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql_handle();
-        let now = self.host.now_ms();
-        let mut ctx = Ctx::new(state, roster, sql, now);
+        let mut ctx = self.make_ctx(state, roster);
         let result = self.room.on_reconnect(&mut ctx, &who).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
@@ -1065,9 +1095,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             let snapshot = self.snapshot()?;
             let roster = self.clients_roster()?;
             let state = self.state.take().expect("state loaded");
-            let sql = self.host.sql_handle();
-            let now = self.host.now_ms();
-            let mut ctx = Ctx::new(state, roster, sql, now);
+            let mut ctx = self.make_ctx(state, roster);
             let result = self.room.on_intent(&mut ctx, &who, intent).await;
             let (state, ctx_effects) = ctx.into_parts();
             self.state = Some(state);
@@ -1201,9 +1229,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql_handle();
-        let now = self.host.now_ms();
-        let mut ctx = Ctx::new(state, roster, sql, now);
+        let mut ctx = self.make_ctx(state, roster);
         let result = self.room.on_disconnect(&mut ctx, &who).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
@@ -1287,9 +1313,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql_handle();
-        let now = self.host.now_ms();
-        let mut ctx = Ctx::new(state, roster, sql, now);
+        let mut ctx = self.make_ctx(state, roster);
         let result = self.room.on_timer(&mut ctx, key.clone()).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
@@ -1354,9 +1378,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql_handle();
-        let now = self.host.now_ms();
-        let mut ctx = Ctx::new(state, roster, sql, now);
+        let mut ctx = self.make_ctx(state, roster);
         let result = self.room.on_leave(&mut ctx, &who, reason).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
@@ -1427,9 +1449,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let roster = self.clients_roster()?;
         let snapshot = self.snapshot()?;
         let state = self.state.take().expect("state loaded");
-        let sql = self.host.sql_handle();
-        let now = self.host.now_ms();
-        let mut ctx = Ctx::new(state, roster, sql, now);
+        let mut ctx = self.make_ctx(state, roster);
         let result = self.room.on_leave(&mut ctx, &who, reason).await;
         let (state, effects) = ctx.into_parts();
         self.state = Some(state);
@@ -1458,7 +1478,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
         if !self.any_live_or_held()? {
-            let since = leave_ms.unwrap_or(now);
+            let since = leave_ms.unwrap_or(self.host.now_ms());
             let due = since.saturating_add(R::EMPTY_GRACE.as_millis() as u64);
             self.timer_set(EMPTY_TIMER, due)?;
         }
@@ -1494,9 +1514,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         let admin_before = self.admin_before();
         if let Some(state) = self.state.take() {
             let roster = self.clients_roster()?;
-            let sql = self.host.sql_handle();
-            let now = self.host.now_ms();
-            let mut ctx = Ctx::new(state, roster, sql, now);
+            let mut ctx = self.make_ctx(state, roster);
             if let Err(err) = self.room.on_dispose(&mut ctx).await {
                 self.log_json(serde_json::json!({
                     "hearth": "handler_error",
@@ -1539,8 +1557,9 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
                 }
                 Effect::Dispose => dispose = true,
                 // Events are delivered by the caller; nested kicks are not
-                // supported in v0.1 and are ignored here.
-                Effect::Event { .. } | Effect::Kick(_) => {}
+                // supported in v0.1 and are ignored here. `Notify` rows are
+                // written by the outbox pass, before this point.
+                Effect::Event { .. } | Effect::Kick(_) | Effect::Notify { .. } => {}
             }
         }
         self.reschedule_alarm().await?;
@@ -1591,10 +1610,14 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
             return Ok(true);
         }
         let had_meta = self.has_table("hearth_meta")?;
-        self.host.sql().exec(CREATE_STATE_TABLE, Vec::new())?;
-        self.host.sql().exec(CREATE_TIMERS_TABLE, Vec::new())?;
-        self.host.sql().exec(CREATE_HELD_TABLE, Vec::new())?;
-        self.host.sql().exec(CREATE_META_TABLE, Vec::new())?;
+        self.host
+            .sql()
+            .exec(store::CREATE_STATE_TABLE, Vec::new())?;
+        self.host
+            .sql()
+            .exec(store::CREATE_TIMERS_TABLE, Vec::new())?;
+        self.host.sql().exec(store::CREATE_HELD_TABLE, Vec::new())?;
+        self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
         if self.identity.is_none() {
             if let Some((room, created_ms)) = self.read_meta()? {
                 self.identity = Some(room);
@@ -1614,7 +1637,7 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
         if let Some(row) = rows.into_iter().next() {
             let seq = row.get("seq").and_then(Value::as_u64).unwrap_or(0);
             let locked = row.get("locked").and_then(Value::as_i64).unwrap_or(0) != 0;
-            let data = json_to_bytes(row.get("data"))?;
+            let data = store::json_to_bytes(row.get("data"))?;
             match rmp_serde::from_slice::<R::State>(&data) {
                 Ok(state) => {
                     self.state = Some(state);
@@ -1931,6 +1954,84 @@ impl<R: Room, H: Host> RoomRuntime<R, H> {
     }
 }
 
+/// `on_call` for a room that accepts object-to-object calls. The handler runs
+/// as a normal pass, so its state change is patched to the room's clients.
+impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
+    pub async fn call(
+        &mut self,
+        envelope: Envelope,
+        name: &str,
+    ) -> std::result::Result<Value, CallError> {
+        self.call_name = name.to_owned();
+        let me = self.me();
+        // A reentrant call would wait for a turn this object cannot take.
+        if envelope.chain.contains(&me) {
+            return Err(CallError::ReentrantCall(me));
+        }
+        let rpc = rpc_from_value::<R::Rpc>(envelope.rpc.clone())?;
+        if self.ensure_loaded().await.map_err(call_internal)? {
+            return Err(CallError::Handler(
+                "persisted state was written by an incompatible build".to_owned(),
+            ));
+        }
+        // The patch base is the loaded state, so an rpc that changes it reaches
+        // the room's clients exactly like an intent does.
+        let before = self.views();
+        let admin_before = self.admin_before();
+        self.chain = envelope.chain.clone();
+        let roster = self.clients_roster().map_err(call_internal)?;
+        let snapshot = self.snapshot().map_err(call_internal)?;
+        let state = self.state.take().expect("state loaded");
+        let mut ctx = self.make_ctx(state, roster);
+        let result = self.room.on_call(&mut ctx, &envelope.from, rpc).await;
+        let (state, effects) = ctx.into_parts();
+        self.state = Some(state);
+        self.chain.clear();
+        match result {
+            Ok(reply) => {
+                let seq = self.persist().map_err(call_internal)?;
+                self.patch_joined(&before, seq);
+                self.admin_after(
+                    admin_before,
+                    vec![Cause::Call {
+                        from: envelope.from.clone(),
+                    }],
+                    Vec::new(),
+                    seq,
+                );
+                let (events, rest) = split_events(effects);
+                self.deliver_events(&events);
+                self.apply_rest_and_kicks(rest)
+                    .await
+                    .map_err(call_internal)?;
+                self.report_players().await;
+                rpc_to_value(reply)
+            }
+            Err(err) => {
+                self.state = Some(rmp_serde::from_slice(&snapshot).map_err(call_internal)?);
+                self.log_json(serde_json::json!({
+                    "hearth": "handler_error",
+                    "room": self.room_label(),
+                    "msg": format!("{err:#}"),
+                }));
+                Err(CallError::Handler(format!("{err:#}")))
+            }
+        }
+    }
+}
+
+/// Drop the in-memory runtime as hibernation does; storage and sockets stay.
+impl<R: Room, H: Host + Clone + 'static> RoomRuntime<R, H> {
+    pub fn hibernate(&mut self) {
+        let host = H::clone(&self.host);
+        *self = Self::new(host, self.binding);
+    }
+}
+
+fn call_internal(err: impl std::fmt::Display) -> CallError {
+    CallError::Handler(err.to_string())
+}
+
 fn grace_timer_key(player: &PlayerId) -> String {
     format!("{GRACE_TIMER_PREFIX}{}", player.0)
 }
@@ -1949,24 +2050,7 @@ fn split_events(effects: Vec<Effect>) -> (Vec<Effect>, Vec<Effect>) {
         .partition(|effect| matches!(effect, Effect::Event { .. }))
 }
 
-/// Blob columns surface as JSON arrays of byte values through the [`Sql`]
-/// trait, which keeps that interface JSON-shaped while still round-tripping
-/// the runtime's state snapshot.
-fn json_to_bytes(value: Option<&Value>) -> Result<Vec<u8>> {
-    let Some(Value::Array(items)) = value else {
-        anyhow::bail!("hearth_state.data is not a byte array");
-    };
-    let mut bytes = Vec::with_capacity(items.len());
-    for item in items {
-        let Some(byte) = item.as_u64().and_then(|value| u8::try_from(value).ok()) else {
-            anyhow::bail!("hearth_state.data contains a non-byte value");
-        };
-        bytes.push(byte);
-    }
-    Ok(bytes)
-}
-
-fn log_error(_err: anyhow::Error) {
+pub(crate) fn log_error(_err: anyhow::Error) {
     #[cfg(not(target_arch = "wasm32"))]
     eprintln!("hearth runtime error: {_err:#}");
 }

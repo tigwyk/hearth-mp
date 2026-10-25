@@ -214,7 +214,7 @@ impl<R: Room> RoomObject<R> {
         let host = WorkerHost::new(Rc::clone(&state), env);
         Self {
             state,
-            rt: Mutex::new(RoomRuntime::new(host)),
+            rt: Mutex::new(RoomRuntime::new(host, "")),
         }
     }
 

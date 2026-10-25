@@ -43,12 +43,29 @@ pub struct InspectDoc {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(tag = "cause", rename_all = "snake_case")]
 pub enum Cause {
-    Join { player: PlayerId },
-    Reconnect { player: PlayerId },
-    Intent { player: PlayerId, intent_seq: u32 },
-    Leave { player: PlayerId },
-    Disconnect { player: PlayerId },
-    Timer { key: String },
+    Join {
+        player: PlayerId,
+    },
+    Reconnect {
+        player: PlayerId,
+    },
+    Intent {
+        player: PlayerId,
+        intent_seq: u32,
+    },
+    Leave {
+        player: PlayerId,
+    },
+    Disconnect {
+        player: PlayerId,
+    },
+    Timer {
+        key: String,
+    },
+    /// Another object called this room (`ctx.call` / `ctx.notify`).
+    Call {
+        from: crate::call::Target,
+    },
     Dispose,
 }
 

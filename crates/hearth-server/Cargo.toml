@@ -18,5 +18,6 @@ serde.workspace = true
 serde_json.workspace = true
 rmp-serde.workspace = true
 anyhow.workspace = true
+thiserror.workspace = true
 worker = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }

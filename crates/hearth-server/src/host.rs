@@ -92,6 +92,26 @@ pub trait Host {
         Ok(())
     }
 
+    /// Send one object-to-object call to `to` and return its reply.
+    ///
+    /// Implementations map a network failure or a non-200 answer to
+    /// [`CallError::Unreachable`]; a receiver-side failure comes back decoded.
+    async fn call(
+        &self,
+        _to: &crate::call::Target,
+        _envelope: crate::call::Envelope,
+    ) -> std::result::Result<hearth_protocol::Value, crate::call::CallError> {
+        Err(crate::call::CallError::Unreachable(
+            "this host cannot make object-to-object calls".to_owned(),
+        ))
+    }
+
+    /// Whether the deployment declares this Durable Object binding. Reports to
+    /// an optional binding are only enqueued when it exists.
+    fn has_binding(&self, _binding: &str) -> bool {
+        false
+    }
+
     /// Append one structured JSON line to the deployment's logs.
     fn log_line(&self, _json: &str) {}
 

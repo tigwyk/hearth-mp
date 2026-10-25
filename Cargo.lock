@@ -701,6 +701,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "serde_json",
+ "thiserror",
  "worker",
 ]
 

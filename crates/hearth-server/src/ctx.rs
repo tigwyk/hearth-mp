@@ -4,6 +4,7 @@ use std::time::Duration;
 use hearth_protocol::{PlayerId, Value};
 use serde::Serialize;
 
+use crate::call::{rpc_to_value, CallError, Callable, Caller, Target};
 use crate::host::Sql;
 use crate::room::{Client, Room, TimerKey};
 
@@ -25,17 +26,24 @@ pub(crate) enum Effect {
     Kick(PlayerId),
     Lock,
     Dispose,
+    /// A durable fire-after-commit call, written to the outbox with the state.
+    Notify {
+        binding: String,
+        name: String,
+        body: Value,
+    },
 }
 
 /// The room's capabilities for one handler. State changes are diffed and
-/// flushed when the handler returns; sends, timers, kick, lock and dispose are
-/// buffered and applied only on success.
+/// flushed when the handler returns; sends, timers, calls, kick, lock and
+/// dispose are buffered and applied only on success.
 pub struct Ctx<R: Room> {
     state: R::State,
     clients: Vec<Client>,
     effects: Vec<Effect>,
     sql: Rc<dyn Sql>,
     now_ms: u64,
+    caller: Caller,
 }
 
 impl<R: Room> Ctx<R> {
@@ -44,6 +52,7 @@ impl<R: Room> Ctx<R> {
         clients: Vec<Client>,
         sql: Rc<dyn Sql>,
         now_ms: u64,
+        caller: Caller,
     ) -> Self {
         Self {
             state,
@@ -51,6 +60,7 @@ impl<R: Room> Ctx<R> {
             effects: Vec::new(),
             sql,
             now_ms,
+            caller,
         }
     }
 
@@ -117,6 +127,34 @@ impl<R: Room> Ctx<R> {
 
     pub fn now_ms(&self) -> u64 {
         self.now_ms
+    }
+
+    /// This room's own address.
+    pub fn me(&self) -> &Target {
+        self.caller.me()
+    }
+
+    /// Call another object and wait for its reply. The call is sent at once: it
+    /// is **not** rolled back if this handler later fails. Use
+    /// [`Ctx::notify`] for work that must follow the commit.
+    pub async fn call<T: Callable>(
+        &mut self,
+        name: &str,
+        rpc: T::Rpc,
+    ) -> std::result::Result<T::Reply, CallError> {
+        self.caller.call::<T>(name, rpc).await
+    }
+
+    /// Send a durable call that fires after this handler commits: it is written
+    /// to the outbox in the same commit as the state, retried until the target
+    /// answers, and deduplicated by the receiver. A failed handler never sends
+    /// it.
+    pub fn notify<T: Callable>(&mut self, name: &str, rpc: T::Rpc) {
+        self.effects.push(Effect::Notify {
+            binding: T::BINDING.to_owned(),
+            name: name.to_owned(),
+            body: rpc_to_value(rpc).unwrap_or(Value::Null),
+        });
     }
 
     pub(crate) fn into_parts(self) -> (R::State, Vec<Effect>) {

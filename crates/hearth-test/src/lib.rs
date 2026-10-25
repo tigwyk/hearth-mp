@@ -9,6 +9,7 @@
 //! [`MemHost`] futures are always immediately ready.
 
 pub mod mem_host;
+pub mod world;
 
 use std::time::Duration;
 
@@ -34,7 +35,7 @@ pub struct TestClient {
 }
 
 /// One client seat as an admin tail socket sees itself: no client core.
-struct AdminTail {
+pub(crate) struct AdminTail {
     socket: Socket,
     messages: Vec<Value>,
     closed: Option<(u16, String)>,
@@ -282,7 +283,7 @@ impl<R: Room> TestRoom<R> {
 
     fn runtime(&mut self) -> &mut RoomRuntime<R, MemHost> {
         if self.runtime.is_none() {
-            self.runtime = Some(RoomRuntime::new(self.host.clone()));
+            self.runtime = Some(RoomRuntime::new(self.host.clone(), "counter"));
         }
         self.runtime.as_mut().expect("runtime is set")
     }
@@ -303,52 +304,57 @@ impl<R: Room> TestRoom<R> {
     /// Feed every frame and close the runtime produced into the matching client
     /// or admin tail.
     fn pump(&mut self) {
-        for event in self.host.take_journal() {
-            match event {
-                MemEvent::Sent { socket, msg } => {
-                    if let Some(index) = self
-                        .sockets
-                        .iter()
-                        .position(|candidate| *candidate == socket)
-                    {
-                        match self.clients[index].core.handle(&msg) {
-                            Ok(events) => self.clients[index].events.extend(events),
-                            Err(err) => {
-                                panic!("client {index} could not decode a server frame: {err:?}")
-                            }
-                        }
-                        continue;
-                    }
-                    let Some(index) = self.tails.iter().position(|tail| tail.socket == socket)
-                    else {
-                        continue;
-                    };
-                    match msg {
-                        WireMsg::Text(text) => match serde_json::from_str::<Value>(&text) {
-                            Ok(value) => self.tails[index].messages.push(value),
-                            Err(err) => panic!("admin tail {index} got non-JSON text: {err}"),
-                        },
-                        WireMsg::Binary(_) => {
-                            panic!("admin tail {index} got a binary frame")
+        pump_into(
+            self.host.take_journal(),
+            &mut self.clients,
+            &self.sockets,
+            &mut self.tails,
+        );
+    }
+}
+
+/// Route one host journal into the matching client cores and admin tails.
+/// Shared by [`TestRoom`] and [`world::TestWorld`].
+pub(crate) fn pump_into(
+    events: Vec<MemEvent>,
+    clients: &mut [TestClient],
+    sockets: &[Socket],
+    tails: &mut [AdminTail],
+) {
+    for event in events {
+        match event {
+            MemEvent::Sent { socket, msg } => {
+                if let Some(index) = sockets.iter().position(|candidate| *candidate == socket) {
+                    match clients[index].core.handle(&msg) {
+                        Ok(events) => clients[index].events.extend(events),
+                        Err(err) => {
+                            panic!("client {index} could not decode a server frame: {err:?}")
                         }
                     }
+                    continue;
                 }
-                MemEvent::Closed {
-                    socket,
-                    code,
-                    reason,
-                } => {
-                    if let Some(index) = self
-                        .sockets
-                        .iter()
-                        .position(|candidate| *candidate == socket)
-                    {
-                        self.clients[index].closed = Some((code, reason));
-                        continue;
-                    }
-                    if let Some(index) = self.tails.iter().position(|tail| tail.socket == socket) {
-                        self.tails[index].closed = Some((code, reason));
-                    }
+                let Some(index) = tails.iter().position(|tail| tail.socket == socket) else {
+                    continue;
+                };
+                match msg {
+                    WireMsg::Text(text) => match serde_json::from_str::<Value>(&text) {
+                        Ok(value) => tails[index].messages.push(value),
+                        Err(err) => panic!("admin tail {index} got non-JSON text: {err}"),
+                    },
+                    WireMsg::Binary(_) => panic!("admin tail {index} got a binary frame"),
+                }
+            }
+            MemEvent::Closed {
+                socket,
+                code,
+                reason,
+            } => {
+                if let Some(index) = sockets.iter().position(|candidate| *candidate == socket) {
+                    clients[index].closed = Some((code, reason));
+                    continue;
+                }
+                if let Some(index) = tails.iter().position(|tail| tail.socket == socket) {
+                    tails[index].closed = Some((code, reason));
                 }
             }
         }

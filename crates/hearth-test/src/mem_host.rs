@@ -260,7 +260,7 @@ impl Sql for MemHost {
 }
 
 /// The [`SqlValue`] to SQLite mapping.
-fn to_rusqlite(value: SqlValue) -> rusqlite::types::Value {
+pub(crate) fn to_rusqlite(value: SqlValue) -> rusqlite::types::Value {
     match value {
         SqlValue::Null => rusqlite::types::Value::Null,
         SqlValue::Int(number) => rusqlite::types::Value::Integer(number),
@@ -272,7 +272,7 @@ fn to_rusqlite(value: SqlValue) -> rusqlite::types::Value {
 
 /// SQLite values surface JSON-shaped. Byte blobs become JSON arrays of byte
 /// values; this is the convention the runtime's state snapshot round-trip uses.
-fn from_rusqlite(value: rusqlite::types::Value) -> Value {
+pub(crate) fn from_rusqlite(value: rusqlite::types::Value) -> Value {
     match value {
         rusqlite::types::Value::Null => Value::Null,
         rusqlite::types::Value::Integer(number) => Value::from(number),
