@@ -1,0 +1,5 @@
+error: #[hearth::service] needs binding = "..." (the wrangler DO binding name)
+ --> tests/ui/service_missing_binding.rs:8:1
+  |
+8 | impl Service for Stats {}
+  | ^^^^

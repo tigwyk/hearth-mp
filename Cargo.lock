@@ -710,8 +710,10 @@ name = "hearth-server-macros"
 version = "0.1.0"
 dependencies = [
  "hearth",
+ "hearth-sync",
  "proc-macro2",
  "quote",
+ "serde",
  "syn 2.0.119",
  "trybuild",
  "worker",

@@ -85,13 +85,6 @@ pub trait Host {
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()>;
     async fn wipe(&self) -> Result<()>;
 
-    /// Report a room lifecycle change to the registry. The runtime logs an
-    /// error with [`Host::log_line`] and otherwise ignores it: a registry
-    /// outage must never affect gameplay.
-    async fn report(&self, _report: RoomReport) -> Result<()> {
-        Ok(())
-    }
-
     /// Send one object-to-object call to `to` and return its reply.
     ///
     /// Implementations map a network failure or a non-200 answer to

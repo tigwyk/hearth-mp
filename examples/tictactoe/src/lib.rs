@@ -58,7 +58,7 @@ const LINES: [[usize; 3]; 8] = [
 #[derive(Default)]
 pub struct TicTacToe;
 
-#[hearth::room(mode = "event", max_clients = 2)]
+#[hearth::room(mode = "event", max_clients = 2, binding = "TICTACTOE")]
 impl Room for TicTacToe {
     type State = Board;
     type Intent = Move;

@@ -49,8 +49,8 @@ macro_rules! registry_object {
             pub struct HearthRegistry($crate::RegistryObject);
 
             impl ::worker::DurableObject for HearthRegistry {
-                fn new(state: ::worker::State, _env: ::worker::Env) -> Self {
-                    Self($crate::RegistryObject::new(state))
+                fn new(state: ::worker::State, env: ::worker::Env) -> Self {
+                    Self($crate::RegistryObject::new(state, env))
                 }
 
                 async fn fetch(
@@ -58,6 +58,11 @@ macro_rules! registry_object {
                     req: ::worker::Request,
                 ) -> ::worker::Result<::worker::Response> {
                     self.0.fetch(req).await
+                }
+
+                async fn alarm(&self) -> ::worker::Result<::worker::Response> {
+                    self.0.alarm().await?;
+                    ::worker::Response::empty()
                 }
             }
         }

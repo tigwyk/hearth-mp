@@ -24,7 +24,7 @@
 //! #[derive(Default)]
 //! struct CardMatch;
 //!
-//! #[hearth::room(mode = "event", max_clients = 2)]
+//! #[hearth::room(mode = "event", max_clients = 2, binding = "CARD_MATCH")]
 //! impl Room for CardMatch {
 //!     type State = Match;
 //!     type Intent = Intent;
@@ -55,9 +55,9 @@ pub use hearth_protocol as protocol;
 pub use hearth_protocol::PlayerId;
 pub use hearth_server as server;
 pub use hearth_server::{
-    schema_doc, schema_hash, schema_hash_hex, Client, Ctx, JoinOpts, Leave, Result, Room,
-    SchemaDoc, TimerKey,
+    schema_doc, schema_hash, schema_hash_hex, CallError, Callable, Client, Ctx, Envelope, JoinOpts,
+    Leave, Result, Room, RoomRpc, SchemaDoc, Service, ServiceCtx, Target, TimerKey,
 };
-pub use hearth_server_macros::room;
+pub use hearth_server_macros::{room, service};
 pub use hearth_sync as sync;
 pub use hearth_sync::{HearthState, Schema, SyncMap};

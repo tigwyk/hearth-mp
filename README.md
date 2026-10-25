@@ -99,7 +99,7 @@ pub enum Intent {
 #[derive(Default)]
 pub struct Counter;
 
-#[hearth::room(mode = "event", max_clients = 4)]
+#[hearth::room(mode = "event", max_clients = 4, binding = "ROOM")]
 impl Room for Counter {
     type State = Match;
     type Intent = crate::Intent;

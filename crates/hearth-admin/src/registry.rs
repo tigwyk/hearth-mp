@@ -6,12 +6,12 @@
 
 use std::rc::Rc;
 
-use hearth_server::worker::WorkerSql;
+use hearth_server::worker::{ServiceObject, WorkerSql};
 use hearth_server::{
     Callable, Result, RoomName, RoomReport, Service, ServiceCtx, Sql, SqlValue, Target,
 };
 use serde::{Deserialize, Serialize};
-use worker::{Date, Method, Request, Response, State};
+use worker::{Env, Method, Request, Response, State};
 
 const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_rooms (
     room_type TEXT NOT NULL,
@@ -190,6 +190,7 @@ impl Service for RegistryService {
 /// `type`, `after_type`, `after_name` and `limit` query parameters.
 // shortcut: single registry DO (~1k writes/s); shard by hash(room_type, name) when a game outgrows it
 pub struct RegistryObject {
+    service: ServiceObject<RegistryService>,
     sql: WorkerSql,
 }
 
@@ -210,50 +211,55 @@ struct ListResponse {
 
 impl RegistryObject {
     /// Must be called by the generated Durable Object wrapper's `new`.
-    pub fn new(state: State) -> Self {
-        let sql = WorkerSql::new(Rc::new(state));
+    pub fn new(state: State, env: Env) -> Self {
+        let state = Rc::new(state);
+        let sql = WorkerSql::new(Rc::clone(&state));
+        let service = ServiceObject::<RegistryService>::new_shared(
+            Rc::clone(&state),
+            env,
+            RegistryService::BINDING,
+        );
         // Create the table now so the first read cannot fail on a missing table.
         Registry::new(&sql);
-        Self { sql }
+        Self { service, sql }
     }
 
-    pub async fn fetch(&self, mut req: Request) -> worker::Result<Response> {
-        let registry = Registry::new(&self.sql);
-        match (req.method(), req.path().as_str()) {
-            (Method::Post, "/report") => match req.json::<RoomReport>().await {
-                Ok(report) => match registry.apply(&report, Date::now().as_millis()) {
-                    Ok(()) => Ok(Response::empty()?.with_status(204)),
-                    Err(err) => Response::error(format!("registry write failed: {err:#}"), 500),
-                },
-                Err(_) => Response::error("body must be a RoomReport JSON object", 400),
-            },
-            (Method::Get, "/list") => {
-                let Ok(query) = req.query::<ListQuery>() else {
-                    return Response::error("invalid query", 400);
-                };
-                let room_type = query
-                    .room_type
-                    .as_deref()
-                    .filter(|room_type| !room_type.is_empty());
-                let after = match (query.after_type.as_deref(), query.after_name.as_deref()) {
-                    (None, None) => None,
-                    (Some(room_type), Some(name)) => Some(RoomName {
-                        room_type: room_type.to_owned(),
-                        name: name.to_owned(),
-                    }),
-                    _ => {
-                        return Response::error(
-                            "after_type and after_name must be passed together",
-                            400,
-                        )
-                    }
-                };
-                match registry.list(room_type, after.as_ref(), query.limit.unwrap_or(50)) {
-                    Ok((rooms, next)) => Response::from_json(&ListResponse { rooms, next }),
-                    Err(err) => Response::error(format!("registry read failed: {err:#}"), 500),
-                }
-            }
-            _ => Response::error("not found", 404),
+    pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
+        // `/list` is the admin listing; everything else is the service path
+        // (`/__hearth/call`, `/__hearth/inspect`).
+        if req.path() == "/list" {
+            return self.list(req).await;
         }
+        self.service.fetch(req).await
+    }
+
+    async fn list(&self, req: Request) -> worker::Result<Response> {
+        if req.method() != Method::Get {
+            return Response::error("not found", 404);
+        }
+        let Ok(query) = req.query::<ListQuery>() else {
+            return Response::error("invalid query", 400);
+        };
+        let room_type = query
+            .room_type
+            .as_deref()
+            .filter(|room_type| !room_type.is_empty());
+        let after = match (query.after_type.as_deref(), query.after_name.as_deref()) {
+            (None, None) => None,
+            (Some(room_type), Some(name)) => Some(RoomName {
+                room_type: room_type.to_owned(),
+                name: name.to_owned(),
+            }),
+            _ => return Response::error("after_type and after_name must be passed together", 400),
+        };
+        let registry = Registry::new(&self.sql);
+        match registry.list(room_type, after.as_ref(), query.limit.unwrap_or(50)) {
+            Ok((rooms, next)) => Response::from_json(&ListResponse { rooms, next }),
+            Err(err) => Response::error(format!("registry read failed: {err:#}"), 500),
+        }
+    }
+
+    pub async fn alarm(&self) -> worker::Result<()> {
+        self.service.alarm().await
     }
 }

@@ -1,38 +1,39 @@
 //! Production [`Host`] over a hibernating Durable Object, plus the
-//! [`RoomObject`] every `#[hearth::room]` impl is wrapped in.
+//! [`RoomObject`] and [`ServiceObject`] every room class and service class is
+//! wrapped in.
 //!
 //! Sockets are only ever accepted through the hibernation API; the keepalive
 //! `hearth:ping` text frame is answered by the Durable Object auto-response so
 //! it never wakes the room.
 //!
-//! The room also serves the internal `/__hearth/*` paths used by the admin API
-//! and by the registry. The Gateway builds those requests itself, so a player
-//! can never reach them.
+//! Every object also serves the internal `/__hearth/*` paths used by the admin
+//! API, the registry and object-to-object calls. Hearth builds those requests
+//! itself, so a player can never reach them.
 
 use std::rc::Rc;
 
 use futures::lock::Mutex;
-use hearth_protocol::{PlayerId, WireMsg, PING_TEXT, PONG_TEXT};
+use hearth_protocol::{PlayerId, Value, WireMsg, PING_TEXT, PONG_TEXT};
 use worker::{
     console_log, Date, DateInit, Env, Method, Request, RequestInit, Response, ScheduledTime,
     SqlCursor, SqlStorageValue, State, WebSocket, WebSocketIncomingMessage, WebSocketPair,
     WebSocketRequestResponsePair,
 };
 
-use crate::host::{Attachment, Host, RoomName, RoomReport, Sql, SqlValue};
-use crate::room::Room;
+use crate::call::{CallError, Envelope, Target};
+use crate::host::{Attachment, Host, RoomName, Sql, SqlValue};
+use crate::room::{Room, RoomRpc};
 use crate::runtime::RoomRuntime;
+use crate::service::{Service, ServiceRuntime};
 use crate::Result;
 
-/// Binding name of the registry Durable Object. Optional: without it the room
-/// never reports and `hearth inspect rooms` returns 501.
-const REGISTRY_BINDING: &str = "HEARTH_REGISTRY";
-/// One registry Durable Object for every room type.
-// shortcut: single registry DO (~1k writes/s); shard by hash(room_type, name) when a game outgrows it
-const REGISTRY_NAME: &str = "global";
-/// The registry's report path.
-const REGISTRY_URL: &str = "https://registry/report";
+/// The room's type and name. The Gateway builds this header itself.
 const ROOM_HEADER: &str = "X-Hearth-Room";
+/// The target object's own name. Every caller sets it, so a receiver knows its
+/// address (and can check the call chain) before taking its runtime lock.
+const NAME_HEADER: &str = "X-Hearth-Name";
+const CALL_PATH: &str = "/__hearth/call";
+const CALL_URL: &str = "https://hearth/__hearth/call";
 
 /// [`Host`] backed by a Durable Object: hibernation sockets, SQLite storage and
 /// the single alarm.
@@ -44,7 +45,7 @@ pub struct WorkerHost {
 }
 
 impl WorkerHost {
-    /// The state is shared with [`RoomObject`] because `worker::State` is not
+    /// The state is shared with the object wrapper because `worker::State` is not
     /// `Clone` (and WASM is single-threaded, so `Rc` is enough).
     pub(crate) fn new(state: Rc<State>, env: Env) -> Self {
         Self {
@@ -52,6 +53,44 @@ impl WorkerHost {
             state,
             env,
         }
+    }
+
+    /// POST one [`Envelope`] to another object and decode its reply.
+    async fn fetch_object(
+        &self,
+        to: &Target,
+        mut init: RequestInit,
+    ) -> std::result::Result<Value, CallError> {
+        let namespace = self
+            .env
+            .durable_object(&to.binding)
+            .map_err(|err| CallError::Unreachable(format!("no binding {}: {err}", to.binding)))?;
+        let id = namespace
+            .id_from_name(&to.name)
+            .map_err(|err| CallError::Unreachable(format!("bad object name: {err}")))?;
+        let stub = id
+            .get_stub()
+            .map_err(|err| CallError::Unreachable(format!("no stub: {err}")))?;
+        init.with_method(Method::Post);
+        let request = Request::new_with_init(CALL_URL, &init)
+            .map_err(|err| CallError::Unreachable(format!("bad request: {err}")))?;
+        let mut response = stub
+            .fetch_with_request(request)
+            .await
+            .map_err(|err| CallError::Unreachable(format!("fetch failed: {err}")))?;
+        if response.status_code() != 200 {
+            return Err(CallError::Unreachable(format!(
+                "{} answered {}",
+                to.binding,
+                response.status_code()
+            )));
+        }
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|err| CallError::Unreachable(format!("body read failed: {err}")))?;
+        rmp_serde::from_slice::<std::result::Result<Value, CallError>>(&bytes)
+            .map_err(|err| CallError::Unreachable(format!("reply did not decode: {err}")))?
     }
 }
 
@@ -116,28 +155,26 @@ impl Host for WorkerHost {
             .map_err(worker_error)
     }
 
-    /// POST the report to the registry Durable Object. A missing binding is not
-    /// an error: the registry is optional.
-    async fn report(&self, report: RoomReport) -> Result<()> {
-        let Ok(namespace) = self.env.durable_object(REGISTRY_BINDING) else {
-            return Ok(());
-        };
-        let stub = namespace.get_by_name(REGISTRY_NAME).map_err(worker_error)?;
-        let body = serde_json::to_string(&report)?;
+    async fn call(&self, to: &Target, envelope: Envelope) -> std::result::Result<Value, CallError> {
+        let body = rmp_serde::to_vec(&envelope)
+            .map_err(|err| CallError::BadRpc(format!("envelope did not encode: {err}")))?;
+        let headers = worker::Headers::new();
+        headers
+            .set(NAME_HEADER, &to.name)
+            .map_err(|err| CallError::Unreachable(format!("bad header: {err}")))?;
+        headers
+            .set("content-type", "application/msgpack")
+            .map_err(|err| CallError::Unreachable(format!("bad header: {err}")))?;
         let mut init = RequestInit::new();
-        init.with_method(Method::Post)
-            .with_body(Some(worker::wasm_bindgen::JsValue::from_str(&body)));
-        let mut request = Request::new_with_init(REGISTRY_URL, &init).map_err(worker_error)?;
-        request
-            .headers_mut()
-            .map_err(worker_error)?
-            .set("content-type", "application/json")
-            .map_err(worker_error)?;
-        let _ = stub
-            .fetch_with_request(request)
-            .await
-            .map_err(worker_error)?;
-        Ok(())
+        init.with_headers(headers)
+            .with_body(Some(worker::wasm_bindgen::JsValue::from(
+                worker::js_sys::Uint8Array::from(body.as_slice()),
+            )));
+        self.fetch_object(to, init).await
+    }
+
+    fn has_binding(&self, binding: &str) -> bool {
+        self.env.durable_object(binding).is_ok()
     }
 
     fn log_line(&self, json: &str) {
@@ -200,12 +237,13 @@ impl Sql for WorkerSql {
 /// events that would otherwise interleave at `await` points.
 pub struct RoomObject<R: Room> {
     state: Rc<State>,
+    binding: &'static str,
     rt: Mutex<RoomRuntime<R, WorkerHost>>,
 }
 
 impl<R: Room> RoomObject<R> {
     /// Must be called by the generated wrapper's `DurableObject::new`.
-    pub fn new(state: State, env: worker::Env) -> Self {
+    pub fn new(state: State, env: worker::Env, binding: &'static str) -> Self {
         let state = Rc::new(state);
         // Keepalive never wakes the room: workerd answers `PING_TEXT` itself.
         let pair = WebSocketRequestResponsePair::new(PING_TEXT, PONG_TEXT)
@@ -214,7 +252,8 @@ impl<R: Room> RoomObject<R> {
         let host = WorkerHost::new(Rc::clone(&state), env);
         Self {
             state,
-            rt: Mutex::new(RoomRuntime::new(host, "")),
+            binding,
+            rt: Mutex::new(RoomRuntime::new(host, binding)),
         }
     }
 
@@ -226,6 +265,12 @@ impl<R: Room> RoomObject<R> {
             "/__hearth/inspect" => self.inspect(req).await,
             "/__hearth/dispose" => self.dispose(req).await,
             "/__hearth/tail" => self.tail(req).await,
+            // A room without `RoomRpc` rejects calls here; the macro routes
+            // this path to `call` only for a room that accepts them.
+            CALL_PATH => msgpack_error(CallError::BadRpc(
+                "room does not accept rpc (add `rpc` to #[hearth::room] and impl RoomRpc)"
+                    .to_owned(),
+            )),
             _ => Response::error("not found", 404),
         }
     }
@@ -334,6 +379,130 @@ impl<R: Room> RoomObject<R> {
     }
 }
 
+/// `on_call` for a room that accepts object-to-object calls. The macro routes
+/// `/__hearth/call` here only for a room that implements [`RoomRpc`].
+impl<R: RoomRpc> RoomObject<R> {
+    pub async fn call(&self, mut req: Request) -> worker::Result<Response> {
+        if req.method() != Method::Post {
+            return Response::error("not found", 404);
+        }
+        let Some(name) = req.headers().get(NAME_HEADER)? else {
+            return Response::error("missing X-Hearth-Name header", 400);
+        };
+        let bytes = req.bytes().await?;
+        let envelope: Envelope = match rmp_serde::from_slice(&bytes) {
+            Ok(envelope) => envelope,
+            Err(_) => {
+                return msgpack_error(CallError::BadRpc(
+                    "body is not a MessagePack Envelope".to_owned(),
+                ))
+            }
+        };
+        // The chain check happens before the mutex: a reentrant call would wait
+        // for a turn this object cannot take.
+        let me = Target::new(self.binding, &name);
+        if envelope.chain.contains(&me) {
+            return msgpack_error(CallError::ReentrantCall(me));
+        }
+        let reply = self.rt.lock().await.call(envelope, &name).await;
+        msgpack_reply(&reply)
+    }
+}
+
+/// The Durable Object wrapper generated by `#[hearth::service]` delegates to
+/// this: a socket-less object with durable state, timers and SQL.
+pub struct ServiceObject<S: Service> {
+    binding: &'static str,
+    rt: Mutex<ServiceRuntime<S, WorkerHost>>,
+}
+
+impl<S: Service> ServiceObject<S> {
+    /// Must be called by the generated wrapper's `DurableObject::new`.
+    pub fn new(state: State, env: worker::Env, binding: &'static str) -> Self {
+        Self::new_shared(Rc::new(state), env, binding)
+    }
+
+    /// For a wrapper that also owns other state derived from the same DO (the
+    /// registry serves its admin listing next to its service path).
+    pub fn new_shared(state: Rc<State>, env: worker::Env, binding: &'static str) -> Self {
+        let host = WorkerHost::new(Rc::clone(&state), env);
+        Self {
+            binding,
+            rt: Mutex::new(ServiceRuntime::new(host, binding)),
+        }
+    }
+
+    pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
+        match (req.method(), req.path().as_str()) {
+            (Method::Post, CALL_PATH) => self.call(req).await,
+            (Method::Get, "/__hearth/inspect") => match self.rt.lock().await.inspect().await {
+                Ok(Some(state)) => Response::from_json(&state),
+                Ok(None) => Response::error("no such object", 404),
+                Err(err) => Response::error(format!("inspect failed: {err:#}"), 500),
+            },
+            _ => Response::error("not found", 404),
+        }
+    }
+
+    async fn call(&self, mut req: Request) -> worker::Result<Response> {
+        let Some(name) = req.headers().get(NAME_HEADER)? else {
+            return Response::error("missing X-Hearth-Name header", 400);
+        };
+        let bytes = req.bytes().await?;
+        let envelope: Envelope = match rmp_serde::from_slice(&bytes) {
+            Ok(envelope) => envelope,
+            Err(_) => {
+                return msgpack_error(CallError::BadRpc(
+                    "body is not a MessagePack Envelope".to_owned(),
+                ))
+            }
+        };
+        let me = Target::new(self.binding, &name);
+        if envelope.chain.contains(&me) {
+            return msgpack_error(CallError::ReentrantCall(me));
+        }
+        let reply = self.rt.lock().await.call(envelope, &name).await;
+        msgpack_reply(&reply)
+    }
+
+    /// The state as JSON, used by wrapper-specific read paths (the player DO's
+    /// `GET /__hearth/view`).
+    pub async fn load_state_json(&self) -> worker::Result<Option<Value>> {
+        let mut rt = self.rt.lock().await;
+        rt.load().await.map_err(runtime_error)?;
+        Ok(rt
+            .state()
+            .map(|state| serde_json::to_value(state).unwrap_or(Value::Null)))
+    }
+
+    /// The loaded typed state, for a wrapper that derives a client view.
+    pub async fn with_state<T>(&self, f: impl FnOnce(&S::State) -> T) -> worker::Result<Option<T>> {
+        let mut rt = self.rt.lock().await;
+        rt.load().await.map_err(runtime_error)?;
+        Ok(rt.state().map(f))
+    }
+
+    pub async fn alarm(&self) -> worker::Result<()> {
+        self.rt.lock().await.alarm().await;
+        Ok(())
+    }
+}
+
+/// A MessagePack reply carrying one call's result.
+fn msgpack_reply(value: &std::result::Result<Value, CallError>) -> worker::Result<Response> {
+    let body = rmp_serde::to_vec(value).map_err(runtime_error)?;
+    let mut response = Response::from_bytes(body)?;
+    response
+        .headers_mut()
+        .set("content-type", "application/msgpack")?;
+    Ok(response)
+}
+
+/// A MessagePack reply carrying one call failure.
+fn msgpack_error(error: CallError) -> worker::Result<Response> {
+    msgpack_reply(&Err(error))
+}
+
 fn is_websocket(req: &Request) -> worker::Result<bool> {
     Ok(req
         .headers()
@@ -353,8 +522,8 @@ fn parse_room_name(value: &str) -> Option<RoomName> {
     })
 }
 
-fn runtime_error(error: anyhow::Error) -> worker::Error {
-    worker::Error::RustError(format!("{error:#}"))
+fn runtime_error(error: impl std::fmt::Display) -> worker::Error {
+    worker::Error::RustError(format!("{error}"))
 }
 
 fn to_binding(value: SqlValue) -> SqlStorageValue {

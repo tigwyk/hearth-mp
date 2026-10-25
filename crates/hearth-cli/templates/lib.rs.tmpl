@@ -27,7 +27,7 @@ pub enum Intent {
 #[derive(Default)]
 pub struct {{Room}};
 
-#[hearth::room(mode = "event", max_clients = 4)]
+#[hearth::room(mode = "event", max_clients = 4, binding = "ROOM")]
 impl Room for {{Room}} {
     type State = GameState;
     type Intent = crate::Intent;

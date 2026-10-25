@@ -1,13 +1,15 @@
-//! `#[hearth::room]`: turn an `impl Room for X` block into a Durable Object.
+//! Hearth attribute macros: `#[hearth::room]` and `#[hearth::service]`.
 //!
-//! The macro validates the room options, re-emits the impl, adds the
-//! compile-time [`RoomConfig`] implementation and generates the
-//! `#[worker::durable_object]` wrapper that delegates every event to
-//! `hearth_server::worker::RoomObject<X>`.
+//! Both take the `impl` block of the trait and add everything the Durable
+//! Object adapter needs: the compile-time config, the typed [`Callable`]
+//! descriptor and the `#[worker::durable_object]` wrapper the Worker exports.
 //!
 //! ```ignore
-//! #[hearth::room(mode = "event", max_clients = 4, empty_grace_secs = 60)]
+//! #[hearth::room(mode = "event", max_clients = 4, binding = "CARD_MATCH", rpc)]
 //! impl Room for CardMatch { /* ... */ }
+//!
+//! #[hearth::service(binding = "STATS")]
+//! impl Service for Stats { /* ... */ }
 //! ```
 
 use proc_macro::TokenStream;
@@ -23,27 +25,36 @@ struct RoomArgs {
     max_clients: Option<(i64, Span)>,
     empty_grace_secs: Option<u64>,
     reconnect_grace_secs: Option<u64>,
+    binding: Option<(String, Span)>,
+    rpc: Option<Span>,
 }
 
 #[proc_macro_attribute]
 pub fn room(attr: TokenStream, item: TokenStream) -> TokenStream {
-    expand(TokenStream2::from(attr), TokenStream2::from(item)).into()
+    expand_room(&TokenStream2::from(attr), &TokenStream2::from(item)).into()
 }
 
-fn expand(attr: TokenStream2, item: TokenStream2) -> TokenStream2 {
-    match expand_impl(&attr, &item) {
+#[proc_macro_attribute]
+pub fn service(attr: TokenStream, item: TokenStream) -> TokenStream {
+    expand_service(&TokenStream2::from(attr), &TokenStream2::from(item)).into()
+}
+
+fn error_with_item(item: &TokenStream2, err: syn::Error) -> TokenStream2 {
+    // Keep the user's item so the error is the only new diagnostic.
+    let err = err.to_compile_error();
+    quote!(#item #err)
+}
+
+fn expand_room(attr: &TokenStream2, item: &TokenStream2) -> TokenStream2 {
+    match expand_room_impl(attr, item) {
         Ok(expanded) => expanded,
-        Err(err) => {
-            // Keep the user's item so the error is the only new diagnostic.
-            let err = err.to_compile_error();
-            quote!(#item #err)
-        }
+        Err(err) => error_with_item(item, err),
     }
 }
 
-fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStream2> {
+fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStream2> {
     let item_impl: ItemImpl = syn::parse2(item.clone())?;
-    let args = parse_args(attr)?;
+    let args = parse_room_args(attr)?;
 
     match args
         .mode
@@ -56,19 +67,19 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
                 "ticked rooms arrive in Hearth v0.4; use mode = \"event\"",
-            ));
+            ))
         }
         "handoff" => {
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
                 "handoff rooms arrive in Hearth v0.5",
-            ));
+            ))
         }
         _ => {
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
                 "mode must be \"event\"",
-            ));
+            ))
         }
     }
 
@@ -84,6 +95,19 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
             "max_clients must be 1..=255",
         ));
     }
+    let Some((binding, _binding_span)) = args.binding else {
+        return Err(syn::Error::new(
+            first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+            "#[hearth::room] needs binding = \"...\" (the wrangler DO binding name)",
+        ));
+    };
+    if binding.is_empty() {
+        return Err(syn::Error::new(
+            first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+            "#[hearth::room] needs binding = \"...\" (the wrangler DO binding name)",
+        ));
+    }
+    let rpc = args.rpc.is_some();
     let max_clients = max_clients as u8;
     let empty_grace_secs = args.empty_grace_secs.unwrap_or(60);
     let reconnect_grace_secs = args.reconnect_grace_secs.unwrap_or(30);
@@ -94,6 +118,26 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
     let room_name = room.to_string();
     let wrapper = format_ident!("__hearth_{}_object", room_name.to_ascii_lowercase());
     let export_test = format_ident!("__hearth_schema_export_{}", snake_case(&room_name));
+
+    let callable = rpc.then(|| {
+        quote! {
+            impl ::hearth::server::Callable for #room {
+                const BINDING: &'static str = #binding;
+                type Rpc = <#room as ::hearth::server::RoomRpc>::Rpc;
+                type Reply = <#room as ::hearth::server::RoomRpc>::Reply;
+            }
+        }
+    });
+    let call_route = if rpc {
+        quote! {
+            if req.path() == "/__hearth/call" {
+                return self.0.call(req).await;
+            }
+        }
+    } else {
+        quote!()
+    };
+
     Ok(quote! {
         #item_impl
 
@@ -105,6 +149,8 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
             const RECONNECT_GRACE: ::std::time::Duration =
                 ::std::time::Duration::from_secs(#reconnect_grace_secs);
         }
+
+        #callable
 
         /// Test-only schema export for `hearth codegen`: when the driver sets
         /// `HEARTH_SCHEMA_OUT`, this writes the room's `SchemaDoc` there as
@@ -141,13 +187,18 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
 
             impl ::worker::DurableObject for #object {
             fn new(state: ::worker::State, env: ::worker::Env) -> Self {
-                Self(::hearth::server::worker::RoomObject::<#room>::new(state, env))
+                Self(::hearth::server::worker::RoomObject::<#room>::new(
+                    state,
+                    env,
+                    #binding,
+                ))
             }
 
             async fn fetch(
                 &self,
                 req: ::worker::Request,
             ) -> ::worker::Result<::worker::Response> {
+                #call_route
                 self.0.fetch(req).await
             }
 
@@ -187,16 +238,92 @@ fn expand_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStr
     })
 }
 
-fn parse_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
-    let mut args = RoomArgs::default();
-    if attr.is_empty() {
-        return Ok(args);
+/// Options accepted by `#[hearth::service(...)]`.
+#[derive(Default)]
+struct ServiceArgs {
+    binding: Option<(String, Span)>,
+}
+
+fn expand_service(attr: &TokenStream2, item: &TokenStream2) -> TokenStream2 {
+    match expand_service_impl(attr, item) {
+        Ok(expanded) => expanded,
+        Err(err) => error_with_item(item, err),
     }
-    let metas = syn::parse::Parser::parse2(
-        syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated,
-        attr.clone(),
-    )?;
-    for meta in metas {
+}
+
+fn expand_service_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<TokenStream2> {
+    let item_impl: ItemImpl = syn::parse2(item.clone())?;
+    let args = parse_service_args(attr)?;
+    let Some((binding, _)) = args.binding else {
+        return Err(syn::Error::new(
+            first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+            "#[hearth::service] needs binding = \"...\" (the wrangler DO binding name)",
+        ));
+    };
+    if binding.is_empty() {
+        return Err(syn::Error::new(
+            first_token_span(attr).unwrap_or_else(|| item_impl.span()),
+            "#[hearth::service] needs binding = \"...\" (the wrangler DO binding name)",
+        ));
+    }
+    let service = self_ident(&item_impl)?;
+    let self_ty = &item_impl.self_ty;
+    let object = format_ident!("{service}Object");
+    let service_name = service.to_string();
+    let wrapper = format_ident!("__hearth_{}_object", service_name.to_ascii_lowercase());
+
+    Ok(quote! {
+        #item_impl
+
+        impl ::hearth::server::Callable for #service {
+            const BINDING: &'static str = #binding;
+            type Rpc = <#service as ::hearth::server::Service>::Rpc;
+            type Reply = <#service as ::hearth::server::Service>::Reply;
+        }
+
+        // `#[worker::durable_object]`'s wasm-bindgen struct-marker expansion
+        // spells the crate as bare `wasm_bindgen`, so the wrapper lives in a
+        // hidden module that puts that name in scope.
+        #[doc(hidden)]
+        pub mod #wrapper {
+            #[allow(unused_imports)]
+            use super::*;
+            #[allow(unused_imports)]
+            use ::worker::wasm_bindgen as wasm_bindgen;
+
+            #[::worker::durable_object]
+            pub struct #object(::hearth::server::worker::ServiceObject<#self_ty>);
+
+            impl ::worker::DurableObject for #object {
+                fn new(state: ::worker::State, env: ::worker::Env) -> Self {
+                    Self(::hearth::server::worker::ServiceObject::<#service>::new(
+                        state,
+                        env,
+                        #binding,
+                    ))
+                }
+
+                async fn fetch(
+                    &self,
+                    req: ::worker::Request,
+                ) -> ::worker::Result<::worker::Response> {
+                    self.0.fetch(req).await
+                }
+
+                async fn alarm(&self) -> ::worker::Result<::worker::Response> {
+                    self.0.alarm().await?;
+                    ::worker::Response::empty()
+                }
+            }
+        }
+
+        pub use #wrapper::#object;
+    })
+}
+
+fn parse_room_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
+    let mut args = RoomArgs::default();
+    for meta in metas(attr)? {
         let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
             return Err(syn::Error::new_spanned(
                 &meta,
@@ -220,6 +347,14 @@ fn parse_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
                 let value = int_value(&meta, "reconnect_grace_secs")?;
                 args.reconnect_grace_secs = Some(value.base10_parse::<u64>()?);
             }
+            "binding" => {
+                let value = str_value(&meta, "binding")?;
+                args.binding = Some((value.value(), value.span()));
+            }
+            "rpc" => match &meta {
+                Meta::Path(path) if path.is_ident("rpc") => args.rpc = Some(path.span()),
+                _ => return Err(syn::Error::new_spanned(&meta, "rpc is a flag; write `rpc`")),
+            },
             other => {
                 return Err(syn::Error::new_spanned(
                     &meta,
@@ -229,6 +364,41 @@ fn parse_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
         }
     }
     Ok(args)
+}
+
+fn parse_service_args(attr: &TokenStream2) -> syn::Result<ServiceArgs> {
+    let mut args = ServiceArgs::default();
+    for meta in metas(attr)? {
+        let Some(name) = meta.path().get_ident().map(ToString::to_string) else {
+            return Err(syn::Error::new_spanned(
+                &meta,
+                "unknown #[hearth::service] option",
+            ));
+        };
+        match name.as_str() {
+            "binding" => {
+                let value = str_value(&meta, "binding")?;
+                args.binding = Some((value.value(), value.span()));
+            }
+            other => {
+                return Err(syn::Error::new_spanned(
+                    &meta,
+                    format!("unknown #[hearth::service] option `{other}`"),
+                ));
+            }
+        }
+    }
+    Ok(args)
+}
+
+fn metas(attr: &TokenStream2) -> syn::Result<syn::punctuated::Punctuated<Meta, Token![,]>> {
+    if attr.is_empty() {
+        return Ok(syn::punctuated::Punctuated::new());
+    }
+    syn::parse::Parser::parse2(
+        syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated,
+        attr.clone(),
+    )
 }
 
 fn str_value(meta: &Meta, name: &str) -> syn::Result<syn::LitStr> {
@@ -285,7 +455,7 @@ fn self_ident(item_impl: &ItemImpl) -> syn::Result<syn::Ident> {
     }
     Err(syn::Error::new_spanned(
         &item_impl.self_ty,
-        "#[hearth::room] needs a plain room type on `impl Room for X`",
+        "the Hearth attribute needs a plain type on `impl Trait for X`",
     ))
 }
 

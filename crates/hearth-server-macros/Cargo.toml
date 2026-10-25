@@ -17,5 +17,7 @@ proc-macro2.workspace = true
 
 [dev-dependencies]
 hearth.workspace = true
+hearth-sync.workspace = true
+serde.workspace = true
 worker.workspace = true
 trybuild.workspace = true
