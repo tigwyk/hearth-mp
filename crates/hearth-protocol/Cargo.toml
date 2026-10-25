@@ -1,0 +1,14 @@
+[package]
+name = "hearth-protocol"
+description = "Hearth v0.1 wire protocol: frames, opcodes, codec and patch ops."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+thiserror.workspace = true

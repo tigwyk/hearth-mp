@@ -1,0 +1,104 @@
+[
+  {
+    "name": "set_top_level_field",
+    "before": { "a": 1, "b": 2 },
+    "ops": [{ "op": "set", "path": ["a"], "value": 3 }],
+    "after": { "a": 3, "b": 2 }
+  },
+  {
+    "name": "set_creates_missing_object_key",
+    "before": { "a": 1 },
+    "ops": [{ "op": "set", "path": ["c"], "value": 2 }],
+    "after": { "a": 1, "c": 2 }
+  },
+  {
+    "name": "set_nested_field",
+    "before": { "p": { "q": { "r": 1 } } },
+    "ops": [{ "op": "set", "path": ["p", "q", "r"], "value": 2 }],
+    "after": { "p": { "q": { "r": 2 } } }
+  },
+  {
+    "name": "set_nested_list_index",
+    "before": { "rows": [[0], [1]] },
+    "ops": [{ "op": "set", "path": ["rows", 1, 0], "value": 5 }],
+    "after": { "rows": [[0], [5]] }
+  },
+  {
+    "name": "set_at_empty_path_replaces_root",
+    "before": { "a": 1 },
+    "ops": [{ "op": "set", "path": [], "value": [1, 2] }],
+    "after": [1, 2]
+  },
+  {
+    "name": "del_map_key",
+    "before": { "a": 1, "b": 2 },
+    "ops": [{ "op": "del", "path": ["a"] }],
+    "after": { "b": 2 }
+  },
+  {
+    "name": "del_list_item",
+    "before": { "a": [0, 1, 2] },
+    "ops": [{ "op": "del", "path": ["a", 1] }],
+    "after": { "a": [0, 2] }
+  },
+  {
+    "name": "map_insert_new_key",
+    "before": { "m": {} },
+    "ops": [{ "op": "map_insert", "path": ["m"], "key": "k", "value": 1 }],
+    "after": { "m": { "k": 1 } }
+  },
+  {
+    "name": "map_insert_over_existing_key_replaces",
+    "before": { "m": { "k": 1 } },
+    "ops": [{ "op": "map_insert", "path": ["m"], "key": "k", "value": 2 }],
+    "after": { "m": { "k": 2 } }
+  },
+  {
+    "name": "list_splice_insert_middle",
+    "before": [0, 1, 2],
+    "ops": [{ "op": "list_splice", "path": [], "index": 1, "delete": 0, "insert": [9] }],
+    "after": [0, 9, 1, 2]
+  },
+  {
+    "name": "list_splice_delete_middle",
+    "before": [0, 1, 2],
+    "ops": [{ "op": "list_splice", "path": [], "index": 1, "delete": 1, "insert": [] }],
+    "after": [0, 2]
+  },
+  {
+    "name": "list_splice_replace_middle",
+    "before": [0, 1, 2],
+    "ops": [{ "op": "list_splice", "path": [], "index": 1, "delete": 1, "insert": [7, 8] }],
+    "after": [0, 7, 8, 2]
+  },
+  {
+    "name": "list_splice_at_end",
+    "before": { "a": [0, 1] },
+    "ops": [{ "op": "list_splice", "path": ["a"], "index": 2, "delete": 0, "insert": [2] }],
+    "after": { "a": [0, 1, 2] }
+  },
+  {
+    "name": "list_splice_into_empty_list",
+    "before": { "a": [] },
+    "ops": [{ "op": "list_splice", "path": ["a"], "index": 0, "delete": 0, "insert": [1, 2] }],
+    "after": { "a": [1, 2] }
+  },
+  {
+    "name": "error_path_through_missing_key",
+    "before": { "a": 1 },
+    "ops": [{ "op": "set", "path": ["missing", "x"], "value": 1 }],
+    "error": true
+  },
+  {
+    "name": "error_list_index_out_of_range",
+    "before": { "a": [0] },
+    "ops": [{ "op": "set", "path": ["a", 3], "value": 1 }],
+    "error": true
+  },
+  {
+    "name": "error_splice_past_end",
+    "before": { "a": [0, 1] },
+    "ops": [{ "op": "list_splice", "path": ["a"], "index": 1, "delete": 5, "insert": [] }],
+    "error": true
+  }
+]

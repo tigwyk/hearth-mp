@@ -1,0 +1,9 @@
+/target
+*.wasm
+.recon/
+.dev.vars
+node_modules/
+godot/addons/hearth/bin/
+examples/tictactoe-godot/.godot/
+examples/tictactoe-godot/android/
+.DS_Store
