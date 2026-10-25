@@ -1,0 +1,11 @@
+[package]
+name = "hearth-cli"
+description = "Hearth CLI: `hearth new`, `hearth dev`, `hearth deploy`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# `src/bin/hearth.rs` and `src/bin/cargo-hearth.rs` are auto-discovered: the
+# second name lets `cargo hearth ...` work.

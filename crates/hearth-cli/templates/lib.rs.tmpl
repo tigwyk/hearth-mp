@@ -1,0 +1,80 @@
+//! The {{name}} room: a minimal Hearth event-mode counter.
+//!
+//! Durable data lives in [`GameState`]. The room struct is rebuilt from
+//! `Default` every time the Durable Object wakes from hibernation.
+
+use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, Room};
+use serde::{Deserialize, Serialize};
+use worker::{event, Context, Env, Request, Response};
+
+/// Synced room state: only `#[sync]` fields are sent to clients.
+#[derive(HearthState, Serialize, Deserialize, Default)]
+#[hearth(crate = "hearth")]
+pub struct GameState {
+    #[sync]
+    pub count: i64,
+}
+
+/// What clients send up to the room.
+#[derive(Deserialize)]
+pub enum Intent {
+    Add(i64),
+}
+
+/// One room instance. The runtime owns it and rebuilds it after hibernation, so
+/// keep durable data in `State`, not in `self`.
+#[derive(Default)]
+pub struct {{Room}};
+
+#[hearth::room(mode = "event", max_clients = 4)]
+impl Room for {{Room}} {
+    type State = GameState;
+    type Intent = crate::Intent;
+
+    async fn on_join(
+        &mut self,
+        _ctx: &mut Ctx<Self>,
+        _who: &Client,
+        _opts: JoinOpts,
+    ) -> hearth::Result<()> {
+        Ok(())
+    }
+
+    async fn on_intent(
+        &mut self,
+        ctx: &mut Ctx<Self>,
+        _who: &Client,
+        intent: Self::Intent,
+    ) -> hearth::Result<()> {
+        match intent {
+            Intent::Add(n) => ctx.state().count += n,
+        }
+        Ok(())
+    }
+
+    async fn on_leave(
+        &mut self,
+        _ctx: &mut Ctx<Self>,
+        _who: &Client,
+        _reason: Leave,
+    ) -> hearth::Result<()> {
+        Ok(())
+    }
+}
+
+/// Worker entry: the gateway authenticates each socket, sets
+/// `X-Hearth-Player-Id`, and forwards it to this room's Durable Object. The
+/// `ROOM` binding and the class name are declared in `wrangler.toml`.
+#[event(fetch)]
+async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
+    hearth_gateway::serve(
+        req,
+        env,
+        &[hearth_gateway::RoomRoute {
+            room_type: "{{room_type}}",
+            binding: "ROOM",
+            schema_hash: <GameState as HearthState>::schema_hash_hex,
+        }],
+    )
+    .await
+}

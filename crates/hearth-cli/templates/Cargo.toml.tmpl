@@ -1,0 +1,15 @@
+[package]
+name = "{{crate_name}}"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+# worker-build requires cdylib; rlib keeps `cargo test` usable.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hearth = "0.1"
+hearth-gateway = "0.1"
+serde = { version = "1", features = ["derive"] }
+worker = "0.8"
