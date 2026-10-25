@@ -461,3 +461,112 @@ fn garbage_frame_is_a_protocol_error() {
         Err(ProtocolError::Malformed(_))
     ));
 }
+
+fn join_ok(core: &mut ClientCore, seat: u8, encoding: Encoding) -> Vec<ClientEvent> {
+    recv(
+        core,
+        &Frame::JoinOk {
+            player_id: PlayerId("p1".into()),
+            seat,
+        },
+        encoding,
+    )
+}
+
+#[test]
+fn unacked_intents_reported_on_disconnect() {
+    let mut core = ClientCore::new(config(Encoding::MsgPack));
+    core.queue_intent(json!({"Add": 1}));
+    core.queue_intent(json!({"Fail": 1}));
+    core.queue_intent(json!({"Add": 2}));
+    assert!(
+        core.poll_send(0).is_some(),
+        "all three intents are in flight"
+    );
+
+    // Seq 1 is ACKed and seq 2 is rejected; only seq 3 is unaccounted for.
+    recv(
+        &mut core,
+        &Frame::Ack {
+            state_seq: 1,
+            intent_seqs: vec![1],
+        },
+        Encoding::MsgPack,
+    );
+    recv(
+        &mut core,
+        &Frame::Error {
+            code: ErrorCode::IntentRejected,
+            message: "nope".into(),
+            ref_seq: Some(2),
+        },
+        Encoding::MsgPack,
+    );
+
+    assert_eq!(
+        core.on_disconnected(),
+        vec![ClientEvent::IntentsUnconfirmed { seqs: vec![3] }]
+    );
+    assert!(
+        core.on_disconnected().is_empty(),
+        "each unconfirmed intent is reported once"
+    );
+}
+
+#[test]
+fn queued_intents_survive_and_wait_for_join_ok() {
+    let mut core = ClientCore::new(config(Encoding::MsgPack));
+    join_ok(&mut core, 0, Encoding::MsgPack);
+
+    // A first-session intent is in flight when the socket drops: it is
+    // reported, never resent.
+    core.queue_intent(json!({"Add": 1}));
+    assert!(core.poll_send(0).is_some());
+    assert_eq!(
+        core.on_disconnected(),
+        vec![ClientEvent::IntentsUnconfirmed { seqs: vec![1] }]
+    );
+
+    // Intents queued while disconnected stay queued.
+    core.queue_intent(json!({"Add": 2}));
+    core.queue_intent(json!({"Add": 3}));
+    assert!(
+        core.poll_send(1_000).is_none(),
+        "queued intents wait for JOIN_OK"
+    );
+
+    // The resume joins again; the queue then flushes in one message.
+    join_ok(&mut core, 0, Encoding::MsgPack);
+    let wire = core.poll_send(1_000).expect("JOIN_OK releases the queue");
+    let Frame::Intent { intents } = decode(&wire).expect("INTENT decodes") else {
+        panic!("expected an INTENT frame");
+    };
+    assert_eq!(
+        intents.iter().map(|msg| msg.seq).collect::<Vec<_>>(),
+        vec![2, 3]
+    );
+    assert!(core.poll_send(2_000).is_none(), "the queue is drained");
+}
+
+#[test]
+fn no_event_when_nothing_in_flight() {
+    let mut core = ClientCore::new(config(Encoding::Json));
+    join_ok(&mut core, 0, Encoding::Json);
+
+    // An ACKed intent is no longer in flight.
+    core.queue_intent(json!({"Add": 1}));
+    assert!(core.poll_send(0).is_some());
+    recv(
+        &mut core,
+        &Frame::Ack {
+            state_seq: 1,
+            intent_seqs: vec![1],
+        },
+        Encoding::Json,
+    );
+    assert!(core.on_disconnected().is_empty());
+
+    // A queued but never-sent intent is not in flight either.
+    core.queue_intent(json!({"Add": 2}));
+    assert!(core.on_disconnected().is_empty());
+}

@@ -5,6 +5,10 @@
 //! [`ClientCore::handle`], queue intents with [`ClientCore::queue_intent`] and
 //! ask [`ClientCore::poll_send`] for the next frame to send.
 //!
+//! When the socket drops, call [`ClientCore::on_disconnected`] to learn which
+//! intents the server may or may not have applied, then use a
+//! [`ReconnectPolicy`] to decide when to try again.
+//!
 //! ```
 //! use hearth_client::{ClientConfig, ClientCore};
 //! use hearth_protocol::Encoding;
@@ -16,12 +20,16 @@
 //! let intent = client.poll_send(0).unwrap();
 //! ```
 
-use std::collections::VecDeque;
+use std::collections::{BTreeSet, VecDeque};
 
 use hearth_protocol::{
     apply, decode, encode, Encoding, ErrorCode, Frame, IntentMsg, PatchOp, PlayerId, ProtocolError,
     Value, WireMsg, PING_TEXT, PONG_TEXT, PROTOCOL_VERSION,
 };
+
+mod reconnect;
+
+pub use reconnect::{Reconnect, ReconnectPolicy};
 
 /// Default outgoing message rate limit, in messages per second.
 pub const DEFAULT_MAX_MSGS_PER_SEC: u32 = 20;
@@ -80,6 +88,10 @@ pub enum ClientEvent {
     /// A patch could not be applied. The state is unusable until the next
     /// `FULL_STATE`, which emits [`ClientEvent::StateReset`].
     Desync,
+    /// Intents that were sent but never ACKed or rejected before the socket
+    /// dropped. The server may or may not have applied them: never resend them
+    /// silently. Reported once per drop, sorted ascending.
+    IntentsUnconfirmed { seqs: Vec<u32> },
 }
 
 /// Sans-IO client session state.
@@ -90,6 +102,11 @@ pub struct ClientCore {
     player_id: Option<PlayerId>,
     next_intent_seq: u32,
     pending: VecDeque<IntentMsg>,
+    /// Intent sequence numbers sent but not yet ACKed or rejected.
+    in_flight: BTreeSet<u32>,
+    /// Set by [`ClientCore::on_disconnected`], cleared by the next `JOIN_OK`.
+    /// Sending is paused while it is set.
+    awaiting_join: bool,
     desynced: bool,
     /// Minimum milliseconds between two sends, from `cfg.max_msgs_per_sec`.
     send_interval_ms: u64,
@@ -108,6 +125,8 @@ impl ClientCore {
             player_id: None,
             next_intent_seq: 1,
             pending: VecDeque::new(),
+            in_flight: BTreeSet::new(),
+            awaiting_join: false,
             desynced: false,
             send_interval_ms,
             last_send_ms: None,
@@ -127,6 +146,9 @@ impl ClientCore {
     }
 
     /// Decode one frame from the server and apply it to the session.
+    ///
+    /// An `ACK` clears the listed intents from the unconfirmed set, and an
+    /// `ERROR` with a `ref_seq` clears that intent.
     pub fn handle(&mut self, msg: &WireMsg) -> Result<Vec<ClientEvent>, ProtocolError> {
         // Keepalive pings and pongs are text frames, not protocol frames.
         if let WireMsg::Text(text) = msg {
@@ -137,6 +159,7 @@ impl ClientCore {
         match decode(msg)? {
             Frame::JoinOk { player_id, seat } => {
                 self.player_id = Some(player_id.clone());
+                self.awaiting_join = false;
                 Ok(vec![ClientEvent::Joined { player_id, seat }])
             }
             Frame::FullState { seq, state } => {
@@ -149,20 +172,30 @@ impl ClientCore {
             Frame::Ack {
                 state_seq,
                 intent_seqs,
-            } => Ok(vec![ClientEvent::Acked {
-                state_seq,
-                intent_seqs,
-            }]),
+            } => {
+                for seq in &intent_seqs {
+                    self.in_flight.remove(seq);
+                }
+                Ok(vec![ClientEvent::Acked {
+                    state_seq,
+                    intent_seqs,
+                }])
+            }
             Frame::Event { name, data } => Ok(vec![ClientEvent::Event { name, data }]),
             Frame::Error {
                 code,
                 message,
                 ref_seq,
-            } => Ok(vec![ClientEvent::Error {
-                code,
-                message,
-                ref_seq,
-            }]),
+            } => {
+                if let Some(seq) = ref_seq {
+                    self.in_flight.remove(&seq);
+                }
+                Ok(vec![ClientEvent::Error {
+                    code,
+                    message,
+                    ref_seq,
+                }])
+            }
             // Server-to-client frames this client never expects; ignore them.
             Frame::Hello { .. } | Frame::Intent { .. } | Frame::Leave {} => Ok(Vec::new()),
         }
@@ -196,10 +229,11 @@ impl ClientCore {
 
     /// The next `INTENT` frame to send, or `None` when nothing may be sent now.
     ///
-    /// Returns `None` while the queue is empty or while the rate limit has not
-    /// elapsed since the previous send. The first send is never rate limited.
+    /// Returns `None` while the queue is empty, while waiting for the next
+    /// `JOIN_OK` after a drop, or while the rate limit has not elapsed since the
+    /// previous send. The first send is never rate limited.
     pub fn poll_send(&mut self, now_ms: u64) -> Option<WireMsg> {
-        if self.pending.is_empty() {
+        if self.awaiting_join || self.pending.is_empty() {
             return None;
         }
         if let Some(last) = self.last_send_ms {
@@ -208,9 +242,27 @@ impl ClientCore {
             }
         }
         let take = self.cfg.max_intents_per_msg.max(1).min(self.pending.len());
-        let intents = self.pending.drain(..take).collect();
+        let intents: Vec<IntentMsg> = self.pending.drain(..take).collect();
+        self.in_flight
+            .extend(intents.iter().map(|intent| intent.seq));
         self.last_send_ms = Some(now_ms);
         Some(encode(&Frame::Intent { intents }, self.cfg.encoding))
+    }
+
+    /// Record that the socket dropped.
+    ///
+    /// Returns at most one event: [`ClientEvent::IntentsUnconfirmed`] naming
+    /// every intent that was sent but never ACKed or rejected. Those intents
+    /// are then forgotten, so they are reported once and never resent silently.
+    /// Intents queued but never sent stay queued, and sending pauses until the
+    /// next `JOIN_OK`.
+    pub fn on_disconnected(&mut self) -> Vec<ClientEvent> {
+        self.awaiting_join = true;
+        if self.in_flight.is_empty() {
+            return Vec::new();
+        }
+        let seqs: Vec<u32> = std::mem::take(&mut self.in_flight).into_iter().collect();
+        vec![ClientEvent::IntentsUnconfirmed { seqs }]
     }
 
     /// The `LEAVE` frame that closes the session.

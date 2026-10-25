@@ -1,0 +1,194 @@
+[
+  {
+    "name": "code_1006_attempt_0_backoff_500",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 2000,
+    "expect": 2500
+  },
+  {
+    "name": "code_1006_attempt_1_backoff_1000",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 1,
+    "now_ms": 2000,
+    "expect": 3000
+  },
+  {
+    "name": "code_1006_attempt_2_backoff_2000",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 2,
+    "now_ms": 2000,
+    "expect": 4000
+  },
+  {
+    "name": "code_1006_attempt_3_backoff_4000",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 3,
+    "now_ms": 2000,
+    "expect": 6000
+  },
+  {
+    "name": "code_1006_attempt_4_backoff_8000",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 4,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "code_1006_attempt_5_capped_at_8000",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 5,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "code_1011_attempt_0_backoff_500",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 2000,
+    "expect": 2500
+  },
+  {
+    "name": "code_1011_attempt_1_backoff_1000",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 1,
+    "now_ms": 2000,
+    "expect": 3000
+  },
+  {
+    "name": "code_1011_attempt_2_backoff_2000",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 2,
+    "now_ms": 2000,
+    "expect": 4000
+  },
+  {
+    "name": "code_1011_attempt_3_backoff_4000",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 3,
+    "now_ms": 2000,
+    "expect": 6000
+  },
+  {
+    "name": "code_1011_attempt_4_backoff_8000",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 4,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "code_1011_attempt_5_capped_at_8000",
+    "code": 1011,
+    "first_drop_ms": 1000,
+    "attempt": 5,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "code_1012_attempt_0_backoff_500",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 2000,
+    "expect": 2500
+  },
+  {
+    "name": "code_1012_attempt_1_backoff_1000",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 1,
+    "now_ms": 2000,
+    "expect": 3000
+  },
+  {
+    "name": "code_1012_attempt_2_backoff_2000",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 2,
+    "now_ms": 2000,
+    "expect": 4000
+  },
+  {
+    "name": "code_1012_attempt_3_backoff_4000",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 3,
+    "now_ms": 2000,
+    "expect": 6000
+  },
+  {
+    "name": "code_1012_attempt_4_backoff_8000",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 4,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "code_1012_attempt_5_capped_at_8000",
+    "code": 1012,
+    "first_drop_ms": 1000,
+    "attempt": 5,
+    "now_ms": 2000,
+    "expect": 10000
+  },
+  {
+    "name": "window_edge_29999_retries",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 30999,
+    "expect": 31499
+  },
+  {
+    "name": "window_edge_30000_gives_up",
+    "code": 1006,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 31000,
+    "expect": "give_up"
+  },
+  {
+    "name": "code_1000_clean_close_gives_up",
+    "code": 1000,
+    "first_drop_ms": 5000,
+    "attempt": 0,
+    "now_ms": 5000,
+    "expect": "give_up"
+  },
+  {
+    "name": "code_4001_schema_mismatch_gives_up",
+    "code": 4001,
+    "first_drop_ms": 5000,
+    "attempt": 0,
+    "now_ms": 5000,
+    "expect": "give_up"
+  },
+  {
+    "name": "code_4002_room_full_gives_up",
+    "code": 4002,
+    "first_drop_ms": 5000,
+    "attempt": 0,
+    "now_ms": 5000,
+    "expect": "give_up"
+  },
+  {
+    "name": "code_4009_unknown_fatal_gives_up",
+    "code": 4009,
+    "first_drop_ms": 5000,
+    "attempt": 0,
+    "now_ms": 5000,
+    "expect": "give_up"
+  }
+]
