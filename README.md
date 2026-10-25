@@ -140,6 +140,12 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response
             // `GET /me` and `POST /match` + `GET /lobby` are opt-in.
             player: None,
             matchmaker: false,
+            // Login providers come from the worker env; the default is anonymous
+            // only. See docs/auth.md for JWT, Steam, itch.io and Discord.
+            auth: hearth_gateway::AuthConfig::default(),
+            // Per-IP and per-player rate limits; add the [[ratelimits]] bindings
+            // in wrangler.toml to turn them on.
+            limits: hearth_gateway::ratelimit::Limits::default(),
         },
     )
     .await
@@ -157,6 +163,10 @@ changes, events and timers are rolled back.
 - [Wire protocol v1](docs/protocol.md): frames, opcodes, patch ops, handshake.
 - [Limits and when not to use Hearth](docs/limits.md): the hard line, per-mode
   cost profile, memory/CPU budgets, JSON number precision.
+- [Cost estimate](docs/cost.md): model the monthly Cloudflare bill with
+  `hearth cost`, and the versioned pricing table behind it.
+- [Auth providers](docs/auth.md): JWT, Steam, itch.io and Discord logins, the
+  player id namespaces, and the 24-hour session token.
 - [Admin and observability](docs/admin.md): `hearth inspect` (list rooms, inspect
   full state, force-dispose, tail patches), the `/admin/*` JSON API, and Workers
   Logs events.

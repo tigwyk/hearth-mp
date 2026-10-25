@@ -85,8 +85,10 @@ else changes: the room, the reports and the wire protocol are the same.
 - The pool is recorded when the room is minted, in the `QuickJoin` call. The
   room never learns its pool and does not need to.
 - Quick-join only considers rooms in the requested pool, and the lobby only
-  lists one pool at a time. Players asking for different pools never share a
-  room.
+  lists one pool at a time, so a new match never puts players from different
+  pools in one room. One exception, on purpose: a player who is already seated
+  in a room, or still holds a seat reservation, gets *that* room back whatever
+  pool they name — asking twice must never move a player mid-game.
 - Use pools for modes, maps or skill buckets (for example `"default"`,
   `"ranked"`, `"island"`).
 

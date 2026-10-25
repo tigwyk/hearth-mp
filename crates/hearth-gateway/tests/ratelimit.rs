@@ -7,7 +7,10 @@ use hearth_protocol::PlayerId;
 #[test]
 fn keys_are_scoped_and_prefixed() {
     let player = PlayerId("jwt_u1".to_owned());
-    assert_eq!(key(Scope::Ip, "1.2.3.4", None), Some("ip:1.2.3.4".to_owned()));
+    assert_eq!(
+        key(Scope::Ip, "1.2.3.4", None),
+        Some("ip:1.2.3.4".to_owned())
+    );
     assert_eq!(
         key(Scope::Player, "1.2.3.4", Some(&player)),
         Some("p:jwt_u1".to_owned())
