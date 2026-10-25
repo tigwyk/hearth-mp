@@ -242,6 +242,8 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
 #[derive(Default)]
 struct ServiceArgs {
     binding: Option<(String, Span)>,
+    /// Generate a player DO (with the read-only `GET /__hearth/view` path).
+    player: Option<Span>,
 }
 
 fn expand_service(attr: &TokenStream2, item: &TokenStream2) -> TokenStream2 {
@@ -271,6 +273,23 @@ fn expand_service_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<
     let object = format_ident!("{service}Object");
     let service_name = service.to_string();
     let wrapper = format_ident!("__hearth_{}_object", service_name.to_ascii_lowercase());
+    // A player service is the same DO with a typed client view path, so the
+    // wrapper picks PlayerObject and the trait bound enforces the impl.
+    let (wrapper_type, object_new) = if args.player.is_some() {
+        (
+            quote!(::hearth::server::worker::PlayerObject<#self_ty>),
+            quote!(::hearth::server::worker::PlayerObject::<#service>::new(
+                state, env, #binding
+            )),
+        )
+    } else {
+        (
+            quote!(::hearth::server::worker::ServiceObject<#self_ty>),
+            quote!(::hearth::server::worker::ServiceObject::<#service>::new(
+                state, env, #binding
+            )),
+        )
+    };
 
     Ok(quote! {
         #item_impl
@@ -292,15 +311,11 @@ fn expand_service_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<
             use ::worker::wasm_bindgen as wasm_bindgen;
 
             #[::worker::durable_object]
-            pub struct #object(::hearth::server::worker::ServiceObject<#self_ty>);
+            pub struct #object(#wrapper_type);
 
             impl ::worker::DurableObject for #object {
                 fn new(state: ::worker::State, env: ::worker::Env) -> Self {
-                    Self(::hearth::server::worker::ServiceObject::<#service>::new(
-                        state,
-                        env,
-                        #binding,
-                    ))
+                    Self(#object_new)
                 }
 
                 async fn fetch(
@@ -380,6 +395,15 @@ fn parse_service_args(attr: &TokenStream2) -> syn::Result<ServiceArgs> {
                 let value = str_value(&meta, "binding")?;
                 args.binding = Some((value.value(), value.span()));
             }
+            "player" => match &meta {
+                Meta::Path(path) if path.is_ident("player") => args.player = Some(path.span()),
+                _ => {
+                    return Err(syn::Error::new_spanned(
+                        &meta,
+                        "player is a flag; write `player`",
+                    ))
+                }
+            },
             other => {
                 return Err(syn::Error::new_spanned(
                     &meta,

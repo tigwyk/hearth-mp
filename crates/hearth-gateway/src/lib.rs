@@ -6,4 +6,4 @@ pub mod routes;
 pub use auth::{
     anonymous_player_id, issue_token, mint_room_name, valid_room_name, verify_token, AuthError,
 };
-pub use routes::{serve, RoomRoute};
+pub use routes::{mm_room, serve, GatewayConfig, PlayerRoute, RoomRoute};

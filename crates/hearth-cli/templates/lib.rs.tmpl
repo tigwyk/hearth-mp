@@ -69,23 +69,31 @@ hearth::admin::registry_object!();
 
 /// Every room type this Worker serves. The `ROOM` binding and the class name are
 /// declared in `wrangler.toml`.
-fn room_routes() -> [hearth_gateway::RoomRoute; 1] {
-    [hearth_gateway::RoomRoute {
+fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
         room_type: "{{room_type}}",
         binding: "ROOM",
         schema_hash: hearth::server::schema_hash_hex::<{{Room}}>,
-    }]
+        max_clients: 4,
+    }];
+    &ROUTES
 }
 
 /// Worker entry: the gateway authenticates each socket, sets
 /// `X-Hearth-Player-Id`, and forwards it to this room's Durable Object.
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-    let routes = room_routes();
     // The admin API exists only when HEARTH_ADMIN_TOKEN is set. Without it these
     // paths are ordinary 404s, as if the feature were not deployed.
     if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
-        return hearth::admin::serve_admin(req, env, &routes).await;
+        return hearth::admin::serve_admin(req, env, room_routes()).await;
     }
-    hearth_gateway::serve(req, env, &routes).await
+    let config = hearth_gateway::GatewayConfig {
+        rooms: room_routes(),
+        // `Some(PlayerRoute { binding })` serves `GET /me`; `matchmaker: true`
+        // serves `/match` and `/lobby` when the HEARTH_MATCHMAKER binding exists.
+        player: None,
+        matchmaker: false,
+    };
+    hearth_gateway::serve(req, env, &config).await
 }

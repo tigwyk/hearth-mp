@@ -15,6 +15,15 @@ class_name = "TicTacToeObject"
 name = "HEARTH_REGISTRY"
 class_name = "HearthRegistry"
 
+# Per-player records (`GET /me`). The matchmaker hands out room names.
+[[durable_objects.bindings]]
+name = "TTT_PLAYER"
+class_name = "TttPlayerObject"
+
+[[durable_objects.bindings]]
+name = "HEARTH_MATCHMAKER"
+class_name = "HearthMatchmaker"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["TicTacToeObject"]
@@ -22,6 +31,10 @@ new_sqlite_classes = ["TicTacToeObject"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["HearthRegistry"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["TttPlayerObject", "HearthMatchmaker"]
 
 # Workers Logs: the runtime emits one JSON line per join, leave, dispose,
 # handler error and incompatible-state wake.

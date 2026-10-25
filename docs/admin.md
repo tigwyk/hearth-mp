@@ -228,8 +228,8 @@ Notes:
   ```
 
   where `routes()` is the same `&[hearth_gateway::RoomRoute]` list the game
-  Worker passes to `hearth_gateway::serve`. Everything that is not `/admin/*`
-  must 404 (or be left unrouted).
+  Worker puts in its `hearth_gateway::GatewayConfig`. Everything that is not
+  `/admin/*` must 404 (or be left unrouted).
 - The admin Worker's only secret is `HEARTH_ADMIN_TOKEN`
   (`wrangler secret put HEARTH_ADMIN_TOKEN -c wrangler.admin.toml`). The game
   Worker can leave its own `HEARTH_ADMIN_TOKEN` unset, which keeps `/admin/*`

@@ -6,7 +6,10 @@
 
 use hearth::anyhow;
 use hearth::sync::SyncMap;
-use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, Result, Room, Schema};
+use hearth::{
+    Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, PlayerService, Result, Room, Schema,
+    Service, ServiceCtx,
+};
 use serde::{Deserialize, Serialize};
 use worker::{Context, Env, Request, Response};
 
@@ -42,6 +45,62 @@ pub struct Board {
 pub enum Move {
     Place { cell: u8 },
     Rematch,
+}
+
+/// A finished game's outcome for one player.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Win,
+    Loss,
+    Draw,
+}
+
+/// One player's lifetime record, kept in a Player Durable Object so it outlives
+/// any match.
+#[derive(Serialize, Deserialize, Default, Debug)]
+pub struct PlayerStats {
+    pub wins: u32,
+    pub losses: u32,
+    pub draws: u32,
+}
+
+/// What a room tells a player object when a game ends.
+#[derive(Serialize, Deserialize, Debug)]
+pub enum PlayerRpc {
+    Result(Outcome),
+}
+
+#[derive(Default)]
+pub struct TttPlayer;
+
+#[hearth::service(binding = "TTT_PLAYER", player)]
+impl Service for TttPlayer {
+    type State = PlayerStats;
+    type Rpc = PlayerRpc;
+    type Reply = ();
+
+    async fn on_call(
+        &mut self,
+        ctx: &mut ServiceCtx<Self>,
+        _from: &hearth::Target,
+        rpc: PlayerRpc,
+    ) -> Result<()> {
+        let PlayerRpc::Result(outcome) = rpc;
+        let stats = ctx.state();
+        match outcome {
+            Outcome::Win => stats.wins += 1,
+            Outcome::Loss => stats.losses += 1,
+            Outcome::Draw => stats.draws += 1,
+        }
+        Ok(())
+    }
+}
+
+impl PlayerService for TttPlayer {
+    /// The player sees only their own record, which is the whole state here.
+    fn client_view(state: &Self::State) -> serde_json::Value {
+        serde_json::to_value(state).expect("PlayerStats is JSON")
+    }
 }
 
 const LINES: [[usize; 3]; 8] = [
@@ -106,6 +165,7 @@ impl Room for TicTacToe {
                 };
                 state.cells[index] = mark;
 
+                let mut results: Vec<(PlayerId, Outcome)> = Vec::new();
                 if let Some(winning_mark) = winning_mark(&state.cells) {
                     let winner = state
                         .marks
@@ -113,15 +173,37 @@ impl Room for TicTacToe {
                         .find(|(_, candidate)| **candidate == winning_mark)
                         .map(|(player, _)| player.clone())
                         .unwrap_or_else(|| who.player_id.clone());
-                    state.status = Status::Won(winner);
+                    state.status = Status::Won(winner.clone());
+                    results = state
+                        .marks
+                        .iter()
+                        .map(|(player, candidate)| {
+                            let outcome = if *candidate == winning_mark {
+                                Outcome::Win
+                            } else {
+                                Outcome::Loss
+                            };
+                            (player.clone(), outcome)
+                        })
+                        .collect();
                 } else if state.cells.iter().all(|cell| *cell != 0) {
                     state.status = Status::Draw;
+                    results = state
+                        .marks
+                        .iter()
+                        .map(|(player, _)| (player.clone(), Outcome::Draw))
+                        .collect();
                 } else if let Some((next, _)) = state
                     .marks
                     .iter()
                     .find(|(_, candidate)| **candidate != mark)
                 {
                     state.turn = next.clone();
+                }
+                // Durable fire-after-commit: the record survives a handler
+                // failure after this point and a player-object outage.
+                for (player, outcome) in results {
+                    ctx.notify::<TttPlayer>(&player.0, PlayerRpc::Result(outcome));
                 }
             }
             Move::Rematch => {
@@ -167,27 +249,41 @@ fn winning_mark(cells: &[u8]) -> Option<u8> {
     })
 }
 
-// The room registry (`hearth inspect rooms`). Rooms report themselves here; a
-// registry failure never affects gameplay.
+// The room registry (`hearth inspect rooms`) and the matchmaker
+// (`/match`, `/lobby`). Both are optional bindings; a missing one only disables
+// its feature.
 hearth::admin::registry_object!();
+hearth::matchmaker::matchmaker_object!();
 
 /// Every room type this Worker serves.
-fn room_routes() -> [hearth_gateway::RoomRoute; 1] {
-    [hearth_gateway::RoomRoute {
+fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
         room_type: "tictactoe",
         binding: "TICTACTOE",
         schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
-    }]
+        max_clients: 2,
+    }];
+    &ROUTES
+}
+
+/// The gateway's optional features: `GET /me` and the matchmaker routes.
+fn gateway_config() -> hearth_gateway::GatewayConfig {
+    hearth_gateway::GatewayConfig {
+        rooms: room_routes(),
+        player: Some(hearth_gateway::PlayerRoute {
+            binding: "TTT_PLAYER",
+        }),
+        matchmaker: true,
+    }
 }
 
 /// The gateway Worker entry: auth, routing, and the tictactoe room route.
 #[worker::event(fetch)]
 async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-    let routes = room_routes();
     // The admin API exists only when HEARTH_ADMIN_TOKEN is set. Without it these
     // paths are ordinary 404s, as if the feature were not deployed.
     if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
-        return hearth::admin::serve_admin(req, env, &routes).await;
+        return hearth::admin::serve_admin(req, env, room_routes()).await;
     }
-    hearth_gateway::serve(req, env, &routes).await
+    hearth_gateway::serve(req, env, &gateway_config()).await
 }

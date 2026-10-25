@@ -126,14 +126,21 @@ impl Room for Counter {
 /// the way. `binding` matches wrangler.toml.
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
+    static ROOMS: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
+        room_type: "my-game",
+        binding: "ROOM",
+        schema_hash: <Match as HearthState>::schema_hash_hex,
+        max_clients: 4,
+    }];
     hearth_gateway::serve(
         req,
         env,
-        &[hearth_gateway::RoomRoute {
-            room_type: "my-game",
-            binding: "ROOM",
-            schema_hash: <Match as HearthState>::schema_hash_hex,
-        }],
+        &hearth_gateway::GatewayConfig {
+            rooms: &ROOMS,
+            // `GET /me` and `POST /match` + `GET /lobby` are opt-in.
+            player: None,
+            matchmaker: false,
+        },
     )
     .await
 }
@@ -153,6 +160,10 @@ changes, events and timers are rolled back.
 - [Admin and observability](docs/admin.md): `hearth inspect` (list rooms, inspect
   full state, force-dispose, tail patches), the `/admin/*` JSON API, and Workers
   Logs events.
+- [Typed RPC](docs/rpc.md): `ctx.call` and durable `ctx.notify` between rooms
+  and services, reentrancy, and the internal call path.
+- [Matchmaking](docs/matchmaking.md): quick-join, seat reservations, pools, the
+  lobby, region hints, room metadata, and private rooms.
 - [v0.1 implementation plan](docs/superpowers/plans/2026-10-25-hearth-v0.1-event-rooms.md)
 
 ## Licence

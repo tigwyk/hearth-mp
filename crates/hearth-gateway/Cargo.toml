@@ -9,6 +9,8 @@ authors.workspace = true
 
 [dependencies]
 hearth-protocol.workspace = true
+hearth-server = { workspace = true, features = ["worker"] }
+hearth-matchmaker.workspace = true
 worker.workspace = true
 hmac.workspace = true
 sha2.workspace = true

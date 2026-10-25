@@ -503,6 +503,153 @@ async function main() {
   );
   check(pong.text === 'hearth:pong', 'hearth:ping gets hearth:pong');
 
+  // --- v0.3a: matchmaking, player data and the internal call path ---
+
+  // 10. Two players quick-join the same matchmaker room.
+  const playerC = await login(`device-c-${randomBytes(8).toString('hex')}`);
+  const playerD = await login(`device-d-${randomBytes(8).toString('hex')}`);
+  const playerE = await login(`device-e-${randomBytes(8).toString('hex')}`);
+  const matchC = await request('/match/tictactoe', {
+    method: 'POST',
+    token: playerC.token,
+    body: {},
+  });
+  check(matchC.status === 200, 'quick-join returns 200');
+  check(
+    /^m_(enam|sam|weur|apac|oc|afr|any)_[0-9a-f]{16}$/.test(matchC.json.room ?? ''),
+    'quick-join returns a matchmaker room name',
+  );
+  check(
+    matchC.json.room.split('_')[1] === matchC.json.region,
+    'the room name carries the region the match was made in',
+  );
+  const matchD = await request('/match/tictactoe', {
+    method: 'POST',
+    token: playerD.token,
+    body: { pool: 'default' },
+  });
+  check(
+    matchD.status === 200 && matchD.json.room === matchC.json.room,
+    'two quick-joins share one room until it fills',
+  );
+  const matchRoom = matchC.json.room;
+
+  // 11. Both connect to the matchmade room and play a game.
+  const mmUrlC = `${WS_BASE}/rooms/tictactoe/${encodeURIComponent(matchRoom)}?token=${encodeURIComponent(playerC.token)}`;
+  const mmUrlD = `${WS_BASE}/rooms/tictactoe/${encodeURIComponent(matchRoom)}?token=${encodeURIComponent(playerD.token)}`;
+  const mmC = new JsonSocket(await openSocket(mmUrlC));
+  const mmD = new JsonSocket(await openSocket(mmUrlD));
+  const mmHelloC = await hello(mmC, schemaHash);
+  await hello(mmD, schemaHash);
+  check(mmHelloC.joinOk.player_id === playerC.player_id, 'the matchmade room seats the quick-joined player');
+  for (const [socket, cell] of [
+    [mmC, 0],
+    [mmD, 3],
+    [mmC, 1],
+    [mmD, 4],
+    [mmC, 2],
+  ]) {
+    const frame = intent(cell);
+    socket.send(frame);
+    await socket.waitFor(
+      (candidate) => candidate.op === 'ACK' && candidate.intent_seqs.includes(frame.intents[0].seq),
+      `matchmade ACK for intent ${frame.intents[0].seq}`,
+    );
+  }
+  await mmC.waitForState(
+    (state) => state.status && state.status.Won === playerC.player_id,
+    'the game finishes in the matchmade room',
+  );
+
+  // 12. `GET /me` shows the winner's wins and the loser's losses.
+  const meC = await request('/me', { token: playerC.token });
+  check(meC.status === 200, '/me returns 200');
+  check(
+    meC.json.wins === 1 && meC.json.losses === 0 && meC.json.draws === 0,
+    `the winner's /me shows one win: ${JSON.stringify(meC.json)}`,
+  );
+  const meD = await request('/me', { token: playerD.token });
+  check(
+    meD.json.losses === 1 && meD.json.wins === 0 && meD.json.draws === 0,
+    `the loser's /me shows one loss: ${JSON.stringify(meD.json)}`,
+  );
+  const meE = await request('/me', { token: playerE.token });
+  check(
+    meE.status === 200 && meE.json.wins === 0 && meE.json.losses === 0 && meE.json.draws === 0,
+    'a player who never played has an empty /me',
+  );
+  check(
+    JSON.stringify(meC.json) !== JSON.stringify(meD.json),
+    "another player's token never returns the caller's stats",
+  );
+  const meAnonymous = await request('/me');
+  check(meAnonymous.status === 401, '/me without a token is 401');
+
+  // 13. A third quick-join lands in a new room, which the lobby lists.
+  const matchE = await request('/match/tictactoe', {
+    method: 'POST',
+    token: playerE.token,
+    body: {},
+  });
+  check(
+    matchE.status === 200 && matchE.json.room !== matchRoom,
+    'a third quick-join gets a different room',
+  );
+  const lobby = await request('/lobby/tictactoe?pool=default', { token: playerE.token });
+  check(lobby.status === 200 && Array.isArray(lobby.json.rooms), 'the lobby returns a room list');
+  const listedE = lobby.json.rooms.find((candidate) => candidate.name === matchE.json.room);
+  check(
+    listedE !== undefined && listedE.capacity === 2 && (listedE.players === 0 || listedE.players === 1),
+    `the lobby lists the new room with capacity 2: ${JSON.stringify(listedE)}`,
+  );
+  check(
+    !lobby.json.rooms.some((candidate) => candidate.name === matchRoom),
+    'a full matchmade room is not offered by the lobby',
+  );
+  const lobbyAnonymous = await request('/lobby/tictactoe');
+  check(lobbyAnonymous.status === 401, '/lobby without a token is 401');
+  const badMatch = await request('/match/tictactoe', {
+    method: 'POST',
+    token: playerE.token,
+    body: { pool: 'not a valid pool!' },
+  });
+  check(badMatch.status === 400, 'an invalid pool is rejected with 400');
+
+  // 14. A self-minted m_ name is an ordinary room and never reaches the lobby.
+  const forgedName = `m_any_${randomBytes(8).toString('hex')}`;
+  const forgedSocket = new JsonSocket(
+    await openSocket(
+      `${WS_BASE}/rooms/tictactoe/${encodeURIComponent(forgedName)}?token=${encodeURIComponent(playerE.token)}`,
+    ),
+  );
+  const forgedHello = await hello(forgedSocket, schemaHash);
+  check(forgedHello.joinOk.seat === 0, 'a self-minted m_ name connects as a normal room');
+  const lobbyAfterForged = await request('/lobby/tictactoe?pool=default', { token: playerE.token });
+  check(
+    !lobbyAfterForged.json.rooms.some((candidate) => candidate.name === forgedName),
+    'a self-minted m_ room never appears in the lobby',
+  );
+  forgedSocket.close();
+
+  // 15. Players cannot reach the internal call path.
+  const callPost = await request(
+    `/rooms/tictactoe/${encodeURIComponent(room)}/__hearth/call`,
+    { method: 'POST', token: playerC.token, body: {} },
+  );
+  check(
+    callPost.status === 404 || callPost.status === 400,
+    'POST to a room internal call path is rejected',
+  );
+  const callGet = await request('/__hearth/call', { token: playerC.token });
+  check(
+    callGet.status === 404 || callGet.status === 400,
+    'GET /__hearth/call is rejected',
+  );
+  const matchAnonymous = await request('/match/tictactoe', { method: 'POST', body: {} });
+  check(matchAnonymous.status === 401, '/match without a token is 401');
+
+  mmC.close();
+  mmD.close();
   if (NO_ADMIN) {
     // 10. A deployment without HEARTH_ADMIN_TOKEN has no admin API at all.
     const unauthenticated = await request('/admin/rooms');
