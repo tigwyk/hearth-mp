@@ -1,0 +1,197 @@
+extends Node
+## Pure-GDScript Hearth client for web exports: JSON text frames only.
+##
+## Same methods and signals as the `HearthNative` GDExtension class, so
+## `hearth_client.gd` can swap the backend without changing game code.
+##
+## The state tree comes from `JSON.parse_string`, so all numbers are floats;
+## patch paths are applied by `hearth_patch.gd` with the same semantics as the
+## Rust reference.
+
+signal joined(player_id: String, seat: int)
+signal state_reset()
+signal patched(ops: Array)
+signal acked(state_seq: int, intent_seqs: Array)
+signal event(name: String, data: Variant)
+signal error(code: String, message: String, ref_seq: int)
+signal disconnected(code: int, reason: String)
+
+const Patch = preload("res://addons/hearth/hearth_patch.gd")
+
+const PROTOCOL_VERSION := 1
+const MAX_MSGS_PER_SEC := 20
+const MAX_INTENTS_PER_MSG := 32
+const PING_INTERVAL_MS := 20000
+
+var _peer: WebSocketPeer = null
+var _schema_hash := ""
+var _opts: Dictionary = {}
+var _state = {}
+var _state_seq := 0
+var _player_id := ""
+var _next_intent_seq := 1
+var _pending: Array = []
+var _last_send_ms := -100000
+var _last_ping_ms := 0
+var _hello_sent := false
+var _desynced := false
+var _close_reported := false
+
+
+func connect_to_room(url: String, schema_hash: String, opts: Dictionary) -> void:
+	_schema_hash = schema_hash
+	_opts = opts
+	_state = {}
+	_state_seq = 0
+	_next_intent_seq = 1
+	_pending.clear()
+	_desynced = false
+	_hello_sent = false
+	_close_reported = false
+	_last_send_ms = -100000
+	_last_ping_ms = Time.get_ticks_msec()
+	_peer = WebSocketPeer.new()
+	var error_code := _peer.connect_to_url(url)
+	if error_code != OK:
+		_peer = null
+		_emit_error("BAD_FRAME", "WebSocketPeer.connect_to_url failed (%d)" % error_code, -1)
+
+
+func send_intent(intent) -> int:
+	var seq := _next_intent_seq
+	_next_intent_seq += 1
+	_pending.append({"seq": seq, "intent": intent})
+	return seq
+
+
+func leave() -> void:
+	if _peer != null and _peer.get_ready_state() == WebSocketPeer.STATE_OPEN:
+		_send({"op": "LEAVE"})
+		_peer.close()
+	_peer = null
+
+
+func get_state() -> Dictionary:
+	return _state if _state is Dictionary else {}
+
+
+func get_player_id() -> String:
+	return _player_id
+
+
+func _process(_delta: float) -> void:
+	if _peer == null:
+		return
+	_peer.poll()
+	var now := Time.get_ticks_msec()
+	match _peer.get_ready_state():
+		WebSocketPeer.STATE_OPEN:
+			if not _hello_sent:
+				_hello_sent = true
+				_send({
+					"op": "HELLO",
+					"protocol": PROTOCOL_VERSION,
+					"schema_hash": _schema_hash,
+					"opts": _opts,
+				})
+			while _peer.get_available_packet_count() > 0:
+				var packet := _peer.get_packet()
+				if not _peer.was_string_packet():
+					_emit_error("BAD_FRAME", "JSON mode received a binary frame", -1)
+					continue
+				_handle_text(packet.get_string_from_utf8())
+			if _peer != null and now - _last_ping_ms >= PING_INTERVAL_MS:
+				_last_ping_ms = now
+				_peer.send_text("hearth:ping")
+			_flush(now)
+		WebSocketPeer.STATE_CLOSED:
+			var code := _peer.get_close_code()
+			var reason := _peer.get_close_reason()
+			_peer = null
+			if not _close_reported:
+				_close_reported = true
+				disconnected.emit(code, reason)
+
+
+func _flush(now: int) -> void:
+	if _pending.is_empty():
+		return
+	if now - _last_send_ms < int(1000 / MAX_MSGS_PER_SEC):
+		return
+	var batch := _pending.slice(0, mini(MAX_INTENTS_PER_MSG, _pending.size()))
+	_pending = _pending.slice(batch.size())
+	_last_send_ms = now
+	_send({"op": "INTENT", "intents": batch})
+
+
+func _send(frame: Dictionary) -> void:
+	if _peer == null:
+		return
+	var error_code := _peer.send_text(JSON.stringify(frame))
+	if error_code != OK:
+		_emit_error("BAD_FRAME", "WebSocketPeer.send_text failed (%d)" % error_code, -1)
+
+
+func _handle_text(text: String) -> void:
+	# Keepalive frames are not protocol frames.
+	if text == "hearth:pong" or text == "hearth:ping":
+		return
+	var frame = JSON.parse_string(text)
+	if typeof(frame) != TYPE_DICTIONARY:
+		_emit_error("BAD_FRAME", "server sent invalid JSON", -1)
+		return
+	match String(frame.get("op", "")):
+		"JOIN_OK":
+			_player_id = String(frame.get("player_id", ""))
+			joined.emit(_player_id, int(frame.get("seat", 0)))
+		"FULL_STATE":
+			_state = frame.get("state", {})
+			_state_seq = int(frame.get("seq", 0))
+			_desynced = false
+			state_reset.emit()
+		"PATCH":
+			_handle_patch(frame)
+		"ACK":
+			acked.emit(int(frame.get("state_seq", 0)), frame.get("intent_seqs", []))
+		"EVENT":
+			event.emit(String(frame.get("name", "")), frame.get("data"))
+		"ERROR":
+			var ref_seq := -1
+			if frame.get("ref_seq") != null:
+				ref_seq = int(frame["ref_seq"])
+			_emit_error(String(frame.get("code", "INTERNAL")), String(frame.get("message", "")), ref_seq)
+		_:
+			_emit_error("BAD_FRAME", "unknown server frame op", -1)
+
+
+func _handle_patch(frame: Dictionary) -> void:
+	var seq := int(frame.get("seq", 0))
+	# A patch that is not newer than our tree is stale; after a desync we wait
+	# for the next FULL_STATE.
+	if _desynced or seq <= _state_seq:
+		return
+	var ops = frame.get("ops", [])
+	if typeof(ops) != TYPE_ARRAY:
+		_desync("PATCH has no ops array")
+		return
+	var next_state = _state
+	for op in ops:
+		if typeof(op) != TYPE_DICTIONARY:
+			_desync("patch op is not an object")
+			return
+		next_state = Patch.apply(next_state, op)
+		if next_state == null:
+			_desync("patch path does not apply")
+			return
+	_state = next_state
+	_state_seq = seq
+	patched.emit(ops)
+
+
+func _desync(message: String) -> void:
+	_desynced = true
+	_emit_error("DESYNC", message, -1)
+
+
+func _emit_error(code: String, message: String, ref_seq: int) -> void:
+	error.emit(code, message, ref_seq)

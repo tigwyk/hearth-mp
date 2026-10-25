@@ -1,0 +1,15 @@
+; Engine configuration file.
+; Hearth tic-tac-toe sample client. Run scripts/sync-addon.ps1 once, then open
+; this project in Godot (or `godot --headless --import --path .`).
+
+config_version=5
+
+[application]
+
+config/name="Hearth TicTacToe"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4")
+
+[autoload]
+
+Hearth="*res://addons/hearth/hearth_client.gd"
