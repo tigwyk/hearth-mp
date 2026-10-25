@@ -250,6 +250,12 @@ in the dashboard in production. Filter on the `hearth` field to find them.
 | `dispose` | A room was disposed, by the empty-room timer or by force-dispose. |
 | `handler_error` | A room handler returned an error; that pass's state changes, events and timers were rolled back. |
 | `state_incompatible` | The persisted state does not match this build's schema. Force-dispose the room. |
+| `tick_dropped` | A ticked room woke late and skipped `n` ticks (at most 3 catch-up steps run per wake). |
+| `tick_overrun` | A ticked room's steps took longer than one tick period (`ms` holds the time spent). |
+| `meta_error` | The room's lobby/matchmaker metadata could not be written; the room keeps running. |
+| `report_error` | A room report could not be queued for the matchmaker. |
+| `outbox_dropped` | A queued `ctx.notify` was dropped after 24 h without a successful delivery. |
+| `outbox_error` | A queued notify delivery failed; it retries with backoff. |
 
 Each line also carries the room, `player` when one applies, and `msg` for
 errors. Logs are for operators, not for game data: keep chat and secrets out of

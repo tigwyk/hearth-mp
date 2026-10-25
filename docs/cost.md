@@ -87,10 +87,10 @@ Two consequences worth internalising:
   and sending one intent per frame instead of batches multiplies it. Keep the
   SDK's batching on.
 
-`--ticked <hz>` models the ticked-mode runtime planned for v0.4 (not shipped yet):
-every tick is an alarm invocation, the room never hibernates, and state persists
-every `--persist-every` ticks (`setAlarm` and each persisted row are rows
-written).
+`--ticked <hz>` models the ticked-mode runtime (see [ticked.md](ticked.md)):
+every tick is an alarm invocation, the room never hibernates while a client is
+connected, and state persists every `--persist-every` ticks (`setAlarm` and each
+persisted row are rows written).
 
 ## The pricing table
 

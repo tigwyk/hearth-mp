@@ -174,6 +174,8 @@ changes, events and timers are rolled back.
   and services, reentrancy, and the internal call path.
 - [Matchmaking](docs/matchmaking.md): quick-join, seat reservations, pools, the
   lobby, region hints, room metadata, and private rooms.
+- [Ticked rooms](docs/ticked.md): fixed-step 5–20 Hz rooms, snapshot
+  interpolation, and shared-logic prediction.
 - [v0.1 implementation plan](docs/superpowers/plans/2026-10-25-hearth-v0.1-event-rooms.md)
 
 ## Licence
