@@ -25,6 +25,8 @@ struct RoomArgs {
     max_clients: Option<(i64, Span)>,
     empty_grace_secs: Option<u64>,
     reconnect_grace_secs: Option<u64>,
+    intent_rate: Option<u32>,
+    intent_burst: Option<u32>,
     binding: Option<(String, Span)>,
     rpc: Option<Span>,
 }
@@ -111,6 +113,8 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
     let max_clients = max_clients as u8;
     let empty_grace_secs = args.empty_grace_secs.unwrap_or(60);
     let reconnect_grace_secs = args.reconnect_grace_secs.unwrap_or(30);
+    let intent_rate = args.intent_rate.unwrap_or(60);
+    let intent_burst = args.intent_burst.unwrap_or(120);
 
     let room = self_ident(&item_impl)?;
     let self_ty = &item_impl.self_ty;
@@ -148,6 +152,8 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
                 ::std::time::Duration::from_secs(#empty_grace_secs);
             const RECONNECT_GRACE: ::std::time::Duration =
                 ::std::time::Duration::from_secs(#reconnect_grace_secs);
+            const INTENT_RATE: u32 = #intent_rate;
+            const INTENT_BURST: u32 = #intent_burst;
         }
 
         #callable
@@ -362,6 +368,28 @@ fn parse_room_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
                 let value = int_value(&meta, "reconnect_grace_secs")?;
                 args.reconnect_grace_secs = Some(value.base10_parse::<u64>()?);
             }
+            "intent_rate" => {
+                let value = int_value(&meta, "intent_rate")?;
+                let rate = value.base10_parse::<u32>()?;
+                if rate < 1 {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "intent_rate must be at least 1",
+                    ));
+                }
+                args.intent_rate = Some(rate);
+            }
+            "intent_burst" => {
+                let value = int_value(&meta, "intent_burst")?;
+                let burst = value.base10_parse::<u32>()?;
+                if burst < 1 {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "intent_burst must be at least 1",
+                    ));
+                }
+                args.intent_burst = Some(burst);
+            }
             "binding" => {
                 let value = str_value(&meta, "binding")?;
                 args.binding = Some((value.value(), value.span()));
@@ -505,4 +533,67 @@ fn snake_case(name: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn expanded(attr: &str) -> String {
+        let attr: TokenStream2 = attr.parse().expect("attribute tokens");
+        let item: TokenStream2 = quote! { impl Room for Game {} };
+        expand_room_impl(&attr, &item)
+            .expect("the attribute expands")
+            .to_string()
+    }
+
+    fn expansion_error(attr: &str) -> String {
+        let attr: TokenStream2 = attr.parse().expect("attribute tokens");
+        let item: TokenStream2 = quote! { impl Room for Game {} };
+        expand_room_impl(&attr, &item)
+            .expect_err("the attribute is rejected")
+            .to_string()
+    }
+
+    #[test]
+    fn intent_caps_are_emitted() {
+        let expanded = expanded(
+            "mode = \"event\", max_clients = 2, binding = \"GAME\", \
+             intent_rate = 5, intent_burst = 9",
+        );
+        assert!(
+            expanded.contains("const INTENT_RATE : u32 = 5u32"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("const INTENT_BURST : u32 = 9u32"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn intent_caps_default_to_v0_1_values() {
+        let expanded = expanded("mode = \"event\", max_clients = 2, binding = \"GAME\"");
+        assert!(
+            expanded.contains("const INTENT_RATE : u32 = 60u32"),
+            "{expanded}"
+        );
+        assert!(
+            expanded.contains("const INTENT_BURST : u32 = 120u32"),
+            "{expanded}"
+        );
+    }
+
+    #[test]
+    fn intent_rate_and_burst_must_be_at_least_one() {
+        let base = "mode = \"event\", max_clients = 2, binding = \"GAME\"";
+        assert_eq!(
+            expansion_error(&format!("{base}, intent_rate = 0")),
+            "intent_rate must be at least 1"
+        );
+        assert_eq!(
+            expansion_error(&format!("{base}, intent_burst = 0")),
+            "intent_burst must be at least 1"
+        );
+    }
 }

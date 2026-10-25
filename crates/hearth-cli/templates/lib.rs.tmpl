@@ -94,6 +94,11 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response
         // serves `/match` and `/lobby` when the HEARTH_MATCHMAKER binding exists.
         player: None,
         matchmaker: false,
+        // Login providers come from the worker env; the default enables anonymous.
+        auth: hearth_gateway::AuthConfig::default(),
+        // Per-IP and per-player rate limits; add the [[ratelimits]] bindings in
+        // wrangler.toml to turn them on. Without them, requests are unlimited.
+        limits: hearth_gateway::ratelimit::Limits::default(),
     };
     hearth_gateway::serve(req, env, &config).await
 }

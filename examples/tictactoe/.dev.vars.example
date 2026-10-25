@@ -5,3 +5,16 @@ HEARTH_SECRET=0000000000000000000000000000000000000000000000000000000000000000
 # Optional admin API (`/admin/*`, `hearth inspect`). Uncomment with a random token
 # of at least 32 bytes (openssl rand -hex 32). Without it the admin API is 404.
 # HEARTH_ADMIN_TOKEN=0000000000000000000000000000000000000000000000000000000000000000
+
+# Optional JWT provider (`POST /auth/jwt`, e2e: E2E_JWT=1). Serve the fixture JWKS
+# with `node jwks.mjs serve` in this directory, then uncomment these four lines.
+# Leave HEARTH_JWT_SECRET unset: HS256 is the alternative to a JWKS.
+# HEARTH_JWT_JWKS_URL=http://127.0.0.1:8799/jwks.json
+# HEARTH_JWT_ISS=https://e2e.hearth.test
+# HEARTH_JWT_AUD=hearth-e2e
+# HEARTH_JWT_NAME_CLAIM=name
+
+# Optional Steam / itch.io / Discord providers; see docs/auth.md for the secrets.
+# HEARTH_STEAM_APP_ID=480
+# HEARTH_AUTH_ITCH=1
+# HEARTH_DISCORD_CLIENT_ID=000000000000000000

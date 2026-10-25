@@ -17,9 +17,39 @@ pub(crate) const CREATE_STATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_s
 pub(crate) const CREATE_TIMERS_TABLE: &str =
     "CREATE TABLE IF NOT EXISTS hearth_timers (key TEXT PRIMARY KEY, due_ms INTEGER NOT NULL)";
 pub(crate) const CREATE_HELD_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_held (\
-    player_id TEXT PRIMARY KEY, seat INTEGER NOT NULL, until_ms INTEGER NOT NULL)";
+    player_id TEXT PRIMARY KEY, seat INTEGER NOT NULL, until_ms INTEGER NOT NULL, \
+    provider TEXT, display_name TEXT)";
 pub(crate) const CREATE_META_TABLE: &str =
     "CREATE TABLE IF NOT EXISTS hearth_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)";
+
+/// Add the v0.3b identity columns to a `hearth_held` table an older build
+/// created. SQLite has no `ADD COLUMN IF NOT EXISTS`, so read the current
+/// columns from `pragma_table_info` and run only the `ALTER TABLE`s that are
+/// actually missing. Old rows keep `NULL` in both columns, which reads as the
+/// anonymous provider.
+pub(crate) fn ensure_held_columns(sql: &dyn Sql) -> Result<()> {
+    let rows = sql.exec(
+        "SELECT name FROM pragma_table_info('hearth_held')",
+        Vec::new(),
+    )?;
+    let has = |column: &str| {
+        rows.iter()
+            .any(|row| row.get("name").and_then(Value::as_str) == Some(column))
+    };
+    if !has("provider") {
+        sql.exec(
+            "ALTER TABLE hearth_held ADD COLUMN provider TEXT",
+            Vec::new(),
+        )?;
+    }
+    if !has("display_name") {
+        sql.exec(
+            "ALTER TABLE hearth_held ADD COLUMN display_name TEXT",
+            Vec::new(),
+        )?;
+    }
+    Ok(())
+}
 
 /// Whether a table exists, without creating it.
 pub(crate) fn has_table(sql: &dyn Sql, name: &str) -> Result<bool> {

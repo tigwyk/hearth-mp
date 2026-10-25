@@ -21,7 +21,7 @@ use worker::{
 };
 
 use crate::call::{CallError, Envelope, Target};
-use crate::host::{Attachment, Host, RoomName, Sql, SqlValue};
+use crate::host::{Attachment, Host, RoomName, Session, Sql, SqlValue, ANON_PROVIDER};
 use crate::room::{Room, RoomRpc};
 use crate::runtime::RoomRuntime;
 use crate::service::{PlayerService, Service, ServiceRuntime};
@@ -345,12 +345,27 @@ impl<R: Room> RoomObject<R> {
         };
 
         let matchmaker = headers.get("X-Hearth-Matchmaker")?;
+        // These headers are set by the gateway from a *verified* token only; a
+        // player can never reach this internal path. The room trusts them and
+        // never sees the raw credential.
+        let provider = headers
+            .get("X-Hearth-Provider")?
+            .unwrap_or_else(|| ANON_PROVIDER.to_owned());
+        let display_name = headers
+            .get("X-Hearth-Display-Name")?
+            .map(|value| percent_decode(&value))
+            .filter(|name| !name.is_empty());
+        let session = Session {
+            player: PlayerId(player_id),
+            provider,
+            display_name,
+        };
         let pair = WebSocketPair::new()?;
         self.state.accept_web_socket(&pair.server);
         self.rt
             .lock()
             .await
-            .connect(pair.server.clone(), PlayerId(player_id), room, matchmaker)
+            .connect(pair.server.clone(), session, room, matchmaker)
             .await;
         Response::from_websocket(pair.client)
     }
@@ -617,6 +632,35 @@ fn parse_room_name(value: &str) -> Option<RoomName> {
 
 fn runtime_error(error: impl std::fmt::Display) -> worker::Error {
     worker::Error::RustError(format!("{error}"))
+}
+
+/// Decode a percent-encoded header value (`%XX`). The gateway percent-encodes
+/// the display name so CR/LF can never reach a header; a malformed escape is
+/// kept literally rather than panicking the room.
+fn percent_decode(value: &str) -> String {
+    fn hex(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+    let bytes = value.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            if let (Some(high), Some(low)) = (hex(bytes[index + 1]), hex(bytes[index + 2])) {
+                decoded.push(high << 4 | low);
+                index += 3;
+                continue;
+            }
+        }
+        decoded.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&decoded).into_owned()
 }
 
 fn to_binding(value: SqlValue) -> SqlStorageValue {

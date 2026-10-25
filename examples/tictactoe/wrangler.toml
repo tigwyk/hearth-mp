@@ -40,3 +40,16 @@ new_sqlite_classes = ["TttPlayerObject", "HearthMatchmaker"]
 # handler error and incompatible-state wake.
 [observability]
 enabled = true
+
+# Abuse limits. The per-IP limit is generous because many players can share one
+# IP (CGNAT, schools); the per-player limit is the tight one. Without these
+# bindings the gateway allows every request and logs `ratelimit_disabled` once.
+[[ratelimits]]
+name = "HEARTH_IP_LIMIT"
+namespace_id = "1001"
+simple = { limit = 300, period = 60 }
+
+[[ratelimits]]
+name = "HEARTH_PLAYER_LIMIT"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }

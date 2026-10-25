@@ -1,0 +1,5 @@
+error: intent_burst must be at least 1
+ --> tests/ui/intent_burst_zero.rs:7:74
+  |
+7 | #[room(mode = "event", max_clients = 2, binding = "GAME", intent_burst = 0)]
+  |                                                                          ^

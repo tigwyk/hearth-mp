@@ -25,6 +25,10 @@ pub trait Sql {
     ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>>;
 }
 
+/// The provider every unauthenticated client gets. The gateway namespaces
+/// player ids per provider (`anon_`, `jwt_`, ...); this is the room's default.
+pub const ANON_PROVIDER: &str = "anon";
+
 /// Per-socket data that survives hibernation. Stored in the WebSocket
 /// attachment, so rebuilding a view never needs a storage read.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -36,6 +40,39 @@ pub struct Attachment {
     /// alive. Defaulted so attachments written before v0.2c still decode.
     #[serde(default)]
     pub admin: bool,
+    /// The gateway-verified provider (`"anon"`, `"jwt"`, `"steam"`, ...).
+    /// Defaulted to anonymous so attachments written before v0.3b still decode.
+    #[serde(default = "anon_provider")]
+    pub provider: String,
+    /// The gateway-verified display name, if the provider supplied one.
+    #[serde(default)]
+    pub display_name: Option<String>,
+}
+
+/// The serde default for [`Attachment::provider`].
+fn anon_provider() -> String {
+    ANON_PROVIDER.to_owned()
+}
+
+/// A player identity verified by the gateway before the connect. Rooms never
+/// see raw credentials: only this reaches the runtime.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Session {
+    pub player: PlayerId,
+    pub provider: String,
+    pub display_name: Option<String>,
+}
+
+impl Session {
+    /// The identity of a client that was never authenticated: provider
+    /// `"anon"` and no display name.
+    pub fn anon(player: PlayerId) -> Self {
+        Self {
+            player,
+            provider: ANON_PROVIDER.to_owned(),
+            display_name: None,
+        }
+    }
 }
 
 /// A Durable Object room's identity: its type (`"tictactoe"`) and its name.

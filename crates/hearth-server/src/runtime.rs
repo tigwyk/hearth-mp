@@ -9,7 +9,7 @@ use hearth_sync::{diff, HearthState};
 use crate::admin::{Cause, InspectClient, InspectDoc, TailMsg};
 use crate::call::{rpc_from_value, rpc_to_value, CallError, Caller, Envelope, HostCaller, Target};
 use crate::ctx::{Ctx, Effect};
-use crate::host::{Attachment, Host, RoomName, RoomReport, SqlValue};
+use crate::host::{Attachment, Host, RoomName, RoomReport, Session, SqlValue, ANON_PROVIDER};
 use crate::outbox;
 use crate::room::{Client, JoinOpts, Leave, Room, RoomRpc, TimerKey};
 use crate::store;
@@ -29,11 +29,6 @@ const REGISTRY_NAME: &str = "global";
 /// Binding of the optional matchmaker. A room whose gateway told it which
 /// matchmaker pools it also reports there.
 const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
-
-/// Per-player intent bucket: capacity 120 intents, refill 60/s. Hibernation
-/// resets the bucket, which is intended: a room only hibernates when quiet.
-const INTENT_BUCKET_CAPACITY: f64 = 120.0;
-const INTENT_REFILL_PER_MS: f64 = 60.0 / 1000.0;
 
 /// Event-mode room runtime. One instance lives behind the room's async mutex;
 /// `new` after hibernation rebuilds everything from the [`Host`] (SQLite and
@@ -77,6 +72,15 @@ type Lobby = (Vec<PlayerId>, u8, bool, Value);
 struct TokenBucket {
     tokens: f64,
     last_ms: u64,
+}
+
+/// One held seat's `hearth_held` row, including the verified identity written
+/// when the socket dropped.
+struct HeldSeat {
+    seat: u8,
+    until_ms: u64,
+    provider: String,
+    display_name: Option<String>,
 }
 
 impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
@@ -158,7 +162,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     pub async fn connect(
         &mut self,
         socket: H::Socket,
-        player: PlayerId,
+        session: Session,
         room: RoomName,
         matchmaker: Option<String>,
     ) {
@@ -178,6 +182,11 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 }));
             }
         }
+        let Session {
+            player,
+            provider,
+            display_name,
+        } = session;
         let mut kept_seat = None;
         for existing in self.host.sockets() {
             if existing == socket {
@@ -200,6 +209,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                             seat: None,
                             encoding: None,
                             admin: false,
+                            provider: provider.clone(),
+                            display_name: display_name.clone(),
                         },
                     );
                     self.host
@@ -214,6 +225,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 seat: kept_seat,
                 encoding: None,
                 admin: false,
+                provider,
+                display_name,
             },
         );
     }
@@ -260,6 +273,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 seat: None,
                 encoding: None,
                 admin: true,
+                provider: ANON_PROVIDER.to_owned(),
+                display_name: None,
             },
         );
     }
@@ -427,7 +442,11 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .into_iter()
             .map(|(_, attachment)| attachment.player_id)
             .collect();
-        players.extend(self.held_rows()?.into_iter().map(|(player, _)| player));
+        players.extend(
+            self.held_clients()?
+                .into_iter()
+                .map(|client| client.player_id),
+        );
         players.sort_by(|left, right| left.0.cmp(&right.0));
         Ok(players)
     }
@@ -699,18 +718,12 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 player_id: attachment.player_id,
                 seat: attachment.seat.unwrap_or(0),
                 connected: true,
+                provider: attachment.provider,
+                display_name: attachment.display_name,
             })
             .collect();
         if self.has_table("hearth_held")? {
-            roster.extend(
-                self.held_rows()?
-                    .into_iter()
-                    .map(|(player_id, seat)| Client {
-                        player_id,
-                        seat,
-                        connected: false,
-                    }),
-            );
+            roster.extend(self.held_clients()?);
         }
         Ok(roster)
     }
@@ -982,6 +995,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             player_id: attachment.player_id.clone(),
             seat,
             connected: true,
+            provider: attachment.provider.clone(),
+            display_name: attachment.display_name.clone(),
         };
         let before = self.views();
         let mut effects = Vec::new();
@@ -1012,6 +1027,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                         seat: None,
                         encoding: Some(wire_encoding),
                         admin: false,
+                        provider: attachment.provider.clone(),
+                        display_name: attachment.display_name.clone(),
                     },
                 );
                 self.send_error(
@@ -1034,6 +1051,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             seat: Some(seat),
             encoding: Some(wire_encoding),
             admin: false,
+            provider: attachment.provider.clone(),
+            display_name: attachment.display_name.clone(),
         };
         self.host.set_attachment(&socket, &joined_attachment);
         // A join during the empty-room grace period cancels the dispose.
@@ -1086,6 +1105,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
 
     /// Complete a resumed `HELLO`: delete the held row and its grace timer, send
     /// `JOIN_OK` + `FULL_STATE`, then run `on_reconnect` as a handler pass.
+    ///
+    /// The identity comes from the held row, not from the connect's session: a
+    /// resume keeps the values the player originally joined with.
     async fn resume(
         &mut self,
         socket: H::Socket,
@@ -1093,17 +1115,24 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         wire_encoding: Encoding,
         seat: u8,
     ) -> Result<()> {
+        let identity = self.held_identity(&attachment.player_id)?;
         self.expire_held(&attachment.player_id)?;
+        let (provider, display_name) = identity
+            .unwrap_or_else(|| (attachment.provider.clone(), attachment.display_name.clone()));
         let who = Client {
             player_id: attachment.player_id.clone(),
             seat,
             connected: true,
+            provider: provider.clone(),
+            display_name: display_name.clone(),
         };
         let joined_attachment = Attachment {
             player_id: attachment.player_id.clone(),
             seat: Some(seat),
             encoding: Some(wire_encoding),
             admin: false,
+            provider,
+            display_name,
         };
         self.host.set_attachment(&socket, &joined_attachment);
         let view = self
@@ -1185,6 +1214,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             player_id: attachment.player_id.clone(),
             seat: attachment.seat.unwrap_or(0),
             connected: true,
+            provider: attachment.provider.clone(),
+            display_name: attachment.display_name.clone(),
         };
         let before = self.views();
         let admin_before = self.admin_before();
@@ -1298,6 +1329,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.host.set_attachment(
                 &socket,
                 &Attachment {
+                    provider: attachment.provider.clone(),
+                    display_name: attachment.display_name.clone(),
                     player_id: attachment.player_id,
                     seat: None,
                     encoding: None,
@@ -1323,11 +1356,14 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .now_ms()
             .saturating_add(R::RECONNECT_GRACE.as_millis() as u64);
         self.host.sql().exec(
-            "INSERT OR REPLACE INTO hearth_held (player_id, seat, until_ms) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO hearth_held \
+             (player_id, seat, until_ms, provider, display_name) VALUES (?, ?, ?, ?, ?)",
             vec![
                 SqlValue::Text(player.0.clone()),
                 SqlValue::Int(i64::from(seat)),
                 SqlValue::Int(due as i64),
+                SqlValue::Text(attachment.provider.clone()),
+                optional_text(&attachment.display_name),
             ],
         )?;
         self.timer_set(&grace_timer_key(&player), due)?;
@@ -1337,6 +1373,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.host.set_attachment(
             &socket,
             &Attachment {
+                provider: attachment.provider.clone(),
+                display_name: attachment.display_name.clone(),
                 player_id: player.clone(),
                 seat: None,
                 encoding: None,
@@ -1347,6 +1385,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             player_id: player,
             seat,
             connected: false,
+            provider: attachment.provider,
+            display_name: attachment.display_name,
         };
         let before = self.views();
         let admin_before = self.admin_before();
@@ -1488,6 +1528,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.host.set_attachment(
                 &socket,
                 &Attachment {
+                    provider: attachment.provider.clone(),
+                    display_name: attachment.display_name.clone(),
                     player_id: attachment.player_id,
                     seat: None,
                     encoding: None,
@@ -1500,6 +1542,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             player_id: attachment.player_id.clone(),
             seat,
             connected: false,
+            provider: attachment.provider.clone(),
+            display_name: attachment.display_name.clone(),
         };
         let before = self.views();
         let admin_before = self.admin_before();
@@ -1521,6 +1565,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.host.set_attachment(
             &socket,
             &Attachment {
+                provider: attachment.provider.clone(),
+                display_name: attachment.display_name.clone(),
                 player_id: attachment.player_id,
                 seat: None,
                 encoding: None,
@@ -1560,7 +1606,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     async fn run_held_leave(
         &mut self,
         player: &PlayerId,
-        seat: u8,
+        held: &HeldSeat,
         reason: Leave,
         leave_ms: Option<u64>,
     ) -> Result<()> {
@@ -1569,8 +1615,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         }
         let who = Client {
             player_id: player.clone(),
-            seat,
+            seat: held.seat,
             connected: false,
+            provider: held.provider.clone(),
+            display_name: held.display_name.clone(),
         };
         let before = self.views();
         let admin_before = self.admin_before();
@@ -1617,10 +1665,11 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
 
     /// Fired by a held seat's grace timer: delete the row, then `on_leave(Closed)`.
     async fn run_grace_expired(&mut self, player: &PlayerId) -> Result<()> {
-        let Some((seat, until_ms)) = self.expire_held(player)? else {
+        let Some(held) = self.expire_held(player)? else {
             return Ok(());
         };
-        self.run_held_leave(player, seat, Leave::Closed, Some(until_ms))
+        let until_ms = held.until_ms;
+        self.run_held_leave(player, &held, Leave::Closed, Some(until_ms))
             .await
     }
 
@@ -1741,9 +1790,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 self.run_leave(socket.clone(), attachment, Leave::Kicked)
                     .await?;
                 self.host.close(&socket, close::KICKED, "kicked");
-            } else if let Some((seat, _)) = self.expire_held(&player)? {
+            } else if let Some(held) = self.expire_held(&player)? {
                 // Kicking a held player deletes the row and calls on_leave.
-                self.run_held_leave(&player, seat, Leave::Kicked, None)
+                self.run_held_leave(&player, &held, Leave::Kicked, None)
                     .await?;
             }
         }
@@ -1790,6 +1839,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .sql()
             .exec(store::CREATE_TIMERS_TABLE, Vec::new())?;
         self.host.sql().exec(store::CREATE_HELD_TABLE, Vec::new())?;
+        store::ensure_held_columns(self.host.sql())?;
         self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
         outbox::create(self.host.sql())?;
         if self.identity.is_none() {
@@ -1910,11 +1960,13 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     }
 
     fn take_token(&mut self, player: &PlayerId, now_ms: u64) -> bool {
+        // A room can tune both numbers with its `#[hearth::room]` attributes.
+        let burst = f64::from(R::INTENT_BURST);
+        let refill_per_ms = f64::from(R::INTENT_RATE) / 1000.0;
         if let Some(index) = self.buckets.iter().position(|(id, _)| id == player) {
             let bucket = &mut self.buckets[index].1;
             let elapsed = now_ms.saturating_sub(bucket.last_ms);
-            bucket.tokens =
-                (bucket.tokens + elapsed as f64 * INTENT_REFILL_PER_MS).min(INTENT_BUCKET_CAPACITY);
+            bucket.tokens = (bucket.tokens + elapsed as f64 * refill_per_ms).min(burst);
             bucket.last_ms = now_ms;
             if bucket.tokens >= 1.0 {
                 bucket.tokens -= 1.0;
@@ -1926,7 +1978,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.buckets.push((
                 player.clone(),
                 TokenBucket {
-                    tokens: INTENT_BUCKET_CAPACITY - 1.0,
+                    tokens: burst - 1.0,
                     last_ms: now_ms,
                 },
             ));
@@ -1954,24 +2006,18 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 player_id: attachment.player_id,
                 seat: attachment.seat.unwrap_or(0),
                 connected: true,
+                provider: attachment.provider,
+                display_name: attachment.display_name,
             })
             .collect();
-        roster.extend(
-            self.held_rows()?
-                .into_iter()
-                .map(|(player_id, seat)| Client {
-                    player_id,
-                    seat,
-                    connected: false,
-                }),
-        );
+        roster.extend(self.held_clients()?);
         Ok(roster)
     }
 
     /// Every live or held seat, in player order.
-    fn held_rows(&self) -> Result<Vec<(PlayerId, u8)>> {
+    fn held_clients(&self) -> Result<Vec<Client>> {
         let rows = self.host.sql().exec(
-            "SELECT player_id, seat FROM hearth_held ORDER BY player_id",
+            "SELECT player_id, seat, provider, display_name FROM hearth_held ORDER BY player_id",
             Vec::new(),
         )?;
         let mut held = Vec::with_capacity(rows.len());
@@ -1982,9 +2028,43 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             let Some(seat) = row.get("seat").and_then(Value::as_u64) else {
                 continue;
             };
-            held.push((PlayerId(player.to_owned()), seat as u8));
+            held.push(Client {
+                player_id: PlayerId(player.to_owned()),
+                seat: seat as u8,
+                connected: false,
+                // Rows written before v0.3b have NULL identity columns.
+                provider: row
+                    .get("provider")
+                    .and_then(Value::as_str)
+                    .unwrap_or(ANON_PROVIDER)
+                    .to_owned(),
+                display_name: row
+                    .get("display_name")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            });
         }
         Ok(held)
+    }
+
+    /// A held seat's stored identity, if it has a row.
+    fn held_identity(&self, player: &PlayerId) -> Result<Option<(String, Option<String>)>> {
+        let rows = self.host.sql().exec(
+            "SELECT provider, display_name FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        let Some(row) = rows.first() else {
+            return Ok(None);
+        };
+        Ok(Some((
+            row.get("provider")
+                .and_then(Value::as_str)
+                .unwrap_or(ANON_PROVIDER)
+                .to_owned(),
+            row.get("display_name")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        )))
     }
 
     fn held_seat(&self, player: &PlayerId) -> Result<Option<u8>> {
@@ -1999,41 +2079,50 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .map(|seat| seat as u8))
     }
 
-    /// Delete a held seat's row and grace timer. Returns the seat and the
-    /// scheduled expiry if it was held.
-    fn expire_held(&self, player: &PlayerId) -> Result<Option<(u8, u64)>> {
-        let Some(seat) = self.held_seat(player)? else {
+    /// Delete a held seat's row and grace timer. Returns everything the row
+    /// carried, including the identity written when the socket dropped.
+    fn expire_held(&self, player: &PlayerId) -> Result<Option<HeldSeat>> {
+        let rows = self.host.sql().exec(
+            "SELECT seat, until_ms, provider, display_name FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        let Some(row) = rows.first() else {
             return Ok(None);
         };
-        let until_ms = self
-            .held_until(player)?
-            .unwrap_or_else(|| self.host.now_ms());
+        let Some(seat) = row.get("seat").and_then(Value::as_u64) else {
+            return Ok(None);
+        };
+        let held = HeldSeat {
+            seat: seat as u8,
+            until_ms: row
+                .get("until_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or_else(|| self.host.now_ms()),
+            provider: row
+                .get("provider")
+                .and_then(Value::as_str)
+                .unwrap_or(ANON_PROVIDER)
+                .to_owned(),
+            display_name: row
+                .get("display_name")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+        };
         self.host.sql().exec(
             "DELETE FROM hearth_held WHERE player_id = ?",
             vec![SqlValue::Text(player.0.clone())],
         )?;
         self.timer_delete(&grace_timer_key(player))?;
-        Ok(Some((seat, until_ms)))
-    }
-
-    fn held_until(&self, player: &PlayerId) -> Result<Option<u64>> {
-        let rows = self.host.sql().exec(
-            "SELECT until_ms FROM hearth_held WHERE player_id = ?",
-            vec![SqlValue::Text(player.0.clone())],
-        )?;
-        Ok(rows
-            .first()
-            .and_then(|row| row.get("until_ms"))
-            .and_then(Value::as_u64))
+        Ok(Some(held))
     }
 
     /// Live joined sockets plus held seats.
     fn occupied(&self) -> Result<usize> {
-        Ok(self.joined().len() + self.held_rows()?.len())
+        Ok(self.joined().len() + self.held_clients()?.len())
     }
 
     fn any_live_or_held(&self) -> Result<bool> {
-        Ok(!self.joined().is_empty() || !self.held_rows()?.is_empty())
+        Ok(!self.joined().is_empty() || !self.held_clients()?.is_empty())
     }
 
     fn views(&self) -> Vec<(H::Socket, Value)> {
@@ -2122,7 +2211,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             .iter()
             .filter_map(|(_, attachment)| attachment.seat)
             .collect();
-        taken.extend(self.held_rows()?.into_iter().map(|(_, seat)| seat));
+        taken.extend(self.held_clients()?.into_iter().map(|client| client.seat));
         Ok((0..R::MAX_CLIENTS)
             .find(|seat| !taken.contains(seat))
             .unwrap_or(0))
@@ -2228,6 +2317,14 @@ fn leave_reason(reason: Leave) -> &'static str {
         Leave::Closed => "closed",
         Leave::Left => "left",
         Leave::Kicked => "kicked",
+    }
+}
+
+/// A nullable TEXT column value.
+fn optional_text(value: &Option<String>) -> SqlValue {
+    match value {
+        Some(text) => SqlValue::Text(text.clone()),
+        None => SqlValue::Null,
     }
 }
 

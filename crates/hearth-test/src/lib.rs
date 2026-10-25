@@ -16,7 +16,7 @@ use std::time::Duration;
 use futures::executor::block_on;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
-use hearth_server::{schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Sql};
+use hearth_server::{schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Session, Sql};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
 
@@ -45,8 +45,9 @@ pub struct TestRoom<R: Room> {
     runtime: Option<RoomRuntime<R, MemHost>>,
     clients: Vec<TestClient>,
     sockets: Vec<Socket>,
-    /// The player and encoding behind each client, so `resume` can reconnect.
-    players: Vec<(PlayerId, Encoding)>,
+    /// The verified identity and encoding behind each client, so `resume` can
+    /// reconnect with the same identity.
+    players: Vec<(Session, Encoding)>,
     /// Admin tail sockets, addressed by the `C` values `tail` returns.
     tails: Vec<AdminTail>,
 }
@@ -79,10 +80,25 @@ impl<R: Room> TestRoom<R> {
 
     /// Join a client with a fresh `HELLO` in `encoding`.
     pub fn join_with(&mut self, player: &str, encoding: Encoding, opts: Value) -> C {
-        let player = PlayerId(player.to_owned());
+        let session = Session::anon(PlayerId(player.to_owned()));
+        self.join_session(session, encoding, opts)
+    }
+
+    /// Join a client with the identity the gateway verified, MessagePack
+    /// encoded and with no `HELLO` options.
+    pub fn join_as(&mut self, player: &str, provider: &str, display_name: Option<&str>) -> C {
+        let session = Session {
+            player: PlayerId(player.to_owned()),
+            provider: provider.to_owned(),
+            display_name: display_name.map(str::to_owned),
+        };
+        self.join_session(session, Encoding::MsgPack, Value::Null)
+    }
+
+    fn join_session(&mut self, session: Session, encoding: Encoding, opts: Value) -> C {
         let room = self.room_name();
-        let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player, room, None));
+        let (index, socket) = self.spawn_client(session.clone(), encoding);
+        block_on(self.runtime().connect(socket, session, room, None));
         let hello = self.clients[index].core.hello(opts);
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -91,10 +107,10 @@ impl<R: Room> TestRoom<R> {
 
     /// Register a socket and a client core without sending `HELLO`.
     pub fn connect_raw(&mut self, player: &str) -> C {
-        let player = PlayerId(player.to_owned());
+        let session = Session::anon(PlayerId(player.to_owned()));
         let room = self.room_name();
-        let (index, socket) = self.spawn_client(player.clone(), Encoding::MsgPack);
-        block_on(self.runtime().connect(socket, player, room, None));
+        let (index, socket) = self.spawn_client(session.clone(), Encoding::MsgPack);
+        block_on(self.runtime().connect(socket, session, room, None));
         self.pump();
         C(index)
     }
@@ -141,10 +157,10 @@ impl<R: Room> TestRoom<R> {
 
     /// Reconnect `c`'s player on a new socket with a fresh `HELLO`.
     pub fn resume(&mut self, c: C) -> C {
-        let (player, encoding) = self.players[c.0].clone();
+        let (session, encoding) = self.players[c.0].clone();
         let room = self.room_name();
-        let (index, socket) = self.spawn_client(player.clone(), encoding);
-        block_on(self.runtime().connect(socket, player, room, None));
+        let (index, socket) = self.spawn_client(session.clone(), encoding);
+        block_on(self.runtime().connect(socket, session, room, None));
         let hello = self.clients[index].core.hello(serde_json::json!({}));
         block_on(self.runtime().message(socket, hello));
         self.pump();
@@ -250,7 +266,7 @@ impl<R: Room> TestRoom<R> {
         self.tails[c.0].closed.clone()
     }
 
-    fn spawn_client(&mut self, player: PlayerId, encoding: Encoding) -> (usize, Socket) {
+    fn spawn_client(&mut self, session: Session, encoding: Encoding) -> (usize, Socket) {
         let socket = self.host.open_socket();
         let mut config = ClientConfig::new(schema_hash_hex::<R>(), encoding);
         // The harness drives `poll_send` by hand at one virtual instant, so the
@@ -264,7 +280,7 @@ impl<R: Room> TestRoom<R> {
             closed: None,
         });
         self.sockets.push(socket);
-        self.players.push((player, encoding));
+        self.players.push((session, encoding));
         (index, socket)
     }
 

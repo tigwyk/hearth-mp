@@ -266,15 +266,21 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
     &ROUTES
 }
 
-/// The gateway's optional features: `GET /me` and the matchmaker routes.
-fn gateway_config() -> hearth_gateway::GatewayConfig {
-    hearth_gateway::GatewayConfig {
+/// The gateway's optional features and login providers.
+///
+/// The auth providers come from the environment (`.dev.vars` locally, Worker
+/// variables and secrets in production), so this deployment enables anonymous
+/// logins unless `HEARTH_AUTH_ANONYMOUS=0`, plus whatever else is configured.
+fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
+    Ok(hearth_gateway::GatewayConfig {
         rooms: room_routes(),
         player: Some(hearth_gateway::PlayerRoute {
             binding: "TTT_PLAYER",
         }),
         matchmaker: true,
-    }
+        auth: hearth_gateway::AuthConfig::from_env(env)?,
+        limits: hearth_gateway::ratelimit::Limits::default(),
+    })
 }
 
 /// The gateway Worker entry: auth, routing, and the tictactoe room route.
@@ -285,5 +291,10 @@ async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response>
     if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
         return hearth::admin::serve_admin(req, env, room_routes()).await;
     }
-    hearth_gateway::serve(req, env, &gateway_config()).await
+    // A provider configured wrongly fails loudly instead of silently disabling.
+    let config = match gateway_config(&env) {
+        Ok(config) => config,
+        Err(message) => return Response::error(message, 500),
+    };
+    hearth_gateway::serve(req, env, &config).await
 }

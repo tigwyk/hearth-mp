@@ -23,7 +23,7 @@ pub use admin::{Cause, InspectClient, InspectDoc, TailMsg};
 pub use call::{CallError, Callable, Envelope, Target};
 pub use ctx::Ctx;
 pub use hearth_protocol::PlayerId;
-pub use host::{Attachment, Host, RoomName, RoomReport, Sql, SqlValue};
+pub use host::{Attachment, Host, RoomName, RoomReport, Session, Sql, SqlValue, ANON_PROVIDER};
 pub use room::{Client, JoinOpts, Leave, Mode, Room, RoomConfig, RoomRpc, TimerKey};
 pub use runtime::RoomRuntime;
 pub use schema::{schema_doc, schema_hash, schema_hash_hex, SchemaDoc, HEARTH_SCHEMA_VERSION};

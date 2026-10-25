@@ -20,7 +20,7 @@ use hearth_protocol::{Encoding, PlayerId, Value, WireMsg};
 use hearth_server::call::{CallError, Callable, Envelope, Target};
 use hearth_server::{
     schema_hash_hex, Attachment, Host, InspectDoc, Result, Room, RoomName, RoomRpc, RoomRuntime,
-    Service, ServiceRuntime, Sql, SqlValue,
+    Service, ServiceRuntime, Session, Sql, SqlValue,
 };
 
 use crate::mem_host::MemHost;
@@ -90,7 +90,7 @@ trait AnyObject {
     fn connect<'a>(
         &'a mut self,
         socket: usize,
-        player: PlayerId,
+        session: Session,
         room: RoomName,
     ) -> LocalBoxFuture<'a, ()>;
     fn connect_admin(&mut self, socket: usize) -> LocalBoxFuture<'_, ()>;
@@ -123,10 +123,10 @@ impl<R: Room> AnyObject for RoomSlot<R> {
     fn connect<'a>(
         &'a mut self,
         socket: usize,
-        player: PlayerId,
+        session: Session,
         room: RoomName,
     ) -> LocalBoxFuture<'a, ()> {
-        Box::pin(async move { self.rt.connect(socket, player, room, None).await })
+        Box::pin(async move { self.rt.connect(socket, session, room, None).await })
     }
 
     fn connect_admin(&mut self, socket: usize) -> LocalBoxFuture<'_, ()> {
@@ -196,7 +196,7 @@ impl<S: Service> AnyObject for ServiceSlot<S> {
     fn connect<'a>(
         &'a mut self,
         _socket: usize,
-        _player: PlayerId,
+        _session: Session,
         _room: RoomName,
     ) -> LocalBoxFuture<'a, ()> {
         Box::pin(async {})
@@ -277,7 +277,7 @@ struct Inner {
     partitions: RefCell<HashSet<String>>,
     clients: RefCell<Vec<TestClient>>,
     client_sockets: RefCell<Vec<usize>>,
-    client_players: RefCell<Vec<(PlayerId, Encoding)>>,
+    client_players: RefCell<Vec<(Session, Encoding)>>,
     client_rooms: RefCell<Vec<Key>>,
     tails: RefCell<Vec<AdminTail>>,
     tail_rooms: RefCell<Vec<Key>>,
@@ -475,17 +475,38 @@ impl TestWorld {
         self.hello(c, encoding, opts)
     }
 
+    /// Join a player with the identity the gateway verified, MessagePack
+    /// encoded and with no `HELLO` options.
+    pub fn join_as(
+        &mut self,
+        room: &RoomRef,
+        player: &str,
+        provider: &str,
+        display_name: Option<&str>,
+    ) -> C {
+        let session = Session {
+            player: PlayerId(player.to_owned()),
+            provider: provider.to_owned(),
+            display_name: display_name.map(str::to_owned),
+        };
+        let c = self.connect_raw_as(room, session);
+        self.hello(c, Encoding::MsgPack, Value::Null)
+    }
+
     /// Register a socket and a client core without sending `HELLO`.
     pub fn connect_raw(&mut self, room: &RoomRef, player: &str) -> C {
+        self.connect_raw_as(room, Session::anon(PlayerId(player.to_owned())))
+    }
+
+    fn connect_raw_as(&mut self, room: &RoomRef, session: Session) -> C {
         let socket = self.open_socket();
-        let c = self.push_client(room, PlayerId(player.to_owned()), Encoding::MsgPack, socket);
-        let player = PlayerId(player.to_owned());
+        let c = self.push_client(room, session.clone(), Encoding::MsgPack, socket);
         let room_name = RoomName {
             room_type: room.key.binding.clone(),
             name: room.key.name.clone(),
         };
         self.with_object(&room.key, |obj| {
-            Box::pin(async move { obj.connect(socket, player, room_name).await })
+            Box::pin(async move { obj.connect(socket, session, room_name).await })
         });
         self.pump();
         c
@@ -511,17 +532,17 @@ impl TestWorld {
 
     /// Reconnect a dropped player on a new socket with a fresh `HELLO`.
     pub fn resume(&mut self, room: &RoomRef, c: C) -> C {
-        let (player, encoding) = self.inner.client_players.borrow()[c.0].clone();
+        let (session, encoding) = self.inner.client_players.borrow()[c.0].clone();
         let socket = self.open_socket();
         let room_name = RoomName {
             room_type: room.key.binding.clone(),
             name: room.key.name.clone(),
         };
-        let reconnect = player.clone();
+        let reconnect = session.clone();
         self.with_object(&room.key, |obj| {
             Box::pin(async move { obj.connect(socket, reconnect, room_name).await })
         });
-        let c = self.push_client(room, player, encoding, socket);
+        let c = self.push_client(room, session, encoding, socket);
         let hello = self.inner.clients.borrow_mut()[c.0].core.hello(Value::Null);
         self.deliver(socket, hello);
         self.pump();
@@ -707,7 +728,7 @@ impl TestWorld {
     fn push_client(
         &mut self,
         room: &RoomRef,
-        player: PlayerId,
+        session: Session,
         encoding: Encoding,
         socket: usize,
     ) -> C {
@@ -725,7 +746,7 @@ impl TestWorld {
         self.inner
             .client_players
             .borrow_mut()
-            .push((player, encoding));
+            .push((session, encoding));
         self.inner.client_rooms.borrow_mut().push(room.key.clone());
         C(index)
     }

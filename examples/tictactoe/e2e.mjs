@@ -1,20 +1,25 @@
-// Hearth v0.1/v0.2c end-to-end test for the tictactoe sample.
+// Hearth end-to-end test for the tictactoe sample (v0.1 through v0.3b).
 //
 // Requires `wrangler dev` in examples/tictactoe (default http://127.0.0.1:8787).
 // Run: node e2e.mjs
 //   HEARTH_ADMIN_TOKEN must match the one in examples/tictactoe/.dev.vars for the
 //   admin checks. E2E_NO_ADMIN=1 runs the "admin API disabled" phase against a
-//   server started without HEARTH_ADMIN_TOKEN. E2E_KEEP_ROOM=1 skips the
-//   force-dispose step (for `hearth inspect` by hand).
+//   server started without HEARTH_ADMIN_TOKEN. E2E_RATELIMIT=1 runs only the
+//   rate-limit phase against a server started from `wrangler.e2e-ratelimit.toml`,
+//   whose tiny limits are what make a 429 reachable in a few requests.
+//   E2E_KEEP_ROOM=1 skips the force-dispose step (for `hearth inspect` by hand).
 // Exits 0 on success; prints the failed check and exits 1 otherwise.
 import http from 'node:http';
-import { randomBytes } from 'node:crypto';
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
+import { ensureKeys, mintJwt, startJwksServer, EC_KID, PORT as JWKS_PORT, RSA_KID } from './jwks.mjs';
 
 const BASE = process.env.HEARTH_URL ?? 'http://127.0.0.1:8787';
 const WS_BASE = BASE.replace(/^http/, 'ws');
 const TIMEOUT_MS = 10_000;
 const ADMIN_TOKEN = process.env.HEARTH_ADMIN_TOKEN ?? '';
 const NO_ADMIN = process.env.E2E_NO_ADMIN === '1';
+const RATELIMIT = process.env.E2E_RATELIMIT === '1';
+const JWT = process.env.E2E_JWT === '1';
 const KEEP_ROOM = process.env.E2E_KEEP_ROOM === '1';
 
 function fail(message) {
@@ -44,7 +49,7 @@ async function request(path, { method = 'GET', body, token, upgrade = false } = 
   } catch {
     // not JSON; leave as text for the caller
   }
-  return { status: response.status, json, text };
+  return { status: response.status, json, text, headers: response.headers };
 }
 
 function openSocket(url) {
@@ -393,7 +398,136 @@ async function login(deviceId) {
   return response.json;
 }
 
+// Rate limiting (v0.3b). Runs only under E2E_RATELIMIT=1, because it needs the
+// limits from `wrangler.e2e-ratelimit.toml`: a player limit of 5 per minute and
+// an IP limit of 1000. The IP limit is deliberately high so the player checks
+// finish first no matter how much traffic the server already saw; the phase then
+// bursts up to it, which proves the IP limit without depending on exact counters.
+async function ratelimitPhase() {
+  const { player_id: player_id1, token } = await login(`device-rl-${randomBytes(8).toString('hex')}`);
+  check(typeof player_id1 === 'string', 'the rate-limit phase can log in');
+
+  // 5 requests per player and minute: the first five pass.
+  for (let index = 1; index <= 5; index++) {
+    const response = await request('/me', { token });
+    check(response.status === 200, `player request ${index} of 5 is allowed`);
+  }
+
+  // The sixth is rejected by the player limit, not the IP limit.
+  const limitedPlayer = await request('/me', { token });
+  check(limitedPlayer.status === 429, 'the sixth player request is 429');
+  check(limitedPlayer.json?.scope === 'player', 'the 429 names the player scope');
+  check(limitedPlayer.headers.get('retry-after') !== null, 'the 429 carries Retry-After');
+
+  // Bust the IP limit. Every request from here is charged to this machine's IP.
+  let attempts = 0;
+  let limitedIp = null;
+  while (attempts < 1100) {
+    attempts += 1;
+    const response = await request('/schema/tictactoe');
+    if (response.status === 429) {
+      limitedIp = response;
+      break;
+    }
+    if (response.status !== 200) fail(`request ${attempts} answered ${response.status}`);
+  }
+  check(limitedIp !== null, `the IP limit is reached after ${attempts} requests`);
+  check(limitedIp.json?.scope === 'ip', 'the IP 429 names the ip scope');
+  check(limitedIp.headers.get('retry-after') !== null, 'the IP 429 carries Retry-After');
+
+  // A limited request never reached the router: an invalid body still just 429s.
+  const limitedAuth = await request('/auth/anonymous', {
+    method: 'POST',
+    body: { device_id: 'short' },
+  });
+  check(limitedAuth.status === 429, 'the IP limit covers /auth/* too');
+
+  console.log('e2e ok (rate limits)');
+  process.exit(0);
+}
+
+// JWT provider (v0.3b). Runs only under E2E_JWT=1, because the deployment needs
+// the JWKS fixture configured in .dev.vars:
+//
+//   HEARTH_JWT_JWKS_URL=http://127.0.0.1:8799/jwks.json
+//   HEARTH_JWT_ISS=https://e2e.hearth.test
+//   HEARTH_JWT_AUD=hearth-e2e
+//   HEARTH_JWT_NAME_CLAIM=name
+//
+// The phase serves the JWKS itself (so the gateway has something to fetch) and
+// signs every token locally.
+async function jwtPhase() {
+  const keys = ensureKeys();
+  const jwks = startJwksServer(keys, { port: JWKS_PORT });
+  await new Promise((resolve) => jwks.server.once('listening', resolve));
+
+  const auth = async (jwt) => request('/auth/jwt', { method: 'POST', body: { jwt } });
+  // An unknown kid is the cheapest way to make the gateway fetch the JWKS: the
+  // first one misses the (empty) cache, the second must hit it.
+  const unknownKid = (kid) =>
+    auth(mintJwt(keys, { kid, overrides: { sub: `ghost-${kid}` } }));
+
+  check((await unknownKid('ghost-one')).status === 401, 'an unknown kid is rejected');
+  const firstFetch = jwks.state.fetches;
+  check(firstFetch >= 1, `the gateway fetched the JWKS once (${firstFetch})`);
+  check((await unknownKid('ghost-two')).status === 401, 'a second unknown kid is rejected');
+  check(
+    jwks.state.fetches === firstFetch,
+    'a second unknown kid inside 60s does not refetch the JWKS',
+  );
+
+  const rs = await auth(mintJwt(keys, { alg: 'RS256', kid: RSA_KID, sub: 'e2e-player' }));
+  check(rs.status === 200, 'an RS256 token is accepted');
+  check(rs.json?.player_id === 'jwt_e2e-player', 'the JWT player id is namespaced jwt_');
+  check(rs.json?.display_name === 'E2E Player', 'the name claim becomes the display name');
+  const jwtToken = rs.json?.token;
+
+  const es = await auth(mintJwt(keys, { alg: 'ES256', kid: EC_KID, sub: 'e2e-ec' }));
+  check(es.status === 200, 'an ES256 token is accepted');
+  check(String(es.json?.player_id).startsWith('jwt_'), 'the ES256 player id is namespaced too');
+
+  // A known kid signed by a key that is not in the JWKS.
+  const rogue = generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const rogueToken = mintJwt(
+    { ...keys, rsaPrivate: rogue.privateKey },
+    { alg: 'RS256', kid: RSA_KID, sub: 'rogue' },
+  );
+  check((await auth(rogueToken)).status === 401, 'a token signed by another key is rejected');
+
+  // Algorithm confusion: HS256 keyed with the RSA public key material.
+  const confused = await auth(mintJwt(keys, { alg: 'HS256', kid: RSA_KID, sub: 'confused' }));
+  check(confused.status === 401, 'an HS256 token is rejected by a JWKS deployment');
+  const none = await auth(mintJwt(keys, { alg: 'none', kid: RSA_KID, sub: 'none' }));
+  check(none.status === 401, 'alg none is rejected');
+
+  const now = Math.floor(Date.now() / 1000);
+  const rejections = [
+    // `undefined` drops the claim entirely, which is how "missing exp" is built.
+    ['no exp', { exp: undefined }],
+    ['expired beyond leeway', { exp: now - 120 }],
+    ['nbf in the future', { nbf: now + 120 }],
+    ['wrong issuer', { iss: 'https://elsewhere.test' }],
+    ['wrong audience', { aud: 'another-app' }],
+  ];
+  for (const [label, claims] of rejections) {
+    check((await auth(mintJwt(keys, { overrides: claims }))).status === 401, `a JWT with ${label} is rejected`);
+  }
+
+  const me = await request('/me', { token: jwtToken });
+  check(me.status === 200, 'a JWT-issued token works on the authenticated routes');
+
+  jwks.server.close();
+  console.log('e2e ok (jwt)');
+  process.exit(0);
+}
+
 async function main() {
+  if (process.argv.includes('--mint-jwt')) {
+    process.stdout.write(`${mintJwt(ensureKeys())}\n`);
+    return process.exit(0);
+  }
+  if (RATELIMIT) return ratelimitPhase();
+  if (JWT) return jwtPhase();
   // 1. Two anonymous logins are different players.
   const playerA = await login(`device-a-${randomBytes(8).toString('hex')}`);
   const playerB = await login(`device-b-${randomBytes(8).toString('hex')}`);

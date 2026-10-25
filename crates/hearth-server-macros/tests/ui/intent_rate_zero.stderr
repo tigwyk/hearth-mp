@@ -1,0 +1,5 @@
+error: intent_rate must be at least 1
+ --> tests/ui/intent_rate_zero.rs:7:73
+  |
+7 | #[room(mode = "event", max_clients = 2, binding = "GAME", intent_rate = 0)]
+  |                                                                         ^

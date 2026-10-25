@@ -1,0 +1,57 @@
+# Test fixture: the tictactoe sample with tiny rate limits, so the e2e can reach
+# a 429 in a handful of requests instead of hundreds. Everything else matches
+# wrangler.toml.
+#
+#   npx --yes wrangler@4 dev -c wrangler.e2e-ratelimit.toml --port 8789 \
+#     --persist-to .wrangler/ratelimit-state
+#   E2E_RATELIMIT=1 HEARTH_URL=http://127.0.0.1:8789 node e2e.mjs
+name = "hearth-tictactoe-ratelimit"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[[durable_objects.bindings]]
+name = "TICTACTOE"
+class_name = "TicTacToeObject"
+
+[[durable_objects.bindings]]
+name = "HEARTH_REGISTRY"
+class_name = "HearthRegistry"
+
+[[durable_objects.bindings]]
+name = "TTT_PLAYER"
+class_name = "TttPlayerObject"
+
+[[durable_objects.bindings]]
+name = "HEARTH_MATCHMAKER"
+class_name = "HearthMatchmaker"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["TicTacToeObject"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["HearthRegistry"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["TttPlayerObject", "HearthMatchmaker"]
+
+[observability]
+enabled = true
+
+# The e2e's numbers depend on these two entries: 5 player requests pass, then the
+# player limit rejects. The IP limit is high enough that the player checks finish
+# first, and the phase then bursts up to it to prove the IP limit also fires.
+[[ratelimits]]
+name = "HEARTH_IP_LIMIT"
+namespace_id = "2001"
+simple = { limit = 1000, period = 60 }
+
+[[ratelimits]]
+name = "HEARTH_PLAYER_LIMIT"
+namespace_id = "2002"
+simple = { limit = 5, period = 60 }

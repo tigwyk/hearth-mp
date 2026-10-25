@@ -25,6 +25,13 @@ pub trait RoomConfig {
     /// `#[hearth::room(reconnect_grace_secs = N)]` attribute; `0` restores the
     /// v0.1 behaviour of calling `on_leave(Closed)` at once.
     const RECONNECT_GRACE: Duration = Duration::from_secs(30);
+    /// Intent tokens refilled per second, per player. Set it with the
+    /// `#[hearth::room(intent_rate = N)]` attribute; at least 1.
+    const INTENT_RATE: u32 = 60;
+    /// The per-player intent bucket's capacity: how many intents can arrive in
+    /// one burst. Set it with the `#[hearth::room(intent_burst = N)]`
+    /// attribute; at least 1.
+    const INTENT_BURST: u32 = 120;
 }
 
 /// One client. Identity comes from the gateway, never from the client's own
@@ -36,6 +43,11 @@ pub struct Client {
     /// Whether the client's socket is live. A held seat appears in
     /// [`crate::Ctx::clients`] with `connected: false`.
     pub connected: bool,
+    /// What the gateway verified: the provider (`"anon"`, `"jwt"`, ...). Rooms
+    /// never see raw credentials, only this mirror.
+    pub provider: String,
+    /// What the gateway verified: the provider's display name, if any.
+    pub display_name: Option<String>,
 }
 
 /// Opaque options handed to `on_join`, forwarded from `HELLO.opts`.

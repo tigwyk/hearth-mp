@@ -36,6 +36,10 @@ pub struct CState {
     pub join_calls: i64,
     pub leave_calls: i64,
     pub leave_log: Vec<String>,
+    /// `player:provider:display_name` for every `on_join`, server-only.
+    pub join_identity: Vec<String>,
+    /// `player:provider:display_name` for every `on_reconnect`, server-only.
+    pub reconnect_identity: Vec<String>,
 }
 
 #[derive(Deserialize, Schema, Debug)]
@@ -81,6 +85,12 @@ macro_rules! counter_room {
                 }
                 let state = ctx.state();
                 state.join_calls += 1;
+                state.join_identity.push(format!(
+                    "{}:{}:{}",
+                    who.player_id.0,
+                    who.provider,
+                    who.display_name.clone().unwrap_or_default()
+                ));
                 state.seats.insert(who.player_id.clone(), who.seat);
                 Ok(())
             }
@@ -155,8 +165,15 @@ macro_rules! counter_room {
                 Ok(())
             }
 
-            async fn on_reconnect(&mut self, ctx: &mut Ctx<Self>, _who: &Client) -> Result<()> {
-                ctx.state().hidden += 10;
+            async fn on_reconnect(&mut self, ctx: &mut Ctx<Self>, who: &Client) -> Result<()> {
+                let state = ctx.state();
+                state.reconnect_identity.push(format!(
+                    "{}:{}:{}",
+                    who.player_id.0,
+                    who.provider,
+                    who.display_name.clone().unwrap_or_default()
+                ));
+                state.hidden += 10;
                 Ok(())
             }
 

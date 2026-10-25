@@ -1,16 +1,16 @@
-//! HTTP surface: anonymous auth, room minting, schema lookup, WebSocket routing,
+//! HTTP surface: auth providers, room minting, schema lookup, WebSocket routing,
 //! quick-join, the lobby listing and the caller's own player view.
 
 use hearth_matchmaker::{MmReply, MmRpc};
-use hearth_protocol::{PlayerId, Value};
+use hearth_protocol::Value;
 use hearth_server::call::{Envelope, Target};
 use hearth_server::worker::call_object;
 use serde::Deserialize;
 use worker::{Env, Headers, Method, Request, RequestInit, Response, Result};
 
-use crate::auth::{
-    anonymous_player_id, issue_token, mint_room_name, valid_room_name, verify_token,
-};
+use crate::auth::{issue_token, mint_room_name, valid_room_name, verify_token, Identity};
+use crate::providers::{self, AuthConfig, WorkerFetcher};
+use crate::ratelimit::{self, Limit, Scope};
 
 /// One room type this Worker serves.
 pub struct RoomRoute {
@@ -38,6 +38,10 @@ pub struct GatewayConfig {
     pub player: Option<PlayerRoute>,
     /// `false` disables `POST /match` and `GET /lobby` (both return 501).
     pub matchmaker: bool,
+    /// Which login providers `POST /auth/{provider}` accepts.
+    pub auth: AuthConfig,
+    /// Where the per-IP and per-player rate limits live.
+    pub limits: ratelimit::Limits,
 }
 
 const SECRET_BINDING: &str = "HEARTH_SECRET";
@@ -51,17 +55,17 @@ const ROOM_HEADER: &str = "X-Hearth-Room";
 /// Which `(room_type, region)` matchmaker pools this room, when its name was
 /// minted by one.
 const MATCHMAKER_HEADER: &str = "X-Hearth-Matchmaker";
+/// The verified provider, so a room can tell an anonymous player from a signed-in
+/// one without ever seeing a credential.
+const PROVIDER_HEADER: &str = "X-Hearth-Provider";
+/// The verified display name, percent-encoded so CR/LF can never reach a header.
+const DISPLAY_NAME_HEADER: &str = "X-Hearth-Display-Name";
 /// The Durable Object's internal connect path. The gateway builds the URL, so no
 /// client path or query reaches the room.
 const CONNECT_URL: &str = "https://room/__hearth/connect";
 /// The player DO's read-only view path.
 const PLAYER_VIEW_URL: &str = "https://player/__hearth/view";
 const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
-
-#[derive(Deserialize)]
-struct AnonymousBody {
-    device_id: String,
-}
 
 #[derive(Deserialize)]
 struct TokenQuery {
@@ -80,7 +84,7 @@ struct LobbyQuery {
 }
 
 enum Route<'a> {
-    Anonymous,
+    Auth(&'a str),
     MintRoom(&'a str),
     Schema(&'a str),
     Connect(&'a str, &'a str),
@@ -90,7 +94,7 @@ enum Route<'a> {
 }
 
 /// Dispatch one request. `cfg` is the Worker's static gateway configuration.
-pub async fn serve(mut req: Request, env: Env, cfg: &GatewayConfig) -> Result<Response> {
+pub async fn serve(req: Request, env: Env, cfg: &GatewayConfig) -> Result<Response> {
     // No default secret: a missing or short binding is a deployment error, not a 401.
     let secret = env
         .secret(SECRET_BINDING)
@@ -105,24 +109,64 @@ pub async fn serve(mut req: Request, env: Env, cfg: &GatewayConfig) -> Result<Re
     let Some(route) = parse_route(&req.method(), &path) else {
         return Response::error("not found", 404);
     };
-    match route {
-        Route::Anonymous => anonymous(&mut req, secret).await,
-        Route::MintRoom(room_type) => mint_room(&req, secret, cfg.rooms, room_type),
-        Route::Schema(room_type) => schema(cfg.rooms, room_type),
-        Route::Connect(room_type, name) => {
-            connect(req, &env, secret, cfg.rooms, room_type, name).await
+    // Per-IP first, on every route. Many players can share one IP (CGNAT, a
+    // school), so this limit is generous; the per-player one is the tight one.
+    if let Some(key) = ratelimit::key(Scope::Ip, &client_ip(&req)?, None) {
+        let limit =
+            ratelimit::check(&env, cfg.limits.ip_binding, &key, cfg.limits.ip_period_s).await;
+        if let Limit::Limited { retry_after_s } = limit {
+            return ratelimit::limited(Scope::Ip, retry_after_s);
         }
+    }
+    match route {
+        Route::Auth(provider) => auth(req, &env, secret, cfg, provider).await,
+        Route::MintRoom(room_type) => mint_room(req, &env, secret, cfg, room_type).await,
+        Route::Schema(room_type) => schema(cfg.rooms, room_type),
+        Route::Connect(room_type, name) => connect(req, &env, secret, cfg, room_type, name).await,
         Route::Match(room_type) => match_room(req, &env, secret, cfg, room_type).await,
         Route::Lobby(room_type) => lobby(req, &env, secret, cfg, room_type).await,
         Route::Me => player_view(req, &env, secret, cfg).await,
     }
 }
 
+/// `CF-Connecting-IP`, which Cloudflare always sets. Locally it may be absent,
+/// which just means no per-IP limit can be keyed.
+fn client_ip(req: &Request) -> Result<String> {
+    Ok(req.headers().get("CF-Connecting-IP")?.unwrap_or_default())
+}
+
+/// The per-player limit, checked after a route resolves the caller's token.
+async fn player_limit(
+    env: &Env,
+    cfg: &GatewayConfig,
+    player: Option<&Identity>,
+) -> Result<Option<Response>> {
+    let Some(player) = player else {
+        return Ok(None);
+    };
+    let Some(key) = ratelimit::key(Scope::Player, "", Some(&player.player_id)) else {
+        return Ok(None);
+    };
+    let limit = ratelimit::check(
+        env,
+        cfg.limits.player_binding,
+        &key,
+        cfg.limits.player_period_s,
+    )
+    .await;
+    match limit {
+        Limit::Limited { retry_after_s } => {
+            Ok(Some(ratelimit::limited(Scope::Player, retry_after_s)?))
+        }
+        _ => Ok(None),
+    }
+}
+
 fn parse_route<'a>(method: &Method, path: &'a str) -> Option<Route<'a>> {
     let mut parts = path.trim_start_matches('/').split('/');
     match (parts.next(), parts.next(), parts.next(), parts.next()) {
-        (Some("auth"), Some("anonymous"), None, None) if *method == Method::Post => {
-            Some(Route::Anonymous)
+        (Some("auth"), Some(provider), None, None) if *method == Method::Post => {
+            Some(Route::Auth(provider))
         }
         (Some("rooms"), Some(room_type), None, None) if *method == Method::Post => {
             Some(Route::MintRoom(room_type))
@@ -144,33 +188,52 @@ fn parse_route<'a>(method: &Method, path: &'a str) -> Option<Route<'a>> {
     }
 }
 
-async fn anonymous(req: &mut Request, secret: &[u8]) -> Result<Response> {
-    let Ok(body) = req.json::<AnonymousBody>().await else {
-        return Response::error("body must be JSON: {\"device_id\": \"...\"}", 400);
+/// `POST /auth/{provider}`: verify a credential and mint a Hearth token for it.
+///
+/// The provider never sees the deployment secret and the client never sees a
+/// provider credential after this call: the response is the only way forward.
+async fn auth(
+    mut req: Request,
+    env: &Env,
+    secret: &[u8],
+    cfg: &GatewayConfig,
+    provider: &str,
+) -> Result<Response> {
+    let body: Value = req.json().await.unwrap_or(Value::Null);
+    let identity = match providers::verify(&cfg.auth, provider, &body, env, &WorkerFetcher).await {
+        Ok(identity) => identity,
+        Err(err) => {
+            return Response::from_json(&serde_json::json!({ "error": err.message() }))
+                .map(|response| response.with_status(err.status()));
+        }
     };
-    if !(8..=128).contains(&body.device_id.chars().count()) {
-        return Response::error("device_id must be 8 to 128 characters", 400);
-    }
-    let player = anonymous_player_id(secret, &body.device_id);
-    let token = issue_token(secret, &player, now_s());
-    Response::from_json(&serde_json::json!({ "token": token, "player_id": player }))
+    let token = issue_token(secret, &identity, now_s());
+    Response::from_json(&serde_json::json!({
+        "token": token,
+        "player_id": identity.player_id,
+        "display_name": identity.display_name,
+    }))
 }
 
 /// Mints a room name without touching any Durable Object.
-fn mint_room(
-    req: &Request,
+async fn mint_room(
+    req: Request,
+    env: &Env,
     secret: &[u8],
-    routes: &[RoomRoute],
+    cfg: &GatewayConfig,
     room_type: &str,
 ) -> Result<Response> {
-    if !routes.iter().any(|route| route.room_type == room_type) {
+    if !cfg.rooms.iter().any(|route| route.room_type == room_type) {
         return Response::error("unknown room type", 404);
     }
-    let Some(token) = bearer_token(req) else {
+    let Some(token) = bearer_token(&req) else {
         return Response::error("missing bearer token", 401);
     };
-    if verify_token(secret, &token, now_s()).is_err() {
+    let Ok(identity) = verify_token(secret, &token, now_s()) else {
         return Response::error("invalid or expired token", 401);
+    };
+    if let Some(response) = player_limit(env, cfg, Some(&identity)).await? {
+        return Ok(response);
     }
     Response::from_json(&serde_json::json!({ "room": mint_room_name() }))
 }
@@ -186,11 +249,11 @@ async fn connect(
     req: Request,
     env: &Env,
     secret: &[u8],
-    routes: &[RoomRoute],
+    cfg: &GatewayConfig,
     room_type: &str,
     name: &str,
 ) -> Result<Response> {
-    let Some(route) = routes.iter().find(|route| route.room_type == room_type) else {
+    let Some(route) = cfg.rooms.iter().find(|route| route.room_type == room_type) else {
         return Response::error("unknown room type", 404);
     };
     if !valid_room_name(name) {
@@ -199,10 +262,13 @@ async fn connect(
     let Some(token) = query_token(&req) else {
         return Response::error("missing token", 401);
     };
-    let player = match verify_token(secret, &token, now_s()) {
-        Ok(player) => player,
+    let identity = match verify_token(secret, &token, now_s()) {
+        Ok(identity) => identity,
         Err(_) => return Response::error("invalid or expired token", 401),
     };
+    if let Some(response) = player_limit(env, cfg, Some(&identity)).await? {
+        return Ok(response);
+    }
     let upgrade = req
         .headers()
         .get("Upgrade")?
@@ -221,8 +287,14 @@ async fn connect(
         }
         headers.set(&name, &value)?;
     }
-    headers.set(PLAYER_HEADER, &player.0)?;
+    headers.set(PLAYER_HEADER, &identity.player_id.0)?;
     headers.set(ROOM_HEADER, &format!("{room_type}/{name}"))?;
+    // Both values come from the *verified* token, so a room can trust them; the
+    // name is percent-encoded, which makes header injection impossible.
+    headers.set(PROVIDER_HEADER, identity.provider)?;
+    if let Some(display_name) = &identity.display_name {
+        headers.set(DISPLAY_NAME_HEADER, &percent_encode(display_name))?;
+    }
     // A matchmaker-minted name tells the room which matchmaker pools it, so it
     // reports its lobby state there too.
     if let Some(region) = mm_room(name) {
@@ -255,9 +327,12 @@ async fn match_room(
     let Some(route) = cfg.rooms.iter().find(|route| route.room_type == room_type) else {
         return Response::error("unknown room type", 404);
     };
-    let Some(player) = bearer_player(&req, secret)? else {
+    let Some(identity) = bearer_player(&req, secret)? else {
         return Response::error("missing or invalid bearer token", 401);
     };
+    if let Some(response) = player_limit(env, cfg, Some(&identity)).await? {
+        return Ok(response);
+    }
     let pool = match req.json::<MatchBody>().await {
         Ok(body) => body.pool.unwrap_or_else(|| "default".to_owned()),
         Err(_) => "default".to_owned(),
@@ -267,7 +342,7 @@ async fn match_room(
     }
     let region = region_for(&req);
     let rpc = MmRpc::QuickJoin {
-        player,
+        player: identity.player_id,
         pool,
         capacity: route.max_clients,
     };
@@ -295,9 +370,12 @@ async fn lobby(
     if !cfg.rooms.iter().any(|route| route.room_type == room_type) {
         return Response::error("unknown room type", 404);
     }
-    let Some(_player) = bearer_player(&req, secret)? else {
+    let Some(identity) = bearer_player(&req, secret)? else {
         return Response::error("missing or invalid bearer token", 401);
     };
+    if let Some(response) = player_limit(env, cfg, Some(&identity)).await? {
+        return Ok(response);
+    }
     let Ok(query) = req.query::<LobbyQuery>() else {
         return Response::error("invalid query", 400);
     };
@@ -337,11 +415,14 @@ async fn player_view(
     let Some(player_route) = cfg.player.as_ref() else {
         return not_configured("player binding not configured");
     };
-    let Some(player) = bearer_player(&req, secret)? else {
+    let Some(identity) = bearer_player(&req, secret)? else {
         return Response::error("missing or invalid bearer token", 401);
     };
+    if let Some(response) = player_limit(env, cfg, Some(&identity)).await? {
+        return Ok(response);
+    }
     let namespace = env.durable_object(player_route.binding)?;
-    let id = namespace.id_from_name(&player.0)?;
+    let id = namespace.id_from_name(&identity.player_id.0)?;
     let stub = id.get_stub()?;
     let mut init = RequestInit::new();
     init.with_method(Method::Get);
@@ -371,11 +452,25 @@ struct OpenRoomView {
 }
 
 /// `Authorization: Bearer <token>` verified against the deployment secret.
-fn bearer_player(req: &Request, secret: &[u8]) -> Result<Option<PlayerId>> {
+fn bearer_player(req: &Request, secret: &[u8]) -> Result<Option<Identity>> {
     let Some(token) = bearer_token(req) else {
         return Ok(None);
     };
     Ok(verify_token(secret, &token, now_s()).ok())
+}
+
+/// Percent-encode every byte that is not unreserved, so the value survives a
+/// header unchanged whatever the display name contains.
+fn percent_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            out.push(byte as char);
+        } else {
+            out.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    out
 }
 
 /// Call one matchmaker instance (`"{room_type}:{region}"`) and decode its reply.

@@ -1,9 +1,17 @@
-//! Hearth v0.1 Gateway Worker library: anonymous auth, token verification and room routing.
+//! Hearth Gateway Worker library: auth providers, token verification and room routing.
 
 pub mod auth;
+pub mod providers;
+pub mod ratelimit;
 pub mod routes;
+pub mod webcrypto;
 
 pub use auth::{
-    anonymous_player_id, issue_token, mint_room_name, valid_room_name, verify_token, AuthError,
+    anonymous_player_id, issue_token, mint_room_name, namespaced, sanitize_name, valid_room_name,
+    verify_token, AuthError, Identity,
+};
+pub use providers::{
+    check_enabled, AuthConfig, CannedFetcher, Fetcher, HttpReq, HttpResp, ProviderError,
+    WorkerFetcher,
 };
 pub use routes::{mm_room, serve, GatewayConfig, PlayerRoute, RoomRoute};
