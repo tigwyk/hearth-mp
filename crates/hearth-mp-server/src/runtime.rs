@@ -2659,7 +2659,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 }
             }
             // 3. Persist every N ticks, with the tick number.
-            if R::PERSIST_EVERY > 0 && self.tick % u64::from(R::PERSIST_EVERY) == 0 {
+            if R::PERSIST_EVERY > 0 && self.tick.is_multiple_of(u64::from(R::PERSIST_EVERY)) {
                 self.persist()?;
             }
         }
@@ -3278,14 +3278,10 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         // tick, so without a fresh FULL_STATE they would drop every patch until
         // the counter passed their old high-water mark, and the diffs in between
         // would not match their state. Event rooms never need this.
-        if Self::ticked_mode() && self.state.is_some() && !self.joined().is_empty() {
+        if let Some(state) = self.state.as_ref().filter(|_| Self::ticked_mode()) {
             let seq = self.seq;
             for (socket, attachment) in self.joined() {
-                let view = self
-                    .state
-                    .as_ref()
-                    .expect("state loaded")
-                    .view(&attachment.player_id);
+                let view = state.view(&attachment.player_id);
                 self.send_frame(&socket, &attachment, Frame::FullState { seq, state: view });
             }
         }

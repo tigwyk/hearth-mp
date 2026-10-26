@@ -42,14 +42,18 @@ pub struct TokioHost {
 impl TokioHost {
     pub fn new() -> Self {
         let forward: Vec<Value> =
-            serde_json::from_str(include_str!("../../../conformance/vectors/forward.json")).expect("forward.json is JSON");
+            serde_json::from_str(include_str!("../../../conformance/vectors/forward.json"))
+                .expect("forward.json is JSON");
         Self {
             inner: Rc::new(Inner {
                 db: MemHost::new(),
                 sockets: RefCell::new(Vec::new()),
                 attachments: RefCell::new(HashMap::new()),
                 alarm: Cell::new(None),
-                forward: forward.into_iter().filter(|case| case["inject"] == true).collect(),
+                forward: forward
+                    .into_iter()
+                    .filter(|case| case["inject"] == true)
+                    .collect(),
             }),
         }
     }
@@ -72,7 +76,12 @@ impl TokioHost {
     }
 
     fn sender(&self, socket: Socket) -> Option<UnboundedSender<Out>> {
-        self.inner.sockets.borrow().iter().find(|(s, _)| *s == socket).map(|(_, tx)| tx.clone())
+        self.inner
+            .sockets
+            .borrow()
+            .iter()
+            .find(|(s, _)| *s == socket)
+            .map(|(_, tx)| tx.clone())
     }
 
     /// The injected frames, in the socket's encoding.
@@ -82,9 +91,13 @@ impl TokioHost {
             .iter()
             .filter_map(|case| {
                 if binary {
-                    case["msgpack_hex"].as_str().map(|hex| WireMsg::Binary(unhex(hex)))
+                    case["msgpack_hex"]
+                        .as_str()
+                        .map(|hex| WireMsg::Binary(unhex(hex)))
                 } else {
-                    case["json"].as_object().map(|json| WireMsg::Text(Value::Object(json.clone()).to_string()))
+                    case["json"]
+                        .as_object()
+                        .map(|json| WireMsg::Text(Value::Object(json.clone()).to_string()))
                 }
             })
             .collect()
@@ -98,7 +111,10 @@ impl Default for TokioHost {
 }
 
 fn unhex(text: &str) -> Vec<u8> {
-    (0..text.len()).step_by(2).map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or(0)).collect()
+    (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap_or(0))
+        .collect()
 }
 
 impl hearth_mp_server::__private::Sealed for TokioHost {}
@@ -107,7 +123,12 @@ impl Host for TokioHost {
     type Socket = Socket;
 
     fn sockets(&self) -> Vec<Socket> {
-        self.inner.sockets.borrow().iter().map(|(s, _)| *s).collect()
+        self.inner
+            .sockets
+            .borrow()
+            .iter()
+            .map(|(s, _)| *s)
+            .collect()
     }
 
     fn attachment(&self, socket: &Socket) -> Option<Attachment> {
@@ -116,7 +137,10 @@ impl Host for TokioHost {
 
     fn set_attachment(&self, socket: &Socket, attachment: &Attachment) {
         if self.sender(*socket).is_some() {
-            self.inner.attachments.borrow_mut().insert(*socket, attachment.clone());
+            self.inner
+                .attachments
+                .borrow_mut()
+                .insert(*socket, attachment.clone());
         }
     }
 
@@ -145,7 +169,10 @@ impl Host for TokioHost {
     }
 
     fn now_ms(&self) -> u64 {
-        SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
     }
 
     fn sql(&self) -> &dyn Sql {

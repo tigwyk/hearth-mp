@@ -738,6 +738,9 @@ fn full_state_over_64_kib_is_accepted() {
             encoding,
         );
         assert_eq!(events, vec![ClientEvent::StateReset]);
-        assert_eq!(core.state()["blob"].as_str().map(str::len), Some(blob.len()));
+        assert_eq!(
+            core.state()["blob"].as_str().map(str::len),
+            Some(blob.len())
+        );
     }
 }

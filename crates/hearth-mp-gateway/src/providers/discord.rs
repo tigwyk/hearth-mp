@@ -29,7 +29,11 @@ impl DiscordConfig {
     /// Accept codes for the application `client_id`, whose OAuth2 secret is in the
     /// `secret_env` binding; no redirect URI.
     pub fn new(client_id: impl Into<String>, secret_env: &'static str) -> Self {
-        Self { client_id: client_id.into(), secret_env, redirect_uri: None }
+        Self {
+            client_id: client_id.into(),
+            secret_env,
+            redirect_uri: None,
+        }
     }
 }
 

@@ -32,7 +32,12 @@ impl SteamConfig {
     /// Accept tickets for `app_id`, checked with the Web API key in the `key_env`
     /// binding; identity `"hearth"`, banned owners rejected.
     pub fn new(app_id: u32, key_env: &'static str) -> Self {
-        Self { app_id, key_env, identity: "hearth".to_owned(), reject_banned: true }
+        Self {
+            app_id,
+            key_env,
+            identity: "hearth".to_owned(),
+            reject_banned: true,
+        }
     }
 }
 

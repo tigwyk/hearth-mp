@@ -30,7 +30,10 @@ const EXPECT_TIMEOUT: Duration = Duration::from_secs(5);
 fn start_server() -> String {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         let local = tokio::task::LocalSet::new();
         local.block_on(&runtime, async move {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -49,7 +52,9 @@ fn matches(pattern: &Value, value: &Value) -> bool {
             None => pv == "$absent",
             Some(vv) => pv != "$absent" && matches(pv, vv),
         }),
-        (Value::Array(p), Value::Array(v)) => p.len() == v.len() && p.iter().zip(v).all(|(a, b)| matches(a, b)),
+        (Value::Array(p), Value::Array(v)) => {
+            p.len() == v.len() && p.iter().zip(v).all(|(a, b)| matches(a, b))
+        }
         (Value::Number(a), Value::Number(b)) => a.as_f64() == b.as_f64(),
         _ => pattern == value,
     }
@@ -69,7 +74,10 @@ impl Client {
     fn new(player: &str) -> Self {
         Self {
             player: player.to_owned(),
-            core: ClientCore::new(ClientConfig::new(hearth_mp_conformance_server::schema_hash(), Encoding::Json)),
+            core: ClientCore::new(ClientConfig::new(
+                hearth_mp_conformance_server::schema_hash(),
+                Encoding::Json,
+            )),
             ws: None,
             observed: Vec::new(),
             cursor: 0,
@@ -80,8 +88,12 @@ impl Client {
 
     async fn open(&mut self, base: &str, room: &str) {
         let url = format!("{base}/rooms/conf/{room}?player={}", self.player);
-        let (mut ws, _) = tokio_tungstenite::connect_async(url).await.expect("connect");
-        let WireMsg::Text(hello) = self.core.hello(self.opts.clone()) else { unreachable!() };
+        let (mut ws, _) = tokio_tungstenite::connect_async(url)
+            .await
+            .expect("connect");
+        let WireMsg::Text(hello) = self.core.hello(self.opts.clone()) else {
+            unreachable!()
+        };
         ws.send(Message::Text(hello.into())).await.unwrap();
         self.ws = Some(ws);
     }
@@ -89,12 +101,24 @@ impl Client {
     fn observe(&mut self, events: Vec<ClientEvent>) {
         for event in events {
             let frame = match event {
-                ClientEvent::Joined { player_id, seat } => json!({"op": "JOIN_OK", "player_id": player_id, "seat": seat}),
+                ClientEvent::Joined { player_id, seat } => {
+                    json!({"op": "JOIN_OK", "player_id": player_id, "seat": seat})
+                }
                 ClientEvent::StateReset => json!({"op": "FULL_STATE", "state": self.core.state()}),
-                ClientEvent::Patched { ops } => json!({"op": "PATCH", "ops": ops, "state": self.core.state()}),
-                ClientEvent::Acked { intent_seqs, .. } => json!({"op": "ACK", "intent_seqs": intent_seqs}),
-                ClientEvent::Event { name, data } => json!({"op": "EVENT", "name": name, "data": data}),
-                ClientEvent::Error { code, message, ref_seq } => {
+                ClientEvent::Patched { ops } => {
+                    json!({"op": "PATCH", "ops": ops, "state": self.core.state()})
+                }
+                ClientEvent::Acked { intent_seqs, .. } => {
+                    json!({"op": "ACK", "intent_seqs": intent_seqs})
+                }
+                ClientEvent::Event { name, data } => {
+                    json!({"op": "EVENT", "name": name, "data": data})
+                }
+                ClientEvent::Error {
+                    code,
+                    message,
+                    ref_seq,
+                } => {
                     json!({"op": "ERROR", "code": code, "message": message, "ref_seq": ref_seq})
                 }
                 _ => continue,
@@ -116,11 +140,17 @@ impl Client {
             match tokio::time::timeout(left, ws.next()).await {
                 Err(_) => return,
                 Ok(Some(Ok(Message::Text(text)))) => {
-                    let events = self.core.handle(&WireMsg::Text(text.to_string())).expect("a server frame decodes");
+                    let events = self
+                        .core
+                        .handle(&WireMsg::Text(text.to_string()))
+                        .expect("a server frame decodes");
                     self.observe(events);
                 }
                 Ok(Some(Ok(Message::Binary(bytes)))) => {
-                    let events = self.core.handle(&WireMsg::Binary(bytes.to_vec())).expect("a server frame decodes");
+                    let events = self
+                        .core
+                        .handle(&WireMsg::Binary(bytes.to_vec()))
+                        .expect("a server frame decodes");
                     self.observe(events);
                 }
                 Ok(Some(Ok(Message::Close(frame)))) => {
@@ -149,7 +179,10 @@ impl Client {
     async fn expect(&mut self, pattern: &Value, scenario: &str) {
         let deadline = Instant::now() + EXPECT_TIMEOUT;
         loop {
-            if let Some(i) = self.observed[self.cursor..].iter().position(|f| matches(pattern, f)) {
+            if let Some(i) = self.observed[self.cursor..]
+                .iter()
+                .position(|f| matches(pattern, f))
+            {
                 self.cursor += i + 1;
                 return;
             }
@@ -190,7 +223,9 @@ async fn run_scenario(base: &str, path: &Path) {
             continue;
         }
         let who = step["client"].as_str().unwrap();
-        let client = clients.get_mut(who).unwrap_or_else(|| panic!("{name}: unknown client {who}"));
+        let client = clients
+            .get_mut(who)
+            .unwrap_or_else(|| panic!("{name}: unknown client {who}"));
         if let Some(pattern) = step.get("expect") {
             client.expect(pattern, &name).await;
             continue;
@@ -218,7 +253,9 @@ async fn run_scenario(base: &str, path: &Path) {
                 client.flush().await;
             }
             (_, Some("LEAVE")) => {
-                let WireMsg::Text(leave) = client.core.leave() else { unreachable!() };
+                let WireMsg::Text(leave) = client.core.leave() else {
+                    unreachable!()
+                };
                 if let Some(ws) = client.ws.as_mut() {
                     ws.send(Message::Text(leave.into())).await.unwrap();
                 }
@@ -250,11 +287,17 @@ async fn schema_route_answers() {
     let base = start_server().replace("ws://", "");
     let mut stream = TcpStream::connect(&base).await.unwrap();
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    stream.write_all(b"GET /schema/conf HTTP/1.1\r\nHost: x\r\n\r\n").await.unwrap();
+    stream
+        .write_all(b"GET /schema/conf HTTP/1.1\r\nHost: x\r\n\r\n")
+        .await
+        .unwrap();
     let mut text = String::new();
     stream.read_to_string(&mut text).await.unwrap();
     assert!(text.starts_with("HTTP/1.1 200"), "{text}");
-    assert!(text.contains(&hearth_mp_conformance_server::schema_hash()), "{text}");
+    assert!(
+        text.contains(&hearth_mp_conformance_server::schema_hash()),
+        "{text}"
+    );
 }
 
 #[tokio::test]

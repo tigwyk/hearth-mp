@@ -1,0 +1,292 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "ci/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo public-api output depends on the nightly; the api/ snapshots were made with this one.
+  NIGHTLY: nightly-2026-10-25
+  WRANGLER: wrangler@4.152.0
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Includes the conformance scenarios (Rust runner) and the wire-constants check.
+      - run: cargo test --workspace --locked
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p hearth-mp-gateway -p hearth-mp-admin -p tictactoe -p arena -p arena-dedicated
+      # Crates outside the workspace: their own lockfiles and targets.
+      - name: Standalone crates
+        run: |
+          for manifest in bench/diff-bench bench/tick-bench examples/arena-unity-plugin \
+                          examples/arena-dedicated/server examples/arena-dedicated/fleet/fake-server; do
+            echo "::group::$manifest"
+            cargo check --locked --all-targets --manifest-path "$manifest/Cargo.toml"
+            echo "::endgroup::"
+          done
+
+  stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: rustup toolchain install "$NIGHTLY" --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api@0.52.0,cbindgen@0.29.4,worker-build@0.8.7
+      # The C# and GDScript snapshots are checked in the Unity and Godot jobs.
+      - run: bash scripts/check-stability.sh
+        env:
+          HEARTH_SKIP_ENGINES: "1"
+          PUBLIC_API_TOOLCHAIN: ${{ env.NIGHTLY }}
+
+  godot:
+    strategy:
+      fail-fast: false
+      matrix:
+        # 4.3 is the addon's compatibility_minimum; 4.7 is the current release.
+        godot: [4.3-stable, 4.7.2-stable]
+    runs-on: ubuntu-latest
+    env:
+      GODOT: ${{ github.workspace }}/.godot-bin/godot
+      HEARTH_CONFORMANCE_URL: http://127.0.0.1:8790
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Godot ${{ matrix.godot }}
+        run: |
+          mkdir -p .godot-bin && cd .godot-bin
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${{ matrix.godot }}/Godot_v${{ matrix.godot }}_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v*_linux.x86_64 godot && chmod +x godot
+      - name: Build the GDExtension and sync the addon
+        run: |
+          cargo build --locked --release -p hearth-mp-godot
+          mkdir -p godot/addons/hearth/bin/linux
+          cp target/release/libhearth_mp_godot.so godot/addons/hearth/bin/linux/
+          pwsh -NoProfile -File examples/tictactoe-godot/scripts/sync-addon.ps1
+      - name: Start the conformance server
+        run: |
+          cargo build --locked -p hearth-mp-conformance-server
+          target/debug/hearth-mp-conformance-server &
+          for _ in $(seq 1 60); do curl -fs -o /dev/null "$HEARTH_CONFORMANCE_URL/schema/conf" && break; sleep 1; done
+      - name: Import the project
+        # A fresh checkout has no .godot/ cache: global class names need one import pass.
+        run: |
+          "$GODOT" --headless --path examples/tictactoe-godot --import \
+            || "$GODOT" --headless --path examples/tictactoe-godot --editor --quit \
+            || true
+      - name: GDScript tests
+        run: |
+          run() { echo "::group::$*"; "$GODOT" --headless --path examples/tictactoe-godot -s "$@"; status=$?; echo "::endgroup::"; return $status; }
+          set -e
+          for t in patch_conformance reconnect_conformance typed_runtime typed_object_path api_snapshot; do
+            run "tests/$t.gd"
+          done
+          for web in 0 1; do
+            HEARTH_FORCE_WEB=$web run tests/scenario_runner.gd
+            HEARTH_FORCE_WEB=$web run tests/stuck_server.gd
+          done
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: worker-build@0.8.7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Throwaway .dev.vars
+        working-directory: examples/tictactoe
+        run: |
+          {
+            echo "HEARTH_SECRET=$(openssl rand -hex 32)"
+            echo "HEARTH_ADMIN_TOKEN=$(openssl rand -hex 32)"
+            echo "HEARTH_JWT_JWKS_URL=http://127.0.0.1:8799/jwks.json"
+            echo "HEARTH_JWT_ISS=https://e2e.hearth.test"
+            echo "HEARTH_JWT_AUD=hearth-e2e"
+            echo "HEARTH_JWT_NAME_CLAIM=name"
+          } > .dev.vars
+      - name: Start wrangler dev
+        working-directory: examples/tictactoe
+        run: |
+          npx --yes "$WRANGLER" dev --port 8787 --ip 127.0.0.1 > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+          for _ in $(seq 1 300); do curl -fs -o /dev/null http://127.0.0.1:8787/schema/tictactoe && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/wrangler.log"; exit 1
+      - name: e2e
+        working-directory: examples/tictactoe
+        run: |
+          HEARTH_ADMIN_TOKEN="$(grep '^HEARTH_ADMIN_TOKEN=' .dev.vars | cut -d= -f2)"
+          export HEARTH_ADMIN_TOKEN
+          node e2e.mjs
+          E2E_JWT=1 node e2e.mjs
+      - if: failure()
+        run: cat "$RUNNER_TEMP/wrangler.log"
+
+  # Every shipped native binary, built on the host that can build it, uploaded as
+  # an artifact. A platform the script skips uploads nothing, which fails the job.
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows, os: windows-latest, unity: windows, godot: windows, targets: "" }
+          - { name: linux, os: ubuntu-latest, unity: linux, godot: linux, targets: "" }
+          - { name: macos, os: macos-latest, unity: macos, godot: macos, targets: "x86_64-apple-darwin,aarch64-apple-darwin" }
+          - { name: ios, os: macos-latest, unity: ios, targets: "aarch64-apple-ios" }
+          - { name: android, os: ubuntu-latest, unity: android, targets: "aarch64-linux-android,armv7-linux-androideabi" }
+          - { name: webgl, os: ubuntu-latest, unity: webgl, targets: "wasm32-unknown-unknown" }
+    name: native (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: native-${{ matrix.name }}
+      - if: matrix.unity == 'android'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+      - if: matrix.unity == 'webgl'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.129
+      - name: Unity plugin
+        run: |
+          if [ "${{ matrix.unity }}" = android ]; then export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"; fi
+          bash scripts/build-unity-native.sh --only ${{ matrix.unity }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: unity-${{ matrix.name }}
+          path: |
+            unity/com.hearth.client/Plugins/
+            unity/com.hearth.client/Runtime/StreamingAssets~/
+          if-no-files-found: error
+      - name: Godot extension
+        if: matrix.godot
+        run: |
+          out=godot/addons/hearth/bin/${{ matrix.godot }}
+          mkdir -p "$out"
+          case "${{ matrix.godot }}" in
+            windows)
+              cargo build --locked --release -p hearth-mp-godot
+              cp target/release/hearth_mp_godot.dll "$out/" ;;
+            linux)
+              cargo build --locked --release -p hearth-mp-godot
+              cp target/release/libhearth_mp_godot.so "$out/" ;;
+            macos)
+              cargo build --locked --release -p hearth-mp-godot --target x86_64-apple-darwin
+              cargo build --locked --release -p hearth-mp-godot --target aarch64-apple-darwin
+              lipo -create target/x86_64-apple-darwin/release/libhearth_mp_godot.dylib \
+                           target/aarch64-apple-darwin/release/libhearth_mp_godot.dylib \
+                   -output "$out/libhearth_mp_godot.dylib" ;;
+          esac
+      - if: matrix.godot
+        uses: actions/upload-artifact@v7
+        with:
+          name: godot-${{ matrix.name }}
+          path: godot/addons/hearth/bin/${{ matrix.godot }}/
+          if-no-files-found: error
+
+  # EditMode + PlayMode (includes the C# API snapshot) through GameCI. Needs the
+  # repo secrets UNITY_LICENSE (the .ulf contents), UNITY_EMAIL and
+  # UNITY_PASSWORD; without them the job only prints a notice.
+  unity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write # GameCI posts the test results as a check run
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+    steps:
+      - if: env.UNITY_LICENSE == ''
+        run: echo "::notice::Unity tests skipped; add the UNITY_LICENSE, UNITY_EMAIL and UNITY_PASSWORD secrets"
+      - if: env.UNITY_LICENSE != ''
+        uses: actions/checkout@v7
+      - if: env.UNITY_LICENSE != ''
+        uses: dtolnay/rust-toolchain@stable
+      - if: env.UNITY_LICENSE != ''
+        uses: Swatinem/rust-cache@v2
+      - if: env.UNITY_LICENSE != ''
+        name: Native plugin (Linux, for the editor)
+        run: bash scripts/build-unity-native.sh --only linux
+      - if: env.UNITY_LICENSE != ''
+        uses: actions/cache@v6
+        with:
+          path: examples/tictactoe-unity/Library
+          key: unity-library-${{ hashFiles('examples/tictactoe-unity/Packages/**', 'examples/tictactoe-unity/ProjectSettings/**') }}
+          restore-keys: unity-library-
+      - if: env.UNITY_LICENSE != ''
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: examples/tictactoe-unity
+          testMode: all
+          artifactsPath: unity-test-results
+      - if: always() && env.UNITY_LICENSE != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: unity-test-results
+          path: unity-test-results
