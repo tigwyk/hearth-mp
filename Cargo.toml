@@ -12,7 +12,7 @@ members = [
 exclude = ["examples/arena-unity-plugin"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -53,19 +53,19 @@ tokio-tungstenite = "0.30.0"
 toml = "1.1.8"
 
 # Workspace crates.
-hearth-mp-protocol = { path = "crates/hearth-mp-protocol", version = "0.1.0" }
-hearth-mp-sync = { path = "crates/hearth-mp-sync", version = "0.1.0" }
-hearth-mp-sync-derive = { path = "crates/hearth-mp-sync-derive", version = "0.1.0" }
-hearth-mp-client = { path = "crates/hearth-mp-client", version = "0.1.0" }
-hearth-mp-server = { path = "crates/hearth-mp-server", version = "0.1.0" }
-hearth-mp-server-macros = { path = "crates/hearth-mp-server-macros", version = "0.1.0" }
-hearth-mp = { path = "crates/hearth-mp", version = "0.1.0" }
-hearth-mp-gateway = { path = "crates/hearth-mp-gateway", version = "0.1.0" }
-hearth-mp-test = { path = "crates/hearth-mp-test", version = "0.1.0" }
-hearth-mp-cli = { path = "crates/hearth-mp-cli", version = "0.1.0" }
-hearth-mp-godot = { path = "crates/hearth-mp-godot", version = "0.1.0" }
-hearth-mp-admin = { path = "crates/hearth-mp-admin", version = "0.1.0" }
-hearth-mp-matchmaker = { path = "crates/hearth-mp-matchmaker", version = "0.1.0" }
+hearth-mp-protocol = { path = "crates/hearth-mp-protocol", version = "0.1.1" }
+hearth-mp-sync = { path = "crates/hearth-mp-sync", version = "0.1.1" }
+hearth-mp-sync-derive = { path = "crates/hearth-mp-sync-derive", version = "0.1.1" }
+hearth-mp-client = { path = "crates/hearth-mp-client", version = "0.1.1" }
+hearth-mp-server = { path = "crates/hearth-mp-server", version = "0.1.1" }
+hearth-mp-server-macros = { path = "crates/hearth-mp-server-macros", version = "0.1.1" }
+hearth-mp = { path = "crates/hearth-mp", version = "0.1.1" }
+hearth-mp-gateway = { path = "crates/hearth-mp-gateway", version = "0.1.1" }
+hearth-mp-test = { path = "crates/hearth-mp-test", version = "0.1.1" }
+hearth-mp-cli = { path = "crates/hearth-mp-cli", version = "0.1.1" }
+hearth-mp-godot = { path = "crates/hearth-mp-godot", version = "0.1.1" }
+hearth-mp-admin = { path = "crates/hearth-mp-admin", version = "0.1.1" }
+hearth-mp-matchmaker = { path = "crates/hearth-mp-matchmaker", version = "0.1.1" }
 tictactoe = { path = "examples/tictactoe", version = "0.1.0" }
 
 # Wasm bundle size (v1.0a, docs/limits.md "Bundle size"). No `panic = "abort"`:

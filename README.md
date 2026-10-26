@@ -4,6 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/hearth-mp.svg)](https://crates.io/crates/hearth-mp)
 [![MSRV](https://img.shields.io/badge/MSRV-1.91-blue.svg)](https://www.rust-lang.org)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/tigwyk/hearth-mp)
 
 **[Get started](#quickstart) · [Documentation](#docs) · [Examples](#examples) · [Contributing](#contributing) · [Report an issue](https://github.com/tigwyk/hearth-mp/issues)**
 

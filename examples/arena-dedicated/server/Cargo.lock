@@ -354,7 +354,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "hearth-mp-handoff-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-server",
  "serde",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rmp-serde",
  "serde",
@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-sync"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-protocol",
  "hearth-mp-sync-derive",
@@ -401,7 +401,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-sync-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
