@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## Semantics are identical to the Rust reference
 ## (`hearth_protocol::patch::apply`); the conformance suite is
-## `crates/hearth-protocol/tests/fixtures/patch_cases.json`.
+## `conformance/vectors/patch.json`.
 ##
 ## Keys of the state tree are always strings, and a path segment is a string
 ## (object key) or an integer (list index). Godot parses all JSON numbers as

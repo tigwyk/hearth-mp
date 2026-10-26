@@ -42,56 +42,85 @@ const ES256: &[&str] = &["ES256"];
 /// How to authenticate a JWT's signature.
 pub enum JwtKeys {
     /// One shared HS256 secret, read from this binding at request time.
-    Hs256 { secret_env: &'static str },
+    Hs256 {
+        /// The binding that holds the secret.
+        secret_env: &'static str,
+    },
     /// A JWKS document, refetched on an unknown `kid` (cached for 10 minutes).
-    Jwks { url: String },
+    Jwks {
+        /// The JWKS document's URL.
+        url: String,
+    },
 }
 
 /// Which tokens this deployment accepts.
+#[non_exhaustive]
 pub struct JwtConfig {
     /// The `iss` every token must carry.
     pub issuer: String,
     /// The value `aud` must contain.
     pub audience: String,
+    /// How signatures are checked.
     pub keys: JwtKeys,
     /// The claim to read a display name from, e.g. `"name"`.
     pub name_claim: Option<String>,
 }
 
+impl JwtConfig {
+    /// Accept tokens from `issuer` for `audience`, checked with `keys`; no display
+    /// name claim (set `name_claim` to read one).
+    pub fn new(issuer: impl Into<String>, audience: impl Into<String>, keys: JwtKeys) -> Self {
+        Self { issuer: issuer.into(), audience: audience.into(), keys, name_claim: None }
+    }
+}
+
+#[doc(hidden)]
 /// The protected header of a compact JWS.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Header {
+    /// The signing algorithm (`HS256` or `ES256` are accepted).
     pub alg: String,
     #[serde(default)]
+    /// The key id, for JWKS lookup.
     pub kid: Option<String>,
 }
 
+#[doc(hidden)]
 /// The claims this provider reads. Everything else lands in [`Claims::extra`], so
 /// a configured `name_claim` can name any non-registered claim.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize, serde::Serialize)]
 pub struct Claims {
     #[serde(default)]
+    /// The issuer.
     pub iss: Option<String>,
     /// A string or an array of strings.
     #[serde(default)]
     pub aud: Option<Value>,
     #[serde(default)]
+    /// The subject: becomes the player id `jwt_<sub>`.
     pub sub: Option<String>,
     #[serde(default)]
+    /// Expiry, Unix seconds.
     pub exp: Option<u64>,
     #[serde(default)]
+    /// Not-before, Unix seconds.
     pub nbf: Option<u64>,
     #[serde(flatten)]
+    /// Every other claim.
     pub extra: Map<String, Value>,
 }
 
+#[doc(hidden)]
 /// One public key from a JWKS document.
 #[derive(Debug, Clone)]
 pub struct Jwk {
+    /// The key type (`EC` or `oct`).
     pub kty: String,
+    /// The key id.
     pub kid: Option<String>,
     /// The algorithm the key declares, when it declares one.
     pub alg: Option<String>,
+    /// The curve, for EC keys (`P-256`).
     pub crv: Option<String>,
     /// The original JSON object, handed to WebCrypto's `importKey`.
     pub json: Value,
@@ -124,6 +153,7 @@ struct CachedJwks {
     fetched_at_ms: u64,
 }
 
+#[doc(hidden)]
 /// Split and decode a compact JWS into its header, claims, signing input and
 /// signature. Every structural problem is a rejection (401).
 pub fn parse(jwt: &str) -> Result<(Header, Claims, Vec<u8>, Vec<u8>), ProviderError> {
@@ -146,6 +176,7 @@ pub fn parse(jwt: &str) -> Result<(Header, Claims, Vec<u8>, Vec<u8>), ProviderEr
     ))
 }
 
+#[doc(hidden)]
 /// The claim rules. `exp` is required; everything is checked with
 /// [`LEEWAY_S`] of clock skew.
 pub fn check_claims(claims: &Claims, cfg: &JwtConfig, now_s: u64) -> Result<(), ProviderError> {
@@ -193,6 +224,7 @@ pub fn allowed_alg<'a>(keys: &JwtKeys, jwk: &'a Jwk) -> &'a [&'a str] {
     }
 }
 
+#[doc(hidden)]
 /// The identity a verified set of claims names.
 ///
 /// The id is always namespaced `jwt_`, whatever the `sub` claims; a `sub` that
@@ -226,6 +258,7 @@ pub fn select_jwk<'a>(header: &Header, keys: &'a [Jwk]) -> Result<&'a Jwk, Provi
     key_for(header, keys).ok_or_else(|| rejected("jwt kid is not in the JWKS"))
 }
 
+#[doc(hidden)]
 /// Verify an HS256 token against a secret already resolved from the Worker's
 /// environment, and return its identity.
 pub fn verify_hs256(

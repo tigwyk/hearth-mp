@@ -1,0 +1,217 @@
+[
+  {
+    "direction": "c2s",
+    "json": {
+      "op": "HELLO",
+      "opts": {},
+      "protocol": 1,
+      "schema_hash": "0123456789abcdef"
+    },
+    "msgpack_hex": "0184a26f70a548454c4c4fa870726f746f636f6c01ab736368656d615f68617368b030313233343536373839616263646566a46f70747380",
+    "name": "hello_empty_opts"
+  },
+  {
+    "direction": "c2s",
+    "json": {
+      "op": "HELLO",
+      "opts": {
+        "name": "ana",
+        "team": 2
+      },
+      "protocol": 1,
+      "schema_hash": "0123456789abcdef"
+    },
+    "msgpack_hex": "0184a26f70a548454c4c4fa870726f746f636f6c01ab736368656d615f68617368b030313233343536373839616263646566a46f70747382a46e616d65a3616e61a47465616d02",
+    "name": "hello_with_opts"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "op": "JOIN_OK",
+      "player_id": "anon_a",
+      "seat": 1
+    },
+    "msgpack_hex": "0283a26f70a74a4f494e5f4f4ba9706c617965725f6964a6616e6f6e5f61a47365617401",
+    "name": "join_ok"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "op": "FULL_STATE",
+      "seq": 7,
+      "state": {
+        "cells": [
+          0,
+          1,
+          2
+        ],
+        "status": {
+          "Won": "anon_a"
+        },
+        "turn": "anon_a"
+      }
+    },
+    "msgpack_hex": "0383a26f70aa46554c4c5f5354415445a373657107a5737461746583a563656c6c7393000102a673746174757381a3576f6ea6616e6f6e5f61a47475726ea6616e6f6e5f61",
+    "name": "full_state"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "op": "PATCH",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "turn"
+          ],
+          "value": "anon_b"
+        },
+        {
+          "op": "del",
+          "path": [
+            "marks",
+            "anon_c"
+          ]
+        },
+        {
+          "key": "anon_b",
+          "op": "map_insert",
+          "path": [
+            "marks"
+          ],
+          "value": 2
+        },
+        {
+          "delete": 1,
+          "index": 1,
+          "insert": [
+            2,
+            0
+          ],
+          "op": "list_splice",
+          "path": [
+            "cells"
+          ]
+        }
+      ],
+      "seq": 8
+    },
+    "msgpack_hex": "0483a26f70a55041544348a373657108a36f70739483a26f70a3736574a47061746891a47475726ea576616c7565a6616e6f6e5f6282a26f70a364656ca47061746892a56d61726b73a6616e6f6e5f6384a26f70aa6d61705f696e73657274a47061746891a56d61726b73a36b6579a6616e6f6e5f62a576616c75650285a26f70ab6c6973745f73706c696365a47061746891a563656c6c73a5696e64657801a664656c65746501a6696e73657274920200",
+    "name": "patch_event_all_ops"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "op": "PATCH",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "avatars",
+            "anon_a",
+            "pos"
+          ],
+          "value": [
+            1.5,
+            2.0
+          ]
+        }
+      ],
+      "seq": 20,
+      "t": 1760000000050,
+      "tick": 41
+    },
+    "msgpack_hex": "0485a26f70a55041544348a373657114a36f70739183a26f70a3736574a47061746893a761766174617273a6616e6f6e5f61a3706f73a576616c756592cb3ff8000000000000cb4000000000000000a47469636b29a174cf00000199c82cc032",
+    "name": "patch_ticked"
+  },
+  {
+    "direction": "c2s",
+    "json": {
+      "intents": [
+        {
+          "intent": {
+            "Place": {
+              "cell": 4
+            }
+          },
+          "seq": 1
+        },
+        {
+          "intent": "Rematch",
+          "seq": 2
+        }
+      ],
+      "op": "INTENT"
+    },
+    "msgpack_hex": "0582a26f70a6494e54454e54a7696e74656e74739282a373657101a6696e74656e7481a5506c61636581a463656c6c0482a373657102a6696e74656e74a752656d61746368",
+    "name": "intent_batch"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "data": {
+        "text": "hi"
+      },
+      "name": "shout",
+      "op": "EVENT"
+    },
+    "msgpack_hex": "0683a26f70a54556454e54a46e616d65a573686f7574a46461746181a474657874a26869",
+    "name": "event"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "intent_seqs": [
+        1,
+        2
+      ],
+      "op": "ACK",
+      "state_seq": 9
+    },
+    "msgpack_hex": "0783a26f70a341434ba973746174655f73657109ab696e74656e745f73657173920102",
+    "name": "ack_event"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "intent_seqs": [
+        3
+      ],
+      "op": "ACK",
+      "state_seq": 20,
+      "tick": 42
+    },
+    "msgpack_hex": "0784a26f70a341434ba973746174655f73657114ab696e74656e745f736571739103a47469636b2a",
+    "name": "ack_ticked"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "code": "BAD_INTENT",
+      "message": "intent did not decode",
+      "op": "ERROR",
+      "ref_seq": 3
+    },
+    "msgpack_hex": "0984a26f70a54552524f52a4636f6465aa4241445f494e54454e54a76d657373616765b5696e74656e7420646964206e6f74206465636f6465a77265665f73657103",
+    "name": "error_with_ref_seq"
+  },
+  {
+    "direction": "s2c",
+    "json": {
+      "code": "SCHEMA_MISMATCH",
+      "message": "schema mismatch",
+      "op": "ERROR",
+      "ref_seq": null
+    },
+    "msgpack_hex": "0984a26f70a54552524f52a4636f6465af534348454d415f4d49534d41544348a76d657373616765af736368656d61206d69736d61746368a77265665f736571c0",
+    "name": "error_without_ref_seq"
+  },
+  {
+    "direction": "c2s",
+    "json": {
+      "op": "LEAVE"
+    },
+    "msgpack_hex": "0a81a26f70a54c45415645",
+    "name": "leave"
+  }
+]

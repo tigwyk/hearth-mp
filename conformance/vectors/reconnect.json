@@ -190,5 +190,13 @@
     "attempt": 0,
     "now_ms": 5000,
     "expect": "give_up"
+  },
+  {
+    "name": "code_4050_unassigned_app_range_gives_up",
+    "code": 4050,
+    "first_drop_ms": 1000,
+    "attempt": 0,
+    "now_ms": 2000,
+    "expect": "give_up"
   }
 ]

@@ -156,6 +156,7 @@ pub struct Echo1d;
 /// [`Echo1d`]'s state.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, serde::Deserialize)]
 pub struct Echo1dState {
+    /// The counter.
     pub x: i64,
 }
 

@@ -20,25 +20,25 @@ const ISSUER: &str = "https://auth.example.test";
 const AUDIENCE: &str = "hearth-tictactoe";
 
 fn hs256_config() -> JwtConfig {
-    JwtConfig {
-        issuer: ISSUER.to_owned(),
-        audience: AUDIENCE.to_owned(),
-        keys: JwtKeys::Hs256 {
+    let mut config = JwtConfig::new(
+        ISSUER,
+        AUDIENCE,
+        JwtKeys::Hs256 {
             secret_env: "HEARTH_JWT_SECRET",
         },
-        name_claim: Some("name".to_owned()),
-    }
+    );
+    config.name_claim = Some("name".to_owned());
+    config
 }
 
 fn jwks_config() -> JwtConfig {
-    JwtConfig {
-        issuer: ISSUER.to_owned(),
-        audience: AUDIENCE.to_owned(),
-        keys: JwtKeys::Jwks {
+    JwtConfig::new(
+        ISSUER,
+        AUDIENCE,
+        JwtKeys::Jwks {
             url: "https://auth.example.test/jwks.json".to_owned(),
         },
-        name_claim: None,
-    }
+    )
 }
 
 fn base_claims() -> Claims {
@@ -234,14 +234,13 @@ fn name_claim_sanitized() {
     assert_eq!(who.display_name.as_deref(), Some("aX-Evil: 1"));
 
     // No configured claim means no display name, even when one is present.
-    let config = JwtConfig {
-        issuer: ISSUER.to_owned(),
-        audience: AUDIENCE.to_owned(),
-        keys: JwtKeys::Hs256 {
+    let config = JwtConfig::new(
+        ISSUER,
+        AUDIENCE,
+        JwtKeys::Hs256 {
             secret_env: "HEARTH_JWT_SECRET",
         },
-        name_claim: None,
-    };
+    );
     assert_eq!(
         identity(&config, &named_claims("Ann"))
             .expect("an identity")

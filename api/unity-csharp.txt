@@ -1,0 +1,157 @@
+sealed class Hearth.ClientWebSocketTransport : Hearth.IHearthTransport, System.IDisposable
+  ctor()
+  method System.Boolean TryReceive(Hearth.TransportEvent& ev)
+  method System.Void Close(System.UInt16 code)
+  method System.Void Connect(System.String url)
+  method System.Void Dispose()
+  method System.Void Send(System.Byte[] data, System.Boolean text)
+class Hearth.HearthClient : UnityEngine.MonoBehaviour
+  ctor()
+  field static System.String UrlOverride
+  method System.Threading.Tasks.Task LoginAnonymousAsync()
+  method System.Threading.Tasks.Task<Hearth.HearthRoom<TState>> JoinAsync<TState>(System.String roomType, System.String room, Newtonsoft.Json.Linq.JObject opts = null)
+  method System.Threading.Tasks.Task<Hearth.HearthRoom> JoinAsync(System.String roomType, System.String room, Newtonsoft.Json.Linq.JObject opts = null)
+  method System.Threading.Tasks.Task<System.String> CreateRoomAsync(System.String roomType)
+  method System.Void Leave()
+  property Hearth.HearthRoom Room { get; }
+  property System.Boolean Connected { get; }
+  property System.Int32 DebugLatencyMs { get; set; }
+  property System.String DeviceIdOverride { get; set; }
+  property System.String PlayerId { get; }
+  property System.String SchemaHash { get; set; }
+  property System.String ServerUrl { get; set; }
+  property System.String Token { get; }
+abstract class Hearth.HearthEnum : Hearth.HearthNode
+  method System.String ToString()
+  method System.Void Load(Newtonsoft.Json.Linq.JToken raw)
+  property Newtonsoft.Json.Linq.JToken Value { get; }
+  property System.String Variant { get; }
+class Hearth.HearthException : System.Exception, System.Runtime.InteropServices._Exception, System.Runtime.Serialization.ISerializable
+  ctor(System.String code, System.String message)
+  property System.String Code { get; }
+sealed class Hearth.HearthInterpolator : System.IDisposable
+  method Newtonsoft.Json.Linq.JToken Sample(System.Object[] path)
+  method System.Single SampleFloat(System.Object[] path)
+  method System.Void Dispose()
+  method UnityEngine.Vector2 SampleVector2(System.Object[] path)
+sealed class Hearth.HearthList<T> : Hearth.HearthNode
+  ctor(System.Func<Newtonsoft.Json.Linq.JToken, T> loadItem)
+  event System.Action OnChange
+  method System.Void Load(Newtonsoft.Json.Linq.JToken next)
+  property System.Collections.Generic.IReadOnlyList<T> Items { get; }
+  property System.Int32 Count { get; }
+  property T this[System.Int32] { get; }
+sealed class Hearth.HearthMap<V> : Hearth.HearthNode
+  ctor(System.Func<Newtonsoft.Json.Linq.JToken, V, V> loadItem, System.Func<V, Hearth.HearthNode> asNode = null)
+  event System.Action<System.String, V> OnAdd
+  event System.Action<System.String, V> OnChange
+  event System.Action<System.String> OnRemove
+  method Hearth.HearthNode Child(System.String wireKey)
+  method System.Boolean ContainsKey(System.String key)
+  method System.Boolean TryGetValue(System.String key, V& value)
+  method System.Void Load(Newtonsoft.Json.Linq.JToken raw)
+  property System.Collections.Generic.IReadOnlyCollection<System.String> Keys { get; }
+  property System.Int32 Count { get; }
+  property V this[System.String] { get; }
+static class Hearth.HearthNative
+  method static System.Int64 ReconnectDecide(System.UInt16 code, System.UInt64 firstDropMs, System.UInt32 attempt, System.UInt64 nowMs)
+abstract class Hearth.HearthNode
+  method Hearth.HearthNode Child(System.String wireKey)
+  method System.Void Load(Newtonsoft.Json.Linq.JToken raw)
+abstract class Hearth.HearthObject : Hearth.HearthNode
+sealed class Hearth.HearthPredictor<TState> : System.IDisposable
+  ctor(Hearth.HearthRoom room, System.String logicName, System.Int32 tickHz)
+  event System.Action<System.String> OnError
+  method System.UInt32 Input(Newtonsoft.Json.Linq.JToken intent, Newtonsoft.Json.Linq.JToken logicInput = null)
+  method System.Void Dispose()
+  property System.Boolean Poisoned { get; }
+  property TState State { get; }
+class Hearth.HearthRoom
+  ctor()
+  event System.Action OnReconnected
+  event System.Action OnStateReset
+  event System.Action<Newtonsoft.Json.Linq.JArray> OnPatched
+  event System.Action<System.Int32, System.Int32> OnReconnecting
+  event System.Action<System.String, Newtonsoft.Json.Linq.JToken> OnEvent
+  event System.Action<System.String, System.String, System.Nullable<System.UInt32>> OnError
+  event System.Action<System.UInt16, System.String> OnDisconnected
+  event System.Action<System.UInt32[]> OnIntentsUnconfirmed
+  event System.Action<System.UInt64, System.UInt32[]> OnAck
+  method Hearth.HearthInterpolator Interpolator(System.Object[][] paths)
+  method System.UInt32 Send(Newtonsoft.Json.Linq.JToken intent)
+  property Newtonsoft.Json.Linq.JToken RawState { get; }
+  property System.Boolean Reconnecting { get; }
+  property System.Int32 Seat { get; }
+  property System.String Name { get; }
+  property System.String PlayerId { get; }
+  property System.String RoomType { get; }
+  property System.UInt64 StateSeq { get; }
+sealed class Hearth.HearthRoom<TState> : Hearth.HearthRoom
+  ctor()
+  property TState State { get; }
+sealed class Hearth.HearthSchemaAttribute : System.Attribute, System.Runtime.InteropServices._Attribute
+  ctor(System.String hash)
+  property System.String Hash { get; }
+interface Hearth.IHearthCore : System.IDisposable
+  method Newtonsoft.Json.Linq.JArray Handle(System.Byte[] data, System.Boolean text)
+  method Newtonsoft.Json.Linq.JArray OnDisconnected()
+  method Newtonsoft.Json.Linq.JToken State()
+  method System.Byte[] Hello(System.String optsJson, System.Boolean& text)
+  method System.Byte[] Leave(System.Boolean& text)
+  method System.Byte[] PollSend(System.UInt64 nowMs, System.Boolean& text)
+  method System.UInt32 QueueIntent(Newtonsoft.Json.Linq.JToken intent)
+  property System.UInt64 LastTickT { get; }
+  property System.UInt64 Seq { get; }
+interface Hearth.IHearthTransport : System.IDisposable
+  method System.Boolean TryReceive(Hearth.TransportEvent& ev)
+  method System.Void Close(System.UInt16 code)
+  method System.Void Connect(System.String url)
+  method System.Void Send(System.Byte[] data, System.Boolean text)
+static class Hearth.Load
+  method static System.Func<Newtonsoft.Json.Linq.JToken, V, V> Item<V>(System.Func<Newtonsoft.Json.Linq.JToken, V> conv)
+  method static T Leaf<T>(Newtonsoft.Json.Linq.JToken raw, System.String wire, Newtonsoft.Json.Linq.JToken& last, T current, System.Func<Newtonsoft.Json.Linq.JToken, T> conv, System.Action<T> onChange)
+  method static T Object<T>(Newtonsoft.Json.Linq.JToken raw, System.String wire, T node)
+static class Hearth.Load.Conv
+  method static Newtonsoft.Json.Linq.JArray Tuple(Newtonsoft.Json.Linq.JToken t)
+  method static System.Boolean Bool(Newtonsoft.Json.Linq.JToken t)
+  method static System.Byte U8(Newtonsoft.Json.Linq.JToken t)
+  method static System.Double F64(Newtonsoft.Json.Linq.JToken t)
+  method static System.Func<Newtonsoft.Json.Linq.JToken, System.Nullable<T>> Nullable<T>(System.Func<Newtonsoft.Json.Linq.JToken, T> inner)
+  method static System.Func<Newtonsoft.Json.Linq.JToken, T> Option<T>(System.Func<Newtonsoft.Json.Linq.JToken, T> inner)
+  method static System.Int16 I16(Newtonsoft.Json.Linq.JToken t)
+  method static System.Int32 I32(Newtonsoft.Json.Linq.JToken t)
+  method static System.Int64 I64(Newtonsoft.Json.Linq.JToken t)
+  method static System.SByte I8(Newtonsoft.Json.Linq.JToken t)
+  method static System.Single F32(Newtonsoft.Json.Linq.JToken t)
+  method static System.String Str(Newtonsoft.Json.Linq.JToken t)
+  method static System.UInt16 U16(Newtonsoft.Json.Linq.JToken t)
+  method static System.UInt32 U32(Newtonsoft.Json.Linq.JToken t)
+  method static System.UInt64 U64(Newtonsoft.Json.Linq.JToken t)
+  method static T Node<T>(Newtonsoft.Json.Linq.JToken t)
+sealed class Hearth.NativeCore : Hearth.IHearthCore, System.IDisposable
+  ctor(System.String schemaHash, System.Byte encoding = 0)
+  method Newtonsoft.Json.Linq.JArray Handle(System.Byte[] data, System.Boolean text)
+  method Newtonsoft.Json.Linq.JArray OnDisconnected()
+  method Newtonsoft.Json.Linq.JToken State()
+  method System.Byte[] Hello(System.String optsJson, System.Boolean& text)
+  method System.Byte[] Leave(System.Boolean& text)
+  method System.Byte[] PollSend(System.UInt64 nowMs, System.Boolean& text)
+  method System.UInt32 QueueIntent(Newtonsoft.Json.Linq.JToken intent)
+  method System.Void Dispose()
+  property System.UInt64 LastTickT { get; }
+  property System.UInt64 Seq { get; }
+static class Hearth.Route
+  method static System.Void Apply(Hearth.HearthNode root, Newtonsoft.Json.Linq.JToken rawRoot, Newtonsoft.Json.Linq.JObject op)
+struct Hearth.TransportEvent
+  field Hearth.TransportEventKind Kind
+  field System.Boolean Text
+  field System.Byte[] Data
+  field System.String Reason
+  field System.UInt16 Code
+  method static Hearth.TransportEvent Closed(System.UInt16 code, System.String reason)
+  method static Hearth.TransportEvent Message(System.Byte[] data, System.Boolean text)
+  method static Hearth.TransportEvent Opened()
+enum Hearth.TransportEventKind : System.IComparable, System.IConvertible, System.IFormattable
+  Closed
+  Message
+  Opened

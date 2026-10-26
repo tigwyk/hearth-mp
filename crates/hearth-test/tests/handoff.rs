@@ -135,6 +135,7 @@ impl Room for Lobby {
             HandoffEvent::Result(_) => "result",
             HandoffEvent::Ended { .. } => "ended",
             HandoffEvent::Failed { .. } => "failed",
+            _ => "other",
         };
         ctx.state().log.push(name.to_owned());
         if let HandoffEvent::Result(data) = event {

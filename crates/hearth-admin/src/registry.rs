@@ -37,10 +37,15 @@ const MAX_PAGE: u32 = 100;
 /// One live room, as the registry remembers it.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct RoomRow {
+    /// The room's type.
     pub room_type: String,
+    /// The room's name.
     pub name: String,
+    /// Seated players at the last report.
     pub players: u8,
+    /// When the room was created, Unix ms.
     pub created_ms: u64,
+    /// When the room last reported, Unix ms.
     pub updated_ms: u64,
 }
 
@@ -84,6 +89,8 @@ impl<'a> Registry<'a> {
                 )?;
                 Ok(())
             }
+            // Report kinds added by a later hearth-server release.
+            _ => Ok(()),
         }
     }
 
@@ -227,6 +234,7 @@ impl RegistryObject {
         Self { service, sql }
     }
 
+    /// The Durable Object's HTTP entry point.
     pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
         // `/list` is the admin listing; everything else is the service path
         // (`/__hearth/call`, `/__hearth/inspect`).
@@ -262,6 +270,7 @@ impl RegistryObject {
         }
     }
 
+    /// The Durable Object alarm.
     pub async fn alarm(&self) -> worker::Result<()> {
         self.service.alarm().await
     }

@@ -5,15 +5,21 @@
 //! Object behaviour is pure Rust behind [`Host`], so every runtime test runs
 //! natively in `hearth-test`.
 
+#![warn(missing_docs)]
+
 pub mod admin;
 pub mod allocator;
 pub mod call;
+/// The handler context rooms and services receive.
 pub mod ctx;
 pub mod fetcher;
 pub mod handoff;
+/// The host abstraction: what a runtime needs from its environment.
 pub mod host;
 mod outbox;
+/// The `Room` trait and its configuration.
 pub mod room;
+/// The room runtime that drives a `Room` over a `Host`.
 pub mod runtime;
 pub mod schema;
 pub mod service;
@@ -46,4 +52,13 @@ pub use runtime::RoomRuntime;
 pub use schema::{schema_doc, schema_hash, schema_hash_hex, SchemaDoc, HEARTH_SCHEMA_VERSION};
 pub use service::{PlayerService, Service, ServiceCtx, ServiceRuntime};
 
+/// Not part of the public API (`spec/stability.md`).
+#[doc(hidden)]
+pub mod __private {
+    /// Soft seal for [`crate::Host`]: only the Hearth crates implement it (the
+    /// Worker adapter, the test harness, the conformance server).
+    pub trait Sealed {}
+}
+
+/// The result type of room and service handlers.
 pub type Result<T> = anyhow::Result<T>;

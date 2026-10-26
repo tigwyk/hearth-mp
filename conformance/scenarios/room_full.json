@@ -1,0 +1,58 @@
+{
+  "name": "room_full",
+  "about": "A third player in a two-seat room is refused with ROOM_FULL (the server then closes with 4002).",
+  "clients": [
+    "a",
+    "b",
+    "c"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "b",
+      "send": "connect"
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "b",
+        "seat": 1
+      }
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "c",
+      "send": "connect"
+    },
+    {
+      "client": "c",
+      "expect": {
+        "op": "ERROR",
+        "code": "ROOM_FULL"
+      }
+    }
+  ]
+}

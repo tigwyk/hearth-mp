@@ -12,8 +12,7 @@ use serde_json::{json, Value};
 const PATH: &str = "value";
 
 fn fixture_cases() -> Vec<Value> {
-    serde_json::from_str(include_str!("fixtures/interp_cases.json"))
-        .expect("interp_cases.json is valid JSON")
+    hearth_protocol::vectors::load("interp.json")
 }
 
 /// An optional path field of a fixture case, defaulting to `["value"]`.

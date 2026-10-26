@@ -212,6 +212,7 @@ fn intents_class(room: &str, class: &str, variants: &[Variant]) -> String {
                 writeln!(out, "static func {function}({parameters}) -> Dictionary:").unwrap();
                 writeln!(out, "\treturn {{\"{}\": {{{pairs}}}}}", variant.name).unwrap();
             }
+            other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
         }
     }
     out
@@ -266,6 +267,7 @@ fn shape_types(shape: &Shape) -> Vec<String> {
                 collect_named(&field.ty, &mut named);
             }
         }
+        other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
     }
     named.into_iter().collect()
 }
@@ -462,6 +464,7 @@ fn shape_json(shape: &Shape) -> serde_json::Value {
                 .map(|field| serde_json::json!({"name": field.name, "ty": type_ref_json(&field.ty)}))
                 .collect::<Vec<_>>(),
         }),
+        other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
     }
 }
 

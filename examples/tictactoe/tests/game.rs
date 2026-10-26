@@ -19,7 +19,7 @@ fn place(room: &mut TestRoom<TicTacToe>, client: C, cell: u8) {
 
 fn last_error(events: &[ClientEvent]) -> Option<(ErrorCode, Option<u32>)> {
     events.iter().rev().find_map(|event| match event {
-        ClientEvent::Error { code, ref_seq, .. } => Some((*code, *ref_seq)),
+        ClientEvent::Error { code, ref_seq, .. } => Some((code.clone(), *ref_seq)),
         _ => None,
     })
 }

@@ -1,12 +1,10 @@
 use hearth_protocol::{apply, PatchError, PatchOp, Value};
 use serde_json::json;
 
-/// Shared conformance suite: the same fixture drives the Rust and GDScript
-/// patch implementations.
-const FIXTURE: &str = include_str!("fixtures/patch_cases.json");
-
+/// Shared conformance suite (`conformance/vectors/patch.json`): the same vectors
+/// drive every SDK's patch implementation.
 fn cases() -> Vec<Value> {
-    serde_json::from_str(FIXTURE).expect("patch_cases.json is valid JSON")
+    hearth_protocol::vectors::load("patch.json")
 }
 
 #[test]

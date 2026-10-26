@@ -1,0 +1,94 @@
+{
+  "name": "reconnect_resume",
+  "about": "A dropped player who reconnects within the grace period keeps the seat and gets a fresh FULL_STATE.",
+  "clients": [
+    "a",
+    "b"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "b",
+      "send": "connect"
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "b",
+        "seat": 1
+      }
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": {
+              "Add": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ACK",
+        "intent_seqs": [
+          1
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "send": "drop"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE",
+        "state": {
+          "n": 1,
+          "seats": {
+            "a": 0,
+            "b": 1
+          }
+        }
+      }
+    }
+  ]
+}

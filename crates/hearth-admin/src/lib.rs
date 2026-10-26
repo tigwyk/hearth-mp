@@ -7,6 +7,8 @@
 //! registry through `WorkerHost::report`; the registry is optional, so a
 //! missing binding only disables `GET /admin/rooms`.
 
+#![warn(missing_docs)]
+
 pub mod registry;
 pub mod routes;
 

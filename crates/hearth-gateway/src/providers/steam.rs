@@ -16,6 +16,7 @@ const AUTH_URL: &str = "https://partner.steam-api.com/ISteamUserAuth/Authenticat
 const MAX_TICKET_CHARS: usize = 4096;
 
 /// Which Steam app's tickets are accepted.
+#[non_exhaustive]
 pub struct SteamConfig {
     /// The Steam app id whose tickets are valid.
     pub app_id: u32,
@@ -25,6 +26,14 @@ pub struct SteamConfig {
     pub identity: String,
     /// Reject tickets whose owner is publisher- or VAC-banned.
     pub reject_banned: bool,
+}
+
+impl SteamConfig {
+    /// Accept tickets for `app_id`, checked with the Web API key in the `key_env`
+    /// binding; identity `"hearth"`, banned owners rejected.
+    pub fn new(app_id: u32, key_env: &'static str) -> Self {
+        Self { app_id, key_env, identity: "hearth".to_owned(), reject_banned: true }
+    }
 }
 
 /// `{"ticket": "<hex>"}`.

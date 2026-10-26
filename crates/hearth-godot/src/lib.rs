@@ -12,7 +12,11 @@
 //! Build with `cargo build -p hearth-godot --release` and copy the library into
 //! `godot/addons/hearth/bin/` (see this crate's README).
 
+#![warn(missing_docs)]
+
 pub mod convert;
+// gdext's generated `#[var]` getters carry no docs.
+#[allow(missing_docs)]
 mod native;
 
 pub use native::HearthNative;

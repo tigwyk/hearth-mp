@@ -92,8 +92,9 @@ fn new_writes_the_templates_and_names_the_crate_and_room() {
     assert!(lib.contains("impl Room for MyGame"), "{lib}");
     assert!(lib.contains("#[event(fetch)]"), "{lib}");
     assert!(lib.contains("hearth_gateway::serve"), "{lib}");
-    assert!(lib.contains("room_type: \"my-game\""), "{lib}");
-    assert!(lib.contains("binding: \"ROOM\""), "{lib}");
+    assert!(lib.contains("RoomRoute::new("), "{lib}");
+    assert!(lib.contains("\"my-game\","), "{lib}");
+    assert!(lib.contains("\"ROOM\","), "{lib}");
     assert!(
         lib.contains("hearth::server::schema_hash_hex::<MyGame>"),
         "{lib}"

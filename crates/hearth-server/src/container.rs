@@ -49,8 +49,11 @@ const RESERVED_ENV_PREFIX: &str = "HEARTH_";
 pub enum ContainerRpc {
     /// Start the container for `sid` and wait until it is healthy.
     Start {
+        /// The session id.
         sid: String,
+        /// The plaintext session secret.
         secret: String,
+        /// Where the container reports lifecycle events.
         report_url: String,
         /// The port the container serves HTTP/WebSocket on (0 means the default).
         port: u16,

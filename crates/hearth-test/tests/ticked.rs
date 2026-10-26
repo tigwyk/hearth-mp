@@ -220,7 +220,7 @@ fn undecodable_intent_immediate_bad_intent() {
     let errors: Vec<_> = r.client(a).events[start..]
         .iter()
         .filter_map(|event| match event {
-            ClientEvent::Error { code, ref_seq, .. } => Some((*code, *ref_seq)),
+            ClientEvent::Error { code, ref_seq, .. } => Some((code.clone(), *ref_seq)),
             _ => None,
         })
         .collect();

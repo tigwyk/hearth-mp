@@ -51,6 +51,7 @@ pub struct MemHost {
 }
 
 impl MemHost {
+    /// An empty host at clock 0.
     pub fn new() -> Self {
         Self {
             inner: Rc::new(Inner {
@@ -113,6 +114,8 @@ impl Default for MemHost {
         Self::new()
     }
 }
+
+impl hearth_server::__private::Sealed for MemHost {}
 
 impl Host for MemHost {
     type Socket = Socket;

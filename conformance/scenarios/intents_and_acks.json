@@ -1,0 +1,101 @@
+{
+  "name": "intents_and_acks",
+  "about": "An accepted intent gives a PATCH and an ACK; a rejected one an ERROR with its ref_seq; events reach the sender.",
+  "clients": [
+    "a"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": {
+              "Add": 2
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "n": 2
+        }
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ACK",
+        "intent_seqs": [
+          1
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 2,
+            "intent": "Fail"
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ERROR",
+        "code": "INTENT_REJECTED",
+        "ref_seq": 2
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 3,
+            "intent": {
+              "Echo": "hi"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "EVENT",
+        "name": "echo",
+        "data": "hi"
+      }
+    }
+  ]
+}

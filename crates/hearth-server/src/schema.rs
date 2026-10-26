@@ -17,11 +17,17 @@ pub const HEARTH_SCHEMA_VERSION: u32 = 1;
 /// One room's state and intent schema, ready for JSON export.
 #[derive(Serialize, Deserialize)]
 pub struct SchemaDoc {
+    /// The format version: [`HEARTH_SCHEMA_VERSION`].
     pub hearth_schema: u32,
+    /// The room's name.
     pub room: String,
+    /// The schema hash, 16 lowercase hex characters.
     pub hash: String,
+    /// The key in `types` of the state struct.
     pub state: String,
+    /// The key in `types` of the intent enum.
     pub intent: String,
+    /// Every named type reachable from the state and the intents.
     pub types: BTreeMap<String, TypeDef>,
 }
 

@@ -1,14 +1,21 @@
 [package]
 name = "hearth-protocol"
-description = "Hearth v0.1 wire protocol: frames, opcodes, codec and patch ops."
+description = "Hearth wire protocol v1: frames, opcodes, codec and patch ops."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 
+[features]
+# `vectors::load` for tests: the conformance vectors in conformance/vectors/.
+vectors = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
 rmp-serde.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+hearth-protocol = { path = ".", features = ["vectors"] }

@@ -68,7 +68,7 @@ fn queue_and_poll_batches() {
 #[wasm_bindgen_test]
 fn garbage_frame_is_error_event_not_crash() {
     let h = client_new(HASH, 0);
-    let events: Value = serde_json::from_str(&client_handle(h, &[0xFF, 0, 1], false)).unwrap();
+    let events: Value = serde_json::from_str(&client_handle(h, &[0x04, 0xC1, 1], false)).unwrap();
     assert_eq!(events[0]["code"], "BAD_FRAME");
     client_free(h);
 }

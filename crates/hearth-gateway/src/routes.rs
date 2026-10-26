@@ -16,6 +16,7 @@ use crate::providers::{self, AuthConfig, WorkerFetcher};
 use crate::ratelimit::{self, Limit, Scope};
 
 /// One room type this Worker serves.
+#[non_exhaustive]
 pub struct RoomRoute {
     /// URL segment, e.g. `"tictactoe"`.
     pub room_type: &'static str,
@@ -32,14 +33,43 @@ pub struct RoomRoute {
     pub max_clients: u8,
 }
 
+impl RoomRoute {
+    /// A route for `room_type`, served by the Durable Object `binding`. `const`, so
+    /// route tables can be `static`:
+    ///
+    /// ```ignore
+    /// static ROUTES: [RoomRoute; 1] =
+    ///     [RoomRoute::new("tictactoe", "TICTACTOE", schema_hash_hex::<TicTacToe>, 2)];
+    /// ```
+    pub const fn new(room_type: &'static str, binding: &'static str, schema_hash: fn() -> String, max_clients: u8) -> Self {
+        Self { room_type, binding, container: None, schema_hash, max_clients }
+    }
+
+    /// Enable `GET /handoff/{sid}/connect` through this container binding.
+    pub const fn with_container(mut self, binding: &'static str) -> Self {
+        self.container = Some(binding);
+        self
+    }
+}
+
 /// Where `GET /me` reads the caller's own player data from.
+#[non_exhaustive]
 pub struct PlayerRoute {
     /// Durable Object binding name, e.g. `"TTT_PLAYER"`.
     pub binding: &'static str,
 }
 
+impl PlayerRoute {
+    /// `GET /me` reads from this Durable Object binding.
+    pub const fn new(binding: &'static str) -> Self {
+        Self { binding }
+    }
+}
+
 /// Everything a deployment's gateway needs to know.
+#[non_exhaustive]
 pub struct GatewayConfig {
+    /// The room types this gateway routes.
     pub rooms: &'static [RoomRoute],
     /// `None` disables `GET /me` (it returns 501).
     pub player: Option<PlayerRoute>,
@@ -49,6 +79,44 @@ pub struct GatewayConfig {
     pub auth: AuthConfig,
     /// Where the per-IP and per-player rate limits live.
     pub limits: ratelimit::Limits,
+}
+
+impl GatewayConfig {
+    /// A gateway for `rooms` with anonymous login, no `GET /me`, no matchmaker
+    /// and the default (binding-gated) rate limits.
+    pub fn new(rooms: &'static [RoomRoute]) -> Self {
+        Self {
+            rooms,
+            player: None,
+            matchmaker: false,
+            auth: AuthConfig::default(),
+            limits: ratelimit::Limits::default(),
+        }
+    }
+
+    /// Serve `GET /me` from this player route.
+    pub fn player(mut self, route: PlayerRoute) -> Self {
+        self.player = Some(route);
+        self
+    }
+
+    /// Serve `POST /match` and `GET /lobby`.
+    pub fn matchmaker(mut self, enabled: bool) -> Self {
+        self.matchmaker = enabled;
+        self
+    }
+
+    /// Use these login providers.
+    pub fn auth(mut self, auth: AuthConfig) -> Self {
+        self.auth = auth;
+        self
+    }
+
+    /// Use these rate limits.
+    pub fn limits(mut self, limits: ratelimit::Limits) -> Self {
+        self.limits = limits;
+        self
+    }
 }
 
 const SECRET_BINDING: &str = "HEARTH_SECRET";
@@ -743,6 +811,7 @@ async fn call_matchmaker(
     serde_json::from_value(value).map_err(|err| format!("matchmaker reply did not decode: {err}"))
 }
 
+#[doc(hidden)]
 /// The region of a matchmaker-minted room name: `m_<region>_<16 hex>`.
 pub fn mm_room(name: &str) -> Option<&str> {
     hearth_matchmaker::parse_room_name(name).map(|(region, _)| region)

@@ -16,6 +16,8 @@
 //! a Worker. A game server that already has an async runtime can run these calls
 //! on a blocking task.
 
+#![warn(missing_docs)]
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,7 +64,9 @@ impl std::error::Error for ServerError {}
 /// and the constructors below are the way to build a session.
 #[derive(Clone)]
 pub struct Session {
+    /// `HEARTH_SID`: the session id.
     pub sid: String,
+    /// `HEARTH_SESSION_SECRET`: authenticates redeems and reports.
     pub secret: String,
     /// `<public_url>/handoff/<sid>`, as the allocator reported it.
     pub report_url: String,
@@ -71,6 +75,7 @@ pub struct Session {
 }
 
 impl Session {
+    /// A session from its id, secret and report URL (tests; servers use `from_env`).
     pub fn new(
         sid: impl Into<String>,
         secret: impl Into<String>,

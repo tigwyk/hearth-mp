@@ -177,9 +177,20 @@ func _process(_delta: float) -> void:
 			_handle_drop(code if code >= 1000 and code <= 4999 else 1006, reason)
 
 
+## Close codes whose ERROR frame some WebSocket stacks (Godot's among them)
+## drop when it arrives in the same read as the close (spec section 9).
+const _CLOSE_ERRORS := {
+	4000: "BAD_FRAME", 4001: "SCHEMA_MISMATCH", 4002: "ROOM_FULL", 4003: "ROOM_LOCKED",
+	4005: "RATE_LIMITED", 4006: "FRAME_TOO_LARGE", 4007: "STATE_INCOMPATIBLE", 4010: "JOIN_REJECTED",
+}
+## Whether this socket delivered an ERROR frame.
+var _saw_error := false
+
+
 func _open_socket() -> bool:
 	_retry_at_ms = -1
 	_hello_sent = false
+	_saw_error = false
 	_last_ping_ms = Time.get_ticks_msec()
 	_peer = WebSocketPeer.new()
 	var error_code := _peer.connect_to_url(_url)
@@ -191,6 +202,8 @@ func _open_socket() -> bool:
 
 
 func _handle_drop(code: int, reason: String) -> void:
+	if not _saw_error and _CLOSE_ERRORS.has(code):
+		_emit_error(_CLOSE_ERRORS[code], reason, -1)
 	_awaiting_join = true
 	_report_unconfirmed()
 	if _first_drop_ms < 0:
@@ -284,9 +297,12 @@ func _handle_text(text: String) -> void:
 			if frame.get("ref_seq") != null:
 				ref_seq = int(frame["ref_seq"])
 				_in_flight.erase(ref_seq)
+			_saw_error = true
 			_emit_error(String(frame.get("code", "INTERNAL")), String(frame.get("message", "")), ref_seq)
 		_:
-			_emit_error("BAD_FRAME", "unknown server frame op", -1)
+			# A frame from a newer protocol revision: ignored, no error and no
+			# close (spec/protocol-v1.md section 12).
+			pass
 
 
 func _emit_server_event(event_name: String, data: Variant) -> void:

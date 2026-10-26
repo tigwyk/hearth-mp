@@ -151,6 +151,7 @@ impl<R: Room> Ctx<R> {
         });
     }
 
+    /// Cancel the timer set under `key`; a no-op when there is none.
     pub fn cancel_timer(&mut self, key: impl Into<TimerKey>) {
         self.effects.push(Effect::CancelTimer { key: key.into() });
     }
@@ -160,6 +161,7 @@ impl<R: Room> Ctx<R> {
         self.sql.as_ref()
     }
 
+    /// Disconnect `who` with close code 4004 (`KICKED`); `on_leave` runs with [`Leave::Kicked`](crate::Leave).
     pub fn kick(&mut self, who: &PlayerId) {
         self.effects.push(Effect::Kick(who.clone()));
     }
@@ -181,6 +183,7 @@ impl<R: Room> Ctx<R> {
         self.effects.push(Effect::Dispose);
     }
 
+    /// The host's clock, in Unix milliseconds.
     pub fn now_ms(&self) -> u64 {
         self.now_ms
     }

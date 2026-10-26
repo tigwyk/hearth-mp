@@ -23,7 +23,7 @@ wasm-bindgen = { version = "0.2.129", optional = true }
 
 [dev-dependencies]
 hearth-client.workspace = true
-hearth-protocol.workspace = true
+hearth-protocol = { workspace = true, features = ["vectors"] }
 serde_json.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]

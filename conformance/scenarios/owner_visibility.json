@@ -1,0 +1,142 @@
+{
+  "name": "owner_visibility",
+  "about": "Owner-only fields carry only the viewer's own entry; public changes reach every client.",
+  "clients": [
+    "a",
+    "b"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "b",
+      "send": "connect"
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "b",
+        "seat": 1
+      }
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "FULL_STATE",
+        "state": {
+          "seats": {
+            "a": 0,
+            "b": 1
+          }
+        }
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "seats": {
+            "a": 0,
+            "b": 1
+          }
+        }
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": {
+              "SetSecret": "x"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "secret": {
+            "a": "x"
+          }
+        }
+      }
+    },
+    {
+      "client": "b",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": {
+              "SetSecret": "y"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "b",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "secret": {
+            "b": "y",
+            "a": "$absent"
+          }
+        }
+      }
+    },
+    {
+      "client": "b",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 2,
+            "intent": {
+              "Add": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "n": 5,
+          "secret": {
+            "a": "x",
+            "b": "$absent"
+          }
+        }
+      }
+    }
+  ]
+}

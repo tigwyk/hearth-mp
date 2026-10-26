@@ -38,10 +38,13 @@ pub const DEFAULT_START_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 /// Default hard cap on a session's life.
 pub const DEFAULT_MAX_DURATION: Duration = Duration::from_secs(2 * 60 * 60);
+#[doc(hidden)]
 /// Allocation attempts before the session fails.
 pub const MAX_ALLOC_ATTEMPTS: u32 = 3;
+#[doc(hidden)]
 /// How long a job may stay in flight before it is re-issued.
 pub const JOB_IN_FLIGHT: Duration = Duration::from_secs(30);
+#[doc(hidden)]
 /// How long ended and failed sessions are kept before pruning.
 pub const SESSION_RETENTION: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -52,6 +55,8 @@ pub const HANDOFF_ENDED_EVENT: &str = "hearth.handoff_ended";
 /// Framework-owned event names use this prefix; rooms may not send them.
 pub const RESERVED_EVENT_PREFIX: &str = "hearth.";
 
+#[doc(hidden)]
+/// The `hearth_sessions` table: one row per handoff session.
 pub const CREATE_SESSIONS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_sessions (\
     sid TEXT PRIMARY KEY, \
     status TEXT NOT NULL, \
@@ -68,6 +73,8 @@ pub const CREATE_SESSIONS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_sessi
     heartbeat_timeout_ms INTEGER NOT NULL, \
     max_duration_ms INTEGER NOT NULL)";
 
+#[doc(hidden)]
+/// The `hearth_tickets` table: one row per player ticket (only its hash is stored).
 pub const CREATE_TICKETS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_tickets (\
     hash BLOB PRIMARY KEY, \
     sid TEXT NOT NULL, \
@@ -78,14 +85,20 @@ pub const CREATE_TICKETS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_ticket
 /// A session's persisted lifecycle state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionStatus {
+    /// The allocator is starting a server.
     Allocating,
+    /// The server is up; players were sent their tickets.
     Ready,
+    /// The server reported `started`.
     Started,
+    /// The session ended normally.
     Ended,
+    /// Allocation or the server failed.
     Failed,
 }
 
 impl SessionStatus {
+    /// The persisted name.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Allocating => "allocating",
@@ -96,6 +109,7 @@ impl SessionStatus {
         }
     }
 
+    /// The status for a persisted name.
     pub fn parse(text: &str) -> Option<Self> {
         match text {
             "allocating" => Some(Self::Allocating),
@@ -128,6 +142,7 @@ impl SessionId {
         Self(format!("hs_{payload}_{}", hex_encode(&random_bytes(8))))
     }
 
+    /// The id as text.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -161,17 +176,24 @@ impl fmt::Display for SessionId {
 
 /// What a room asks for when it hands players to a dedicated server.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct HandoffRequest {
+    /// The players to hand over.
     pub players: Vec<PlayerId>,
     /// Game-defined data for the dedicated server (mode, map, rules, ...).
     pub claims: Value,
+    /// The allocator region hint, if any.
     pub region: Option<String>,
+    /// How long the server may take to report `started`.
     pub start_timeout: Duration,
+    /// How long the server may go without a heartbeat.
     pub heartbeat_timeout: Duration,
+    /// The session's hard time limit.
     pub max_duration: Duration,
 }
 
 impl HandoffRequest {
+    /// A request for `players` with `claims`, and the default timeouts.
     pub fn new(players: Vec<PlayerId>, claims: Value) -> Self {
         Self {
             players,
@@ -183,21 +205,25 @@ impl HandoffRequest {
         }
     }
 
+    /// Ask the allocator for this region.
     pub fn region(mut self, region: impl Into<String>) -> Self {
         self.region = Some(region.into());
         self
     }
 
+    /// Override the start timeout.
     pub fn start_timeout(mut self, timeout: Duration) -> Self {
         self.start_timeout = timeout;
         self
     }
 
+    /// Override the heartbeat timeout.
     pub fn heartbeat_timeout(mut self, timeout: Duration) -> Self {
         self.heartbeat_timeout = timeout;
         self
     }
 
+    /// Override the maximum duration.
     pub fn max_duration(mut self, duration: Duration) -> Self {
         self.max_duration = duration;
         self
@@ -207,14 +233,19 @@ impl HandoffRequest {
 /// One allocation attempt, handed to the adapter to run outside the runtime lock.
 #[derive(Clone, Debug)]
 pub struct AllocJob {
+    /// The session to allocate.
     pub sid: SessionId,
     /// The plaintext session secret. It only lives in memory until allocation
     /// succeeds; before that the dedicated server has never seen it, so a
     /// restart may regenerate it.
     pub secret: String,
+    /// The room handing over.
     pub room: RoomName,
+    /// The players to hand over.
     pub players: Vec<PlayerId>,
+    /// Game-defined data for the server.
     pub claims: Value,
+    /// The allocator region hint, if any.
     pub region: Option<String>,
     /// The session's maximum duration in milliseconds. Adapters that start a
     /// server with a self-destruct backstop (Containers) use it so the backstop
@@ -227,44 +258,89 @@ pub struct AllocJob {
 /// A successfully redeemed ticket, as the dedicated server sees it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Redeemed {
+    /// The player the ticket was minted for.
     pub player_id: PlayerId,
+    /// Their login provider.
     pub provider: String,
+    /// Their display name, if the provider gave one.
     pub display_name: Option<String>,
+    /// The session's game-defined claims.
     pub claims: Value,
+    /// The session the ticket belongs to.
     pub sid: SessionId,
 }
 
 /// Lifecycle events a dedicated server reports back to the room.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ServerReport {
+    /// The server is ready for players.
     Started,
+    /// The server is alive.
     Heartbeat,
-    PlayerJoined { player: PlayerId },
-    PlayerLeft { player: PlayerId },
-    Result { data: Value },
-    Ended { reason: String },
+    /// A player connected to the server.
+    PlayerJoined {
+        /// Who.
+        player: PlayerId,
+    },
+    /// A player left the server.
+    PlayerLeft {
+        /// Who.
+        player: PlayerId,
+    },
+    /// A game result for the room.
+    Result {
+        /// Game-defined result data.
+        data: Value,
+    },
+    /// The session is over.
+    Ended {
+        /// Why, for humans.
+        reason: String,
+    },
 }
 
 /// What the room's [`crate::Room::on_handoff`] hook receives.
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 pub enum HandoffEvent {
-    Ready { endpoint: String },
+    /// The server is up; players received their tickets.
+    Ready {
+        /// The server's address.
+        endpoint: String,
+    },
+    /// The server reported `started`.
     Started,
+    /// A player connected to the server.
     PlayerJoined(PlayerId),
+    /// A player left the server.
     PlayerLeft(PlayerId),
+    /// The server reported a result.
     Result(Value),
-    Ended { reason: String },
-    Failed { reason: String },
+    /// The session ended normally.
+    Ended {
+        /// Why, for humans.
+        reason: String,
+    },
+    /// Allocation or the server failed.
+    Failed {
+        /// What went wrong.
+        reason: String,
+    },
 }
 
 /// Why a redeem or report was rejected. The variants are the only information a
 /// server gets: `Forbidden` covers a bad secret, a used or expired ticket, and a
 /// ticket minted for another session.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum HandoffError {
+    /// No such session.
     NotFound,
+    /// A bad secret, or a used, expired or foreign ticket.
     Forbidden,
+    /// The session is over.
     Gone,
 }
 
@@ -296,6 +372,7 @@ pub fn is_reserved_event(name: &str) -> bool {
     name.starts_with(RESERVED_EVENT_PREFIX)
 }
 
+#[doc(hidden)]
 /// Mint a ticket: returns `(plaintext, hash)`. Only the hash is stored.
 pub fn new_ticket() -> (String, Vec<u8>) {
     let value = hex_encode(&random_bytes(16));
@@ -303,11 +380,13 @@ pub fn new_ticket() -> (String, Vec<u8>) {
     (value, hash)
 }
 
+#[doc(hidden)]
 /// The stored form of a ticket.
 pub fn hash_ticket(ticket: &str) -> Vec<u8> {
     Sha256::digest(ticket.as_bytes()).to_vec()
 }
 
+#[doc(hidden)]
 /// Mint a session secret: returns `(plaintext hex, hash)`. Only the hash is
 /// stored, and the plaintext is sent to the allocator or container once.
 pub fn new_secret() -> (String, Vec<u8>) {
@@ -316,11 +395,13 @@ pub fn new_secret() -> (String, Vec<u8>) {
     (value, hash)
 }
 
+#[doc(hidden)]
 /// The stored form of a session secret.
 pub fn hash_secret(secret: &str) -> Vec<u8> {
     Sha256::digest(secret.as_bytes()).to_vec()
 }
 
+#[doc(hidden)]
 /// Compare two hashes without leaking where they differ.
 pub fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
     if left.len() != right.len() {

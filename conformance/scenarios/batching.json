@@ -1,0 +1,73 @@
+{
+  "name": "batching",
+  "about": "Intents queued together travel in one INTENT frame and are acknowledged together.",
+  "clients": [
+    "a"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": {
+              "Add": 1
+            }
+          },
+          {
+            "seq": 2,
+            "intent": {
+              "Add": 1
+            }
+          },
+          {
+            "seq": 3,
+            "intent": {
+              "Add": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "n": 3
+        }
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ACK",
+        "intent_seqs": [
+          1,
+          2,
+          3
+        ]
+      }
+    }
+  ]
+}

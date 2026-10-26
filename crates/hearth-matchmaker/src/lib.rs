@@ -13,6 +13,8 @@
 //! - quick-join only, no skill or rating matching: add queues when a game needs
 //!   them.
 
+#![warn(missing_docs)]
+
 use hearth_protocol::{PlayerId, Value};
 use hearth_server::{Callable, Result, RoomReport, Service, ServiceCtx, Sql, SqlValue, Target};
 use serde::{Deserialize, Serialize};
@@ -42,12 +44,20 @@ const CREATE_RESERVATIONS: &str = "CREATE TABLE IF NOT EXISTS mm_reservations (\
 pub enum MmRpc {
     /// Seat the player in the fullest room with a free seat, or mint one.
     QuickJoin {
+        /// The player to seat.
         player: PlayerId,
+        /// The pool to match in.
         pool: String,
+        /// Seats per room.
         capacity: u8,
     },
     /// The lobby listing of open rooms in one pool.
-    List { pool: String, limit: u32 },
+    List {
+        /// The pool to list.
+        pool: String,
+        /// At most this many rooms.
+        limit: u32,
+    },
     /// A room's lifecycle report; reports for names this matchmaker never
     /// minted are ignored, so a self-made `m_...` name cannot pollute the lobby.
     Report(RoomReport),
@@ -58,18 +68,25 @@ pub enum MmRpc {
 pub enum MmReply {
     /// The room the player was seated in.
     Room {
+        /// The room name.
         name: String,
     },
+    /// The lobby listing.
     Rooms(Vec<OpenRoom>),
+    /// The report was recorded.
     Ok,
 }
 
 /// One lobby row: what `GET /lobby` returns.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct OpenRoom {
+    /// The room name.
     pub name: String,
+    /// Seated players.
     pub players: u8,
+    /// Seats in total.
     pub capacity: u8,
+    /// The room's `ctx.set_metadata` value.
     pub metadata: Value,
 }
 
@@ -79,6 +96,7 @@ pub struct OpenRoom {
 pub struct MatchmakerService;
 
 #[derive(Default, Serialize, Deserialize)]
+/// The matchmaker's (empty) object state: everything lives in its SQL tables.
 pub struct MatchmakerState {}
 
 impl Callable for MatchmakerService {
@@ -352,6 +370,8 @@ fn apply_report(sql: &dyn Sql, report: &RoomReport, now: u64) -> Result<()> {
                 vec![SqlValue::Text(room.name.clone())],
             )?;
         }
+        // Report kinds added by a later hearth-server release.
+        _ => {}
     }
     Ok(())
 }
@@ -503,6 +523,7 @@ fn mint_name(region: &str) -> String {
     format!("m_{region}_{hex}")
 }
 
+#[doc(hidden)]
 /// The name form `mm_room` recognises; used by the gateway.
 pub fn parse_room_name(name: &str) -> Option<(&str, &str)> {
     let rest = name.strip_prefix("m_")?;

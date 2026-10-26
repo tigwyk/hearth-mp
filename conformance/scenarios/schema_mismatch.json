@@ -1,0 +1,26 @@
+{
+  "name": "schema_mismatch",
+  "about": "A wrong schema hash is refused with SCHEMA_MISMATCH (the server then closes with 4001).",
+  "clients": [
+    "a"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": {
+        "op": "HELLO",
+        "protocol": 1,
+        "schema_hash": "ffffffffffffffff",
+        "opts": {}
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ERROR",
+        "code": "SCHEMA_MISMATCH",
+        "ref_seq": null
+      }
+    }
+  ]
+}

@@ -6,11 +6,12 @@ use crate::frame::PatchOp;
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PatchError {
     #[error("bad patch path: {0:?}")]
+    /// The op's path does not resolve (spec/protocol-v1.md section 7): a desync.
     BadPath(Vec<Value>),
 }
 
 /// Apply one patch op in place. See `docs/protocol.md` and the conformance
-/// fixture `tests/fixtures/patch_cases.json`.
+/// fixture `conformance/vectors/patch.json`.
 pub fn apply(state: &mut Value, op: &PatchOp) -> Result<(), PatchError> {
     match op {
         PatchOp::Set { path, value } => match path.split_last() {

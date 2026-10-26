@@ -28,8 +28,17 @@ typedef struct HearthPredictor HearthPredictor;
  * non-empty one must be passed to [`hearth_buf_free`] exactly once.
  */
 typedef struct HearthBuf {
+  /**
+   * The bytes, or null when empty.
+   */
   uint8_t *ptr;
+  /**
+   * Their length.
+   */
   uintptr_t len;
+  /**
+   * The allocation's capacity (needed to free it).
+   */
   uintptr_t cap;
 } HearthBuf;
 

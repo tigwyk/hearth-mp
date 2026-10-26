@@ -1,0 +1,16 @@
+# Wasm bundle budgets, checked by scripts/bundle-size.sh (also the last step of
+# scripts/check-stability.sh). gzip KiB of build/index_bg.wasm + build/index.js +
+# build/worker/shim.mjs after `worker-build --release`.
+#
+# Each budget is the size measured after the v1.0a release profile
+# (opt-level "z", lto, codegen-units 1), plus 15%, rounded up. Raise one only on
+# purpose, with the reason in the commit. A tracked metric, not a semver promise
+# (spec/stability.md).
+#
+# Workers limit: 3 MiB (Free) / 10 MiB (Paid) compressed — verify on implementation day at developers.cloudflare.com/workers/platform/limits
+
+[budget]
+tictactoe = 633
+arena = 609
+arena-dedicated = 594
+hearth-new = 584

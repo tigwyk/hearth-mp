@@ -42,27 +42,47 @@ pub const fn mix(a: u64, b: u64) -> u64 {
 /// on. Codegen consumes this shape verbatim.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum TypeRef {
+    /// `bool`.
     Bool,
+    /// `i8`.
     I8,
+    /// `i16`.
     I16,
+    /// `i32`.
     I32,
+    /// `i64`.
     I64,
+    /// `u8`.
     U8,
+    /// `u16`.
     U16,
+    /// `u32`.
     U32,
+    /// `u64`.
     U64,
+    /// `f32`.
     F32,
+    /// `f64`.
     F64,
+    /// `String`.
     String,
+    /// `PlayerId` (a string on the wire).
     PlayerId,
+    /// `()`: `null` on the wire.
     Unit,
+    /// `Option<T>`: `null` or a value.
     Option(Box<TypeRef>),
+    /// `Vec<T>` or a synced list.
     List(Box<TypeRef>),
     /// A fixed-size array: the element type and the length.
     Array(Box<TypeRef>, u64),
+    /// A map; keys travel as strings.
     Map(Box<TypeRef>, Box<TypeRef>),
+    /// A [`SyncMap`], diffed per key.
     SyncMap(Box<TypeRef>, Box<TypeRef>),
+    /// A tuple: an array with one value per element type.
     Tuple(Vec<TypeRef>),
     /// A type registered in the [`Registry`] under this Rust type name.
     Named(String),
@@ -72,32 +92,44 @@ pub enum TypeRef {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Vis {
+    /// Every client sees the field.
     Public,
+    /// Each client sees only its own entry (`#[sync(owner)]`).
     Owner,
 }
 
 /// One field of a struct or struct variant.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Field {
+    /// The field name on the wire.
     pub name: String,
+    /// The field's type.
     pub ty: TypeRef,
+    /// Who may see it.
     pub vis: Vis,
 }
 
 /// One enum variant and its payload shape.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Variant {
+    /// The variant name on the wire.
     pub name: String,
+    /// Its payload.
     pub shape: Shape,
 }
 
 /// The payload shape of an enum variant.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum Shape {
+    /// No payload.
     Unit,
+    /// One value.
     Newtype(TypeRef),
+    /// Positional values.
     Tuple(Vec<TypeRef>),
+    /// Named fields.
     Struct(Vec<Field>),
 }
 
@@ -105,8 +137,16 @@ pub enum Shape {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TypeDef {
-    Struct { fields: Vec<Field> },
-    Enum { variants: Vec<Variant> },
+    /// A struct: one value per field.
+    Struct {
+        /// The fields, in declaration order.
+        fields: Vec<Field>,
+    },
+    /// An enum, in serde's external tagging.
+    Enum {
+        /// The variants, in declaration order.
+        variants: Vec<Variant>,
+    },
 }
 
 /// Every named type reachable from one room's state and intent types.
@@ -139,6 +179,7 @@ impl Registry {
 /// Two schema hashes match only when the synchronised shape matches; clients
 /// send the hash in `HELLO` and a mismatch is a hard reject.
 pub trait Schema {
+    /// The type's schema hash: changes whenever its wire shape does.
     const HASH: u64;
 
     /// This type's shape, registering every named type it reaches in `reg`.

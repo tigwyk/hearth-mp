@@ -8,16 +8,22 @@ use crate::Result;
 /// One SQL value, mapped 1:1 onto SQLite storage types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SqlValue {
+    /// SQL `NULL`.
     Null,
+    /// A 64-bit integer.
     Int(i64),
+    /// A 64-bit float.
     Real(f64),
+    /// UTF-8 text.
     Text(String),
+    /// Raw bytes.
     Blob(Vec<u8>),
 }
 
 /// The room's SQLite database. The runtime creates its own tables; dev code may
 /// create and use its own through [`crate::Ctx::sql`].
 pub trait Sql {
+    /// Run one statement with positional `?` parameters; rows come back as JSON objects by column name.
     fn exec(
         &self,
         query: &str,
@@ -33,8 +39,11 @@ pub const ANON_PROVIDER: &str = "anon";
 /// attachment, so rebuilding a view never needs a storage read.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Attachment {
+    /// The player this socket belongs to.
     pub player_id: PlayerId,
+    /// The seat, once joined.
     pub seat: Option<u8>,
+    /// The encoding chosen by the socket's `HELLO`, once received.
     pub encoding: Option<hearth_protocol::Encoding>,
     /// An admin tail socket: never a seat, never a client, never keeps the room
     /// alive. Defaulted so attachments written before v0.2c still decode.
@@ -58,8 +67,11 @@ fn anon_provider() -> String {
 /// see raw credentials: only this reaches the runtime.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Session {
+    /// The verified player identity.
     pub player: PlayerId,
+    /// The login provider: `"anon"`, `"jwt"`, `"steam"`, `"itch"` or `"discord"`.
     pub provider: String,
+    /// The provider's display name, when it gave one.
     pub display_name: Option<String>,
 }
 
@@ -78,7 +90,9 @@ impl Session {
 /// A Durable Object room's identity: its type (`"tictactoe"`) and its name.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct RoomName {
+    /// The room type, for example `"tictactoe"`.
     pub room_type: String,
+    /// The room's name within its type.
     pub name: String,
 }
 
@@ -89,23 +103,39 @@ pub struct RoomName {
 /// matchmaker echoes in its lobby listing.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum RoomReport {
+    /// The room exists and accepts players.
     Open {
+        /// Which room.
         room: RoomName,
+        /// When it was created, Unix ms.
         created_ms: u64,
+        /// The seated roster, live and held.
         players: Vec<PlayerId>,
+        /// Its seat count.
         capacity: u8,
+        /// Whether it refuses new players.
         locked: bool,
+        /// The room's `ctx.set_metadata` value.
         metadata: Value,
     },
+    /// The roster or lock changed.
     Players {
+        /// Which room.
         room: RoomName,
+        /// The seated roster, live and held.
         players: Vec<PlayerId>,
+        /// Its seat count.
         capacity: u8,
+        /// Whether it refuses new players.
         locked: bool,
+        /// The room's `ctx.set_metadata` value.
         metadata: Value,
     },
+    /// The room was disposed.
     Disposed {
+        /// Which room.
         room: RoomName,
     },
 }
@@ -114,21 +144,31 @@ pub enum RoomReport {
 /// implementation wraps a hibernating Durable Object (`worker` feature); the
 /// test harness implements it over an in-memory SQLite database and sockets.
 #[allow(async_fn_in_trait)]
-pub trait Host {
+pub trait Host: crate::__private::Sealed {
+    /// The host's socket handle.
     type Socket: Clone + PartialEq;
 
+    /// Every open socket.
     fn sockets(&self) -> Vec<Self::Socket>;
+    /// A socket's attachment, if it has one.
     fn attachment(&self, socket: &Self::Socket) -> Option<Attachment>;
+    /// Store a socket's attachment (it survives hibernation).
     fn set_attachment(&self, socket: &Self::Socket, attachment: &Attachment);
+    /// Send one frame; a socket that is gone accepts nothing.
     fn send(&self, socket: &Self::Socket, msg: WireMsg);
+    /// Close a socket with a close code and reason.
     fn close(&self, socket: &Self::Socket, code: u16, reason: &str);
+    /// The clock, Unix milliseconds.
     fn now_ms(&self) -> u64;
+    /// The room's SQLite storage.
     fn sql(&self) -> &dyn Sql;
     /// An owned SQL handle for [`crate::Ctx::sql`]. `Ctx` outlives the runtime
     /// borrow that produced it, so the handle is reference-counted.
     fn sql_handle(&self) -> Rc<dyn Sql>;
 
+    /// Set (or with `None` clear) the single alarm.
     async fn set_alarm(&self, at_ms: Option<u64>) -> Result<()>;
+    /// Delete all of the room's storage (disposal).
     async fn wipe(&self) -> Result<()>;
 
     /// Send one object-to-object call to `to` and return its reply.

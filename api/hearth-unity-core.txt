@@ -1,0 +1,53 @@
+pub mod hearth_unity_core
+pub macro hearth_unity_core::plugin!
+#[repr(C)] pub struct hearth_unity_core::HearthBuf
+pub hearth_unity_core::HearthBuf::cap: usize
+pub hearth_unity_core::HearthBuf::len: usize
+pub hearth_unity_core::HearthBuf::ptr: *mut u8
+impl core::marker::Freeze for hearth_unity_core::HearthBuf
+impl !core::marker::Send for hearth_unity_core::HearthBuf
+impl !core::marker::Sync for hearth_unity_core::HearthBuf
+impl core::marker::Unpin for hearth_unity_core::HearthBuf
+impl core::marker::UnsafeUnpin for hearth_unity_core::HearthBuf
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_unity_core::HearthBuf
+impl core::panic::unwind_safe::UnwindSafe for hearth_unity_core::HearthBuf
+pub struct hearth_unity_core::HearthClient
+impl core::marker::Freeze for hearth_unity_core::HearthClient
+impl core::marker::Send for hearth_unity_core::HearthClient
+impl core::marker::Sync for hearth_unity_core::HearthClient
+impl core::marker::Unpin for hearth_unity_core::HearthClient
+impl core::marker::UnsafeUnpin for hearth_unity_core::HearthClient
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_unity_core::HearthClient
+impl core::panic::unwind_safe::UnwindSafe for hearth_unity_core::HearthClient
+pub struct hearth_unity_core::HearthInterp
+impl hearth_unity_core::HearthInterp
+pub fn hearth_unity_core::HearthInterp::new(u8) -> Self
+pub fn hearth_unity_core::HearthInterp::on_patch(&mut self, &str, u64, u64) -> core::result::Result<(), alloc::string::String>
+pub fn hearth_unity_core::HearthInterp::reset(&mut self)
+pub fn hearth_unity_core::HearthInterp::sample(&self, &str, u64) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub fn hearth_unity_core::HearthInterp::sample_at(&self, &str, u64) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub fn hearth_unity_core::HearthInterp::track(&mut self, &str) -> core::result::Result<(), alloc::string::String>
+impl core::marker::Freeze for hearth_unity_core::HearthInterp
+impl core::marker::Send for hearth_unity_core::HearthInterp
+impl core::marker::Sync for hearth_unity_core::HearthInterp
+impl core::marker::Unpin for hearth_unity_core::HearthInterp
+impl core::marker::UnsafeUnpin for hearth_unity_core::HearthInterp
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_unity_core::HearthInterp
+impl core::panic::unwind_safe::UnwindSafe for hearth_unity_core::HearthInterp
+pub struct hearth_unity_core::HearthPredictor
+impl hearth_unity_core::HearthPredictor
+pub fn hearth_unity_core::HearthPredictor::input(&mut self, u32, &str) -> bool
+pub fn hearth_unity_core::HearthPredictor::new(&[(&str, hearth_unity_core::LogicCtor)], &str, &str, u8) -> core::result::Result<Self, alloc::string::String>
+pub fn hearth_unity_core::HearthPredictor::on_authoritative(&mut self, &str, &str) -> bool
+pub fn hearth_unity_core::HearthPredictor::on_unconfirmed(&mut self, &str)
+pub fn hearth_unity_core::HearthPredictor::state(&mut self) -> alloc::string::String
+impl core::marker::Freeze for hearth_unity_core::HearthPredictor
+impl !core::marker::Send for hearth_unity_core::HearthPredictor
+impl !core::marker::Sync for hearth_unity_core::HearthPredictor
+impl core::marker::Unpin for hearth_unity_core::HearthPredictor
+impl core::marker::UnsafeUnpin for hearth_unity_core::HearthPredictor
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_unity_core::HearthPredictor
+impl !core::panic::unwind_safe::UnwindSafe for hearth_unity_core::HearthPredictor
+pub fn hearth_unity_core::guard<T>(T, impl core::ops::function::FnOnce() -> core::result::Result<T, alloc::string::String>) -> T
+pub fn hearth_unity_core::last_error() -> alloc::string::String
+pub type hearth_unity_core::LogicCtor = fn(hearth_protocol::frame::PlayerId, u8) -> alloc::boxed::Box<dyn hearth_client::predict::DynPredictor>

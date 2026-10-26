@@ -140,7 +140,7 @@ fn null_handle_is_safe() {
 #[test]
 fn garbage_frame_is_error_event_not_crash() {
     let c = new_client(0);
-    let garbage = [0xFFu8, 0x00, 0x13];
+    let garbage = [0x04u8, 0xC1, 0x13];
     let events = take_json(unsafe { hearth_client_handle(c, garbage.as_ptr(), garbage.len(), 0) });
     assert_eq!(events[0]["type"], "error");
     assert_eq!(events[0]["code"], "BAD_FRAME");
@@ -177,11 +177,7 @@ fn error_event_and_unconfirmed_shapes() {
 
 #[test]
 fn reconnect_decide_matches_fixture() {
-    let cases: Value = serde_json::from_str(include_str!(
-        "../../hearth-client/tests/fixtures/reconnect_cases.json"
-    ))
-    .unwrap();
-    for case in cases.as_array().unwrap() {
+    for case in &hearth_protocol::vectors::load("reconnect.json") {
         let actual = hearth_reconnect_decide(
             case["code"].as_u64().unwrap() as u16,
             case["first_drop_ms"].as_u64().unwrap(),

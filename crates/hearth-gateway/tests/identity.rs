@@ -80,13 +80,11 @@ fn token_v2_round_trips_identity_with_name() {
 }
 
 #[test]
-fn v1_token_without_prv_is_anon() {
+fn token_without_prv_rejected() {
+    // The pre-v0.3b compatibility shim is gone (v1.0a): every token names its provider.
     let player = anonymous_player_id(SECRET, "device-one");
     let token = signed(SECRET, json!({ "pid": player.0, "exp": NOW + 60 }));
-    let identity = verify_token(SECRET, &token, NOW).expect("a v1 token still verifies");
-    assert_eq!(identity.player_id, player);
-    assert_eq!(identity.provider, "anon");
-    assert_eq!(identity.display_name, None);
+    assert_eq!(verify_token(SECRET, &token, NOW), Err(AuthError::Malformed));
 }
 
 #[test]

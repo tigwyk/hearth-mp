@@ -1,9 +1,12 @@
 //! Hearth Gateway Worker library: auth providers, token verification and room routing.
 
+#![warn(missing_docs)]
+
 pub mod auth;
 pub mod providers;
 pub mod ratelimit;
 pub mod routes;
+#[doc(hidden)]
 pub mod webcrypto;
 
 pub use auth::{

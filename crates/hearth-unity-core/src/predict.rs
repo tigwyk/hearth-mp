@@ -63,6 +63,7 @@ impl HearthPredictor {
         fallback
     }
 
+    /// Record input `seq` (JSON for the logic's input) and step; `false` once poisoned.
     pub fn input(&mut self, seq: u32, input_json: &str) -> bool {
         self.run(false, |p| {
             let input: Value =
@@ -71,6 +72,7 @@ impl HearthPredictor {
         })
     }
 
+    /// Reconcile with the authoritative state; `acked_json` is a JSON array of seqs.
     pub fn on_authoritative(&mut self, state_json: &str, acked_json: &str) -> bool {
         self.run(false, |p| {
             let state: Value =
@@ -80,6 +82,7 @@ impl HearthPredictor {
         })
     }
 
+    /// Drop inputs the server reported as unconfirmed.
     pub fn on_unconfirmed(&mut self, seqs_json: &str) {
         self.run((), |p| {
             p.on_unconfirmed(&seqs(seqs_json)?);
@@ -107,6 +110,7 @@ pub fn names(registry: &[(&str, LogicCtor)]) -> String {
 }
 
 /// The C ABI bodies; the `registry` argument is the plugin's static table.
+#[doc(hidden)]
 pub mod ffi {
     use std::ffi::c_char;
 

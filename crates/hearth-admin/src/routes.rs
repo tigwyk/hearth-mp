@@ -59,6 +59,7 @@ pub fn admin_token(env: &Env) -> Option<Vec<u8>> {
     )
 }
 
+#[doc(hidden)]
 /// [`admin_token`] with the environment read split out, so it is testable.
 pub fn token_from(value: Option<String>) -> Option<Vec<u8>> {
     value
@@ -66,6 +67,7 @@ pub fn token_from(value: Option<String>) -> Option<Vec<u8>> {
         .map(String::into_bytes)
 }
 
+#[doc(hidden)]
 /// `Authorization: Bearer <token>`, compared in constant time over the full
 /// token so a wrong token leaks no prefix.
 pub fn check_bearer(header: Option<&str>, token: &[u8]) -> bool {

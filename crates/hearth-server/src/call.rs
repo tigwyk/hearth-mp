@@ -25,11 +25,14 @@ use crate::host::Host;
 /// object's name (the `id_from_name` name).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Target {
+    /// The Durable Object binding name (`wrangler.toml`).
     pub binding: String,
+    /// The object's name within the binding (its `id_from_name` name).
     pub name: String,
 }
 
 impl Target {
+    /// A target from its binding and name.
     pub fn new(binding: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             binding: binding.into(),
@@ -47,7 +50,9 @@ impl Target {
 pub struct Envelope {
     /// Set for durable `notify` deliveries only; the receiver deduplicates it.
     pub msg_id: Option<String>,
+    /// The calling object.
     pub from: Target,
+    /// Every object awaiting an answer, outermost first (reentrancy detection).
     pub chain: Vec<Target>,
     /// The rpc payload, JSON-shaped like every other Hearth payload.
     pub rpc: Value,
@@ -56,14 +61,19 @@ pub struct Envelope {
 /// A failed call. Serialises into the reply body, so the caller sees the exact
 /// failure the receiver produced.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum CallError {
     #[error("reentrant call into {0:?}")]
+    /// The target is already waiting on this call chain; answering would deadlock.
     ReentrantCall(Target),
     #[error("bad rpc: {0}")]
+    /// The rpc payload did not decode into the receiver's `Rpc` type.
     BadRpc(String),
     #[error("{0}")]
+    /// The receiver's handler returned this error.
     Handler(String),
     #[error("unreachable: {0}")]
+    /// The target could not be reached or did not answer; the only retryable error.
     Unreachable(String),
 }
 
@@ -79,8 +89,11 @@ impl CallError {
 /// the types its `on_call` speaks. `#[hearth::service]` and `#[hearth::room(...,
 /// rpc)]` emit it; a native test writes the same three lines by hand.
 pub trait Callable {
+    /// The Durable Object binding that reaches this object.
     const BINDING: &'static str;
+    /// What its `on_call` accepts.
     type Rpc: Serialize + DeserializeOwned;
+    /// What its `on_call` answers.
     type Reply: Serialize + DeserializeOwned;
 }
 
@@ -91,6 +104,7 @@ pub type CallFuture<'a> = Pin<Box<dyn Future<Output = std::result::Result<Value,
 /// How a runtime reaches another object. The [`Host`] implements it through
 /// [`HostCaller`]; tests route it through their in-memory world.
 pub trait CallTransport {
+    /// Send one call to `to` and await the reply.
     fn call(&self, to: Target, envelope: Envelope) -> CallFuture<'_>;
 }
 

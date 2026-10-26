@@ -14,7 +14,9 @@ use serde_json::{Number, Value};
 /// `int`, everything else (including `3.0`) becomes a Variant `float`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NumberRepr {
+    /// An exact integer.
     Int(i64),
+    /// Any other number.
     Float(f64),
 }
 
@@ -37,12 +39,19 @@ pub fn key_is_string(ty: VariantType) -> bool {
 /// production and for a plain Rust tree in tests, so the recursion is testable
 /// without an engine.
 pub trait BuildVariant: Sized {
+    /// `null`.
     fn nil() -> Self;
+    /// A boolean.
     fn bool(value: bool) -> Self;
+    /// An integer.
     fn int(value: i64) -> Self;
+    /// A float.
     fn float(value: f64) -> Self;
+    /// A string.
     fn string(value: String) -> Self;
+    /// An array.
     fn array(values: Vec<Self>) -> Self;
+    /// An object, in key order.
     fn object(entries: Vec<(String, Self)>) -> Self;
 }
 

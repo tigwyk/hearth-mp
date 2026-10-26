@@ -26,20 +26,13 @@ const DISCORD_ID: &str = "80351110224678912";
 const ACCESS_TOKEN: &str = "discord-access-token-value";
 
 fn steam_config() -> SteamConfig {
-    SteamConfig {
-        app_id: 480,
-        key_env: "HEARTH_STEAM_KEY",
-        identity: "hearth".to_owned(),
-        reject_banned: true,
-    }
+    SteamConfig::new(480, "HEARTH_STEAM_KEY")
 }
 
 fn discord_config(redirect_uri: Option<&str>) -> DiscordConfig {
-    DiscordConfig {
-        client_id: "client-id".to_owned(),
-        secret_env: "HEARTH_DISCORD_SECRET",
-        redirect_uri: redirect_uri.map(str::to_owned),
-    }
+    let mut config = DiscordConfig::new("client-id", "HEARTH_DISCORD_SECRET");
+    config.redirect_uri = redirect_uri.map(str::to_owned);
+    config
 }
 
 fn steam_body() -> Value {
@@ -165,10 +158,8 @@ fn steam_banned_allowed_when_configured() {
     params["publisherbanned"] = Value::Bool(true);
     params["vacbanned"] = Value::Bool(true);
     let fetcher = CannedFetcher::new().route(STEAM_PREFIX, 200, &steam_response(params));
-    let config = SteamConfig {
-        reject_banned: false,
-        ..steam_config()
-    };
+    let mut config = steam_config();
+    config.reject_banned = false;
     let identity = call_steam(&config, &steam_body(), &fetcher).expect("bans are allowed");
     assert_eq!(identity.player_id.0, format!("steam_{STEAM_ID}"));
 }

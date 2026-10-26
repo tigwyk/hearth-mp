@@ -28,8 +28,11 @@ use crate::Result;
 /// durable data in `State`, not in the struct's fields.
 #[allow(async_fn_in_trait)]
 pub trait Service: Default + 'static {
+    /// The persisted state.
     type State: Serialize + DeserializeOwned + Default;
+    /// What `on_call` accepts.
     type Rpc: Serialize + DeserializeOwned;
+    /// What `on_call` answers.
     type Reply: Serialize + DeserializeOwned;
 
     /// Handle one call from another object.
@@ -98,10 +101,12 @@ impl<S: Service> ServiceCtx<S> {
         });
     }
 
+    /// Cancel the timer set under `key`; a no-op when there is none.
     pub fn cancel_timer(&mut self, key: impl Into<TimerKey>) {
         self.effects.push(Effect::CancelTimer { key: key.into() });
     }
 
+    /// The host's clock, in Unix milliseconds.
     pub fn now_ms(&self) -> u64 {
         self.now_ms
     }
@@ -149,6 +154,7 @@ pub struct ServiceRuntime<S: Service, H: Host> {
 }
 
 impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
+    /// A runtime for one service object over `host`; `binding` is its Durable Object binding name.
     pub fn new(host: H, binding: &'static str) -> Self {
         Self {
             host: Rc::new(host),
@@ -161,6 +167,7 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
         }
     }
 
+    /// The loaded state, if any.
     pub fn state(&self) -> Option<&S::State> {
         self.state.as_ref()
     }
@@ -261,6 +268,7 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
         )?))
     }
 
+    /// The host's alarm fired: timers and outbox retries.
     pub async fn alarm(&mut self) {
         if let Err(err) = self.handle_alarm().await {
             crate::runtime::log_error(err);
@@ -502,6 +510,7 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
 
 /// Drop the in-memory runtime as hibernation does; storage stays.
 impl<S: Service, H: Host + Clone + 'static> ServiceRuntime<S, H> {
+    /// Drop in-memory state as a hibernating Durable Object would; the next event reloads it.
     pub fn hibernate(&mut self) {
         let host = H::clone(&self.host);
         *self = Self::new(host, self.binding);

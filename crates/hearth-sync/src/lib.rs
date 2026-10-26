@@ -5,6 +5,8 @@
 //! sends the difference between the view before and after each handler pass as
 //! `PatchOp`s.
 
+#![warn(missing_docs)]
+
 mod diff;
 mod map;
 mod schema;

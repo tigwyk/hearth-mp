@@ -49,7 +49,7 @@ namespace Hearth.Tests
         public void Garbage_Frame_Is_Error_Event()
         {
             using var core = new NativeCore(Hash, 0);
-            var events = core.Handle(new byte[] { 0xFF, 0x00 }, false);
+            var events = core.Handle(new byte[] { 0x04, 0xC1 }, false);
             Assert.AreEqual("error", (string)events[0]["type"]);
             Assert.AreEqual("BAD_FRAME", (string)events[0]["code"]);
         }
@@ -66,10 +66,7 @@ namespace Hearth.Tests
         [Test]
         public void ReconnectDecide_MatchesFixture()
         {
-            var path = Path.Combine(Path.GetFullPath("Packages/com.hearth.client"),
-                "../../crates/hearth-client/tests/fixtures/reconnect_cases.json");
-            var cases = JArray.Parse(File.ReadAllText(path));
-            Assert.IsNotEmpty(cases);
+            var cases = Vectors.Load("reconnect.json");
             foreach (var c in cases)
             {
                 var actual = HearthNative.ReconnectDecide((ushort)c["code"], (ulong)c["first_drop_ms"], (uint)c["attempt"], (ulong)c["now_ms"]);

@@ -1,0 +1,415 @@
+pub mod hearth_gateway
+pub use hearth_gateway::CannedFetcher
+pub use hearth_gateway::Fetcher
+pub use hearth_gateway::HttpReq
+pub use hearth_gateway::HttpResp
+pub mod hearth_gateway::auth
+pub enum hearth_gateway::auth::AuthError
+pub hearth_gateway::auth::AuthError::BadSignature
+pub hearth_gateway::auth::AuthError::BadSubject
+pub hearth_gateway::auth::AuthError::Expired
+pub hearth_gateway::auth::AuthError::Malformed
+impl core::clone::Clone for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::auth::AuthError
+impl core::cmp::PartialEq for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_gateway::auth::AuthError
+impl core::marker::StructuralPartialEq for hearth_gateway::auth::AuthError
+impl core::marker::Freeze for hearth_gateway::auth::AuthError
+impl core::marker::Send for hearth_gateway::auth::AuthError
+impl core::marker::Sync for hearth_gateway::auth::AuthError
+impl core::marker::Unpin for hearth_gateway::auth::AuthError
+impl core::marker::UnsafeUnpin for hearth_gateway::auth::AuthError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::auth::AuthError
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::auth::AuthError
+pub struct hearth_gateway::auth::Identity
+pub hearth_gateway::auth::Identity::display_name: core::option::Option<alloc::string::String>
+pub hearth_gateway::auth::Identity::player_id: hearth_protocol::frame::PlayerId
+pub hearth_gateway::auth::Identity::provider: &'static str
+impl core::clone::Clone for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::auth::Identity
+impl core::cmp::PartialEq for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_gateway::auth::Identity
+impl core::marker::Freeze for hearth_gateway::auth::Identity
+impl core::marker::Send for hearth_gateway::auth::Identity
+impl core::marker::Sync for hearth_gateway::auth::Identity
+impl core::marker::Unpin for hearth_gateway::auth::Identity
+impl core::marker::UnsafeUnpin for hearth_gateway::auth::Identity
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::auth::Identity
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::auth::Identity
+pub const hearth_gateway::auth::ANON_PROVIDER: &str
+pub fn hearth_gateway::auth::anonymous_player_id(&[u8], &str) -> hearth_protocol::frame::PlayerId
+pub fn hearth_gateway::auth::verify_token(&[u8], &str, u64) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::auth::AuthError>
+pub mod hearth_gateway::providers
+pub use hearth_gateway::providers::CannedFetcher
+pub use hearth_gateway::providers::Fetcher
+pub use hearth_gateway::providers::HttpReq
+pub use hearth_gateway::providers::HttpResp
+pub mod hearth_gateway::providers::anonymous
+pub fn hearth_gateway::providers::anonymous::verify(&[u8], &serde_json::value::Value) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub mod hearth_gateway::providers::discord
+#[non_exhaustive] pub struct hearth_gateway::providers::discord::DiscordConfig
+pub hearth_gateway::providers::discord::DiscordConfig::client_id: alloc::string::String
+pub hearth_gateway::providers::discord::DiscordConfig::redirect_uri: core::option::Option<alloc::string::String>
+pub hearth_gateway::providers::discord::DiscordConfig::secret_env: &'static str
+impl hearth_gateway::providers::discord::DiscordConfig
+pub fn hearth_gateway::providers::discord::DiscordConfig::new(impl core::convert::Into<alloc::string::String>, &'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::providers::discord::DiscordConfig
+impl core::marker::Send for hearth_gateway::providers::discord::DiscordConfig
+impl core::marker::Sync for hearth_gateway::providers::discord::DiscordConfig
+impl core::marker::Unpin for hearth_gateway::providers::discord::DiscordConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::discord::DiscordConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::discord::DiscordConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::discord::DiscordConfig
+pub async fn hearth_gateway::providers::discord::verify(&hearth_gateway::providers::discord::DiscordConfig, &serde_json::value::Value, &worker::env::Env, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub async fn hearth_gateway::providers::discord::verify_with_secret(&hearth_gateway::providers::discord::DiscordConfig, &serde_json::value::Value, &str, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub mod hearth_gateway::providers::itch
+pub async fn hearth_gateway::providers::itch::verify(&serde_json::value::Value, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub mod hearth_gateway::providers::jwt
+pub enum hearth_gateway::providers::jwt::JwtKeys
+pub hearth_gateway::providers::jwt::JwtKeys::Hs256
+pub hearth_gateway::providers::jwt::JwtKeys::Hs256::secret_env: &'static str
+pub hearth_gateway::providers::jwt::JwtKeys::Jwks
+pub hearth_gateway::providers::jwt::JwtKeys::Jwks::url: alloc::string::String
+impl core::marker::Freeze for hearth_gateway::providers::jwt::JwtKeys
+impl core::marker::Send for hearth_gateway::providers::jwt::JwtKeys
+impl core::marker::Sync for hearth_gateway::providers::jwt::JwtKeys
+impl core::marker::Unpin for hearth_gateway::providers::jwt::JwtKeys
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::jwt::JwtKeys
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::jwt::JwtKeys
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::jwt::JwtKeys
+#[non_exhaustive] pub struct hearth_gateway::providers::jwt::JwtConfig
+pub hearth_gateway::providers::jwt::JwtConfig::audience: alloc::string::String
+pub hearth_gateway::providers::jwt::JwtConfig::issuer: alloc::string::String
+pub hearth_gateway::providers::jwt::JwtConfig::keys: hearth_gateway::providers::jwt::JwtKeys
+pub hearth_gateway::providers::jwt::JwtConfig::name_claim: core::option::Option<alloc::string::String>
+impl hearth_gateway::providers::jwt::JwtConfig
+pub fn hearth_gateway::providers::jwt::JwtConfig::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>, hearth_gateway::providers::jwt::JwtKeys) -> Self
+impl core::marker::Freeze for hearth_gateway::providers::jwt::JwtConfig
+impl core::marker::Send for hearth_gateway::providers::jwt::JwtConfig
+impl core::marker::Sync for hearth_gateway::providers::jwt::JwtConfig
+impl core::marker::Unpin for hearth_gateway::providers::jwt::JwtConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::jwt::JwtConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::jwt::JwtConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::jwt::JwtConfig
+pub fn hearth_gateway::providers::jwt::allowed_alg<'a>(&hearth_gateway::providers::jwt::JwtKeys, &'a Jwk) -> &'a [&'a str]
+pub fn hearth_gateway::providers::jwt::select_jwk<'a>(&Header, &'a [Jwk]) -> core::result::Result<&'a Jwk, hearth_gateway::providers::ProviderError>
+pub async fn hearth_gateway::providers::jwt::verify(&hearth_gateway::providers::jwt::JwtConfig, &serde_json::value::Value, &worker::env::Env, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub mod hearth_gateway::providers::steam
+#[non_exhaustive] pub struct hearth_gateway::providers::steam::SteamConfig
+pub hearth_gateway::providers::steam::SteamConfig::app_id: u32
+pub hearth_gateway::providers::steam::SteamConfig::identity: alloc::string::String
+pub hearth_gateway::providers::steam::SteamConfig::key_env: &'static str
+pub hearth_gateway::providers::steam::SteamConfig::reject_banned: bool
+impl hearth_gateway::providers::steam::SteamConfig
+pub fn hearth_gateway::providers::steam::SteamConfig::new(u32, &'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::providers::steam::SteamConfig
+impl core::marker::Send for hearth_gateway::providers::steam::SteamConfig
+impl core::marker::Sync for hearth_gateway::providers::steam::SteamConfig
+impl core::marker::Unpin for hearth_gateway::providers::steam::SteamConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::steam::SteamConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::steam::SteamConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::steam::SteamConfig
+pub async fn hearth_gateway::providers::steam::verify(&hearth_gateway::providers::steam::SteamConfig, &serde_json::value::Value, &worker::env::Env, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub async fn hearth_gateway::providers::steam::verify_with_key(&hearth_gateway::providers::steam::SteamConfig, &serde_json::value::Value, &str, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+#[non_exhaustive] pub enum hearth_gateway::providers::ProviderError
+pub hearth_gateway::providers::ProviderError::BadRequest(alloc::string::String)
+pub hearth_gateway::providers::ProviderError::Disabled
+pub hearth_gateway::providers::ProviderError::Rejected(alloc::string::String)
+pub hearth_gateway::providers::ProviderError::Upstream(alloc::string::String)
+impl hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::message(&self) -> &str
+pub fn hearth_gateway::providers::ProviderError::status(&self) -> u16
+impl core::clone::Clone for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::providers::ProviderError
+impl core::cmp::PartialEq for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_gateway::providers::ProviderError
+impl core::marker::Freeze for hearth_gateway::providers::ProviderError
+impl core::marker::Send for hearth_gateway::providers::ProviderError
+impl core::marker::Sync for hearth_gateway::providers::ProviderError
+impl core::marker::Unpin for hearth_gateway::providers::ProviderError
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::ProviderError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::ProviderError
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::ProviderError
+#[non_exhaustive] pub struct hearth_gateway::providers::AuthConfig
+pub hearth_gateway::providers::AuthConfig::anonymous: bool
+pub hearth_gateway::providers::AuthConfig::discord: core::option::Option<hearth_gateway::providers::discord::DiscordConfig>
+pub hearth_gateway::providers::AuthConfig::itch: bool
+pub hearth_gateway::providers::AuthConfig::jwt: core::option::Option<hearth_gateway::providers::jwt::JwtConfig>
+pub hearth_gateway::providers::AuthConfig::steam: core::option::Option<hearth_gateway::providers::steam::SteamConfig>
+impl hearth_gateway::providers::AuthConfig
+pub fn hearth_gateway::providers::AuthConfig::from_env(&worker::env::Env) -> core::result::Result<Self, alloc::string::String>
+impl core::default::Default for hearth_gateway::providers::AuthConfig
+pub fn hearth_gateway::providers::AuthConfig::default() -> Self
+impl core::marker::Freeze for hearth_gateway::providers::AuthConfig
+impl core::marker::Send for hearth_gateway::providers::AuthConfig
+impl core::marker::Sync for hearth_gateway::providers::AuthConfig
+impl core::marker::Unpin for hearth_gateway::providers::AuthConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::AuthConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::AuthConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::AuthConfig
+pub struct hearth_gateway::providers::WorkerFetcher
+impl hearth_server::fetcher::Fetcher for hearth_gateway::providers::WorkerFetcher
+pub async fn hearth_gateway::providers::WorkerFetcher::send(&self, hearth_server::fetcher::HttpReq) -> core::result::Result<hearth_server::fetcher::HttpResp, alloc::string::String>
+impl core::marker::Freeze for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Send for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Sync for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Unpin for hearth_gateway::providers::WorkerFetcher
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::WorkerFetcher
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::WorkerFetcher
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::WorkerFetcher
+pub async fn hearth_gateway::providers::verify(&hearth_gateway::providers::AuthConfig, &str, &serde_json::value::Value, &worker::env::Env, &impl hearth_server::fetcher::Fetcher) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::providers::ProviderError>
+pub mod hearth_gateway::ratelimit
+pub enum hearth_gateway::ratelimit::Limit
+pub hearth_gateway::ratelimit::Limit::Limited
+pub hearth_gateway::ratelimit::Limit::Limited::retry_after_s: u32
+pub hearth_gateway::ratelimit::Limit::NoBinding
+pub hearth_gateway::ratelimit::Limit::Ok
+impl core::clone::Clone for hearth_gateway::ratelimit::Limit
+pub fn hearth_gateway::ratelimit::Limit::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::ratelimit::Limit
+impl core::cmp::PartialEq for hearth_gateway::ratelimit::Limit
+pub fn hearth_gateway::ratelimit::Limit::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::ratelimit::Limit
+pub fn hearth_gateway::ratelimit::Limit::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_gateway::ratelimit::Limit
+impl core::marker::StructuralPartialEq for hearth_gateway::ratelimit::Limit
+impl core::marker::Freeze for hearth_gateway::ratelimit::Limit
+impl core::marker::Send for hearth_gateway::ratelimit::Limit
+impl core::marker::Sync for hearth_gateway::ratelimit::Limit
+impl core::marker::Unpin for hearth_gateway::ratelimit::Limit
+impl core::marker::UnsafeUnpin for hearth_gateway::ratelimit::Limit
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::ratelimit::Limit
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::ratelimit::Limit
+pub enum hearth_gateway::ratelimit::Scope
+pub hearth_gateway::ratelimit::Scope::Ip
+pub hearth_gateway::ratelimit::Scope::Player
+impl core::clone::Clone for hearth_gateway::ratelimit::Scope
+pub fn hearth_gateway::ratelimit::Scope::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::ratelimit::Scope
+impl core::cmp::PartialEq for hearth_gateway::ratelimit::Scope
+pub fn hearth_gateway::ratelimit::Scope::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::ratelimit::Scope
+pub fn hearth_gateway::ratelimit::Scope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_gateway::ratelimit::Scope
+impl core::marker::StructuralPartialEq for hearth_gateway::ratelimit::Scope
+impl core::marker::Freeze for hearth_gateway::ratelimit::Scope
+impl core::marker::Send for hearth_gateway::ratelimit::Scope
+impl core::marker::Sync for hearth_gateway::ratelimit::Scope
+impl core::marker::Unpin for hearth_gateway::ratelimit::Scope
+impl core::marker::UnsafeUnpin for hearth_gateway::ratelimit::Scope
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::ratelimit::Scope
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::ratelimit::Scope
+#[non_exhaustive] pub struct hearth_gateway::ratelimit::Limits
+pub hearth_gateway::ratelimit::Limits::ip_binding: &'static str
+pub hearth_gateway::ratelimit::Limits::ip_period_s: u32
+pub hearth_gateway::ratelimit::Limits::player_binding: &'static str
+pub hearth_gateway::ratelimit::Limits::player_period_s: u32
+impl core::default::Default for hearth_gateway::ratelimit::Limits
+pub fn hearth_gateway::ratelimit::Limits::default() -> Self
+impl core::marker::Freeze for hearth_gateway::ratelimit::Limits
+impl core::marker::Send for hearth_gateway::ratelimit::Limits
+impl core::marker::Sync for hearth_gateway::ratelimit::Limits
+impl core::marker::Unpin for hearth_gateway::ratelimit::Limits
+impl core::marker::UnsafeUnpin for hearth_gateway::ratelimit::Limits
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::ratelimit::Limits
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::ratelimit::Limits
+pub async fn hearth_gateway::ratelimit::check(&worker::env::Env, &str, &str, u32) -> hearth_gateway::ratelimit::Limit
+pub mod hearth_gateway::routes
+#[non_exhaustive] pub struct hearth_gateway::routes::GatewayConfig
+pub hearth_gateway::routes::GatewayConfig::auth: hearth_gateway::providers::AuthConfig
+pub hearth_gateway::routes::GatewayConfig::limits: hearth_gateway::ratelimit::Limits
+pub hearth_gateway::routes::GatewayConfig::matchmaker: bool
+pub hearth_gateway::routes::GatewayConfig::player: core::option::Option<hearth_gateway::routes::PlayerRoute>
+pub hearth_gateway::routes::GatewayConfig::rooms: &'static [hearth_gateway::routes::RoomRoute]
+impl hearth_gateway::routes::GatewayConfig
+pub fn hearth_gateway::routes::GatewayConfig::auth(self, hearth_gateway::providers::AuthConfig) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::limits(self, hearth_gateway::ratelimit::Limits) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::matchmaker(self, bool) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::new(&'static [hearth_gateway::routes::RoomRoute]) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::player(self, hearth_gateway::routes::PlayerRoute) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::GatewayConfig
+impl core::marker::Send for hearth_gateway::routes::GatewayConfig
+impl core::marker::Sync for hearth_gateway::routes::GatewayConfig
+impl core::marker::Unpin for hearth_gateway::routes::GatewayConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::GatewayConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::GatewayConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::GatewayConfig
+#[non_exhaustive] pub struct hearth_gateway::routes::PlayerRoute
+pub hearth_gateway::routes::PlayerRoute::binding: &'static str
+impl hearth_gateway::routes::PlayerRoute
+pub const fn hearth_gateway::routes::PlayerRoute::new(&'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::PlayerRoute
+impl core::marker::Send for hearth_gateway::routes::PlayerRoute
+impl core::marker::Sync for hearth_gateway::routes::PlayerRoute
+impl core::marker::Unpin for hearth_gateway::routes::PlayerRoute
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::PlayerRoute
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::PlayerRoute
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::PlayerRoute
+#[non_exhaustive] pub struct hearth_gateway::routes::RoomRoute
+pub hearth_gateway::routes::RoomRoute::binding: &'static str
+pub hearth_gateway::routes::RoomRoute::container: core::option::Option<&'static str>
+pub hearth_gateway::routes::RoomRoute::max_clients: u8
+pub hearth_gateway::routes::RoomRoute::room_type: &'static str
+pub hearth_gateway::routes::RoomRoute::schema_hash: fn() -> alloc::string::String
+impl hearth_gateway::routes::RoomRoute
+pub const fn hearth_gateway::routes::RoomRoute::new(&'static str, &'static str, fn() -> alloc::string::String, u8) -> Self
+pub const fn hearth_gateway::routes::RoomRoute::with_container(self, &'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::RoomRoute
+impl core::marker::Send for hearth_gateway::routes::RoomRoute
+impl core::marker::Sync for hearth_gateway::routes::RoomRoute
+impl core::marker::Unpin for hearth_gateway::routes::RoomRoute
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::RoomRoute
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::RoomRoute
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::RoomRoute
+pub async fn hearth_gateway::routes::serve(worker::request::Request, worker::env::Env, &hearth_gateway::routes::GatewayConfig) -> worker::Result<worker::response::Response>
+pub enum hearth_gateway::AuthError
+pub hearth_gateway::AuthError::BadSignature
+pub hearth_gateway::AuthError::BadSubject
+pub hearth_gateway::AuthError::Expired
+pub hearth_gateway::AuthError::Malformed
+impl core::clone::Clone for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::auth::AuthError
+impl core::cmp::PartialEq for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::auth::AuthError
+pub fn hearth_gateway::auth::AuthError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_gateway::auth::AuthError
+impl core::marker::StructuralPartialEq for hearth_gateway::auth::AuthError
+impl core::marker::Freeze for hearth_gateway::auth::AuthError
+impl core::marker::Send for hearth_gateway::auth::AuthError
+impl core::marker::Sync for hearth_gateway::auth::AuthError
+impl core::marker::Unpin for hearth_gateway::auth::AuthError
+impl core::marker::UnsafeUnpin for hearth_gateway::auth::AuthError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::auth::AuthError
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::auth::AuthError
+#[non_exhaustive] pub enum hearth_gateway::ProviderError
+pub hearth_gateway::ProviderError::BadRequest(alloc::string::String)
+pub hearth_gateway::ProviderError::Disabled
+pub hearth_gateway::ProviderError::Rejected(alloc::string::String)
+pub hearth_gateway::ProviderError::Upstream(alloc::string::String)
+impl hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::message(&self) -> &str
+pub fn hearth_gateway::providers::ProviderError::status(&self) -> u16
+impl core::clone::Clone for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::providers::ProviderError
+impl core::cmp::PartialEq for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::providers::ProviderError
+pub fn hearth_gateway::providers::ProviderError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_gateway::providers::ProviderError
+impl core::marker::Freeze for hearth_gateway::providers::ProviderError
+impl core::marker::Send for hearth_gateway::providers::ProviderError
+impl core::marker::Sync for hearth_gateway::providers::ProviderError
+impl core::marker::Unpin for hearth_gateway::providers::ProviderError
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::ProviderError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::ProviderError
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::ProviderError
+#[non_exhaustive] pub struct hearth_gateway::AuthConfig
+pub hearth_gateway::AuthConfig::anonymous: bool
+pub hearth_gateway::AuthConfig::discord: core::option::Option<hearth_gateway::providers::discord::DiscordConfig>
+pub hearth_gateway::AuthConfig::itch: bool
+pub hearth_gateway::AuthConfig::jwt: core::option::Option<hearth_gateway::providers::jwt::JwtConfig>
+pub hearth_gateway::AuthConfig::steam: core::option::Option<hearth_gateway::providers::steam::SteamConfig>
+impl hearth_gateway::providers::AuthConfig
+pub fn hearth_gateway::providers::AuthConfig::from_env(&worker::env::Env) -> core::result::Result<Self, alloc::string::String>
+impl core::default::Default for hearth_gateway::providers::AuthConfig
+pub fn hearth_gateway::providers::AuthConfig::default() -> Self
+impl core::marker::Freeze for hearth_gateway::providers::AuthConfig
+impl core::marker::Send for hearth_gateway::providers::AuthConfig
+impl core::marker::Sync for hearth_gateway::providers::AuthConfig
+impl core::marker::Unpin for hearth_gateway::providers::AuthConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::AuthConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::AuthConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::AuthConfig
+#[non_exhaustive] pub struct hearth_gateway::GatewayConfig
+pub hearth_gateway::GatewayConfig::auth: hearth_gateway::providers::AuthConfig
+pub hearth_gateway::GatewayConfig::limits: hearth_gateway::ratelimit::Limits
+pub hearth_gateway::GatewayConfig::matchmaker: bool
+pub hearth_gateway::GatewayConfig::player: core::option::Option<hearth_gateway::routes::PlayerRoute>
+pub hearth_gateway::GatewayConfig::rooms: &'static [hearth_gateway::routes::RoomRoute]
+impl hearth_gateway::routes::GatewayConfig
+pub fn hearth_gateway::routes::GatewayConfig::auth(self, hearth_gateway::providers::AuthConfig) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::limits(self, hearth_gateway::ratelimit::Limits) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::matchmaker(self, bool) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::new(&'static [hearth_gateway::routes::RoomRoute]) -> Self
+pub fn hearth_gateway::routes::GatewayConfig::player(self, hearth_gateway::routes::PlayerRoute) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::GatewayConfig
+impl core::marker::Send for hearth_gateway::routes::GatewayConfig
+impl core::marker::Sync for hearth_gateway::routes::GatewayConfig
+impl core::marker::Unpin for hearth_gateway::routes::GatewayConfig
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::GatewayConfig
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::GatewayConfig
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::GatewayConfig
+pub struct hearth_gateway::Identity
+pub hearth_gateway::Identity::display_name: core::option::Option<alloc::string::String>
+pub hearth_gateway::Identity::player_id: hearth_protocol::frame::PlayerId
+pub hearth_gateway::Identity::provider: &'static str
+impl core::clone::Clone for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::clone(&self) -> Self
+impl core::cmp::Eq for hearth_gateway::auth::Identity
+impl core::cmp::PartialEq for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_gateway::auth::Identity
+pub fn hearth_gateway::auth::Identity::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_gateway::auth::Identity
+impl core::marker::Freeze for hearth_gateway::auth::Identity
+impl core::marker::Send for hearth_gateway::auth::Identity
+impl core::marker::Sync for hearth_gateway::auth::Identity
+impl core::marker::Unpin for hearth_gateway::auth::Identity
+impl core::marker::UnsafeUnpin for hearth_gateway::auth::Identity
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::auth::Identity
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::auth::Identity
+#[non_exhaustive] pub struct hearth_gateway::PlayerRoute
+pub hearth_gateway::PlayerRoute::binding: &'static str
+impl hearth_gateway::routes::PlayerRoute
+pub const fn hearth_gateway::routes::PlayerRoute::new(&'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::PlayerRoute
+impl core::marker::Send for hearth_gateway::routes::PlayerRoute
+impl core::marker::Sync for hearth_gateway::routes::PlayerRoute
+impl core::marker::Unpin for hearth_gateway::routes::PlayerRoute
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::PlayerRoute
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::PlayerRoute
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::PlayerRoute
+#[non_exhaustive] pub struct hearth_gateway::RoomRoute
+pub hearth_gateway::RoomRoute::binding: &'static str
+pub hearth_gateway::RoomRoute::container: core::option::Option<&'static str>
+pub hearth_gateway::RoomRoute::max_clients: u8
+pub hearth_gateway::RoomRoute::room_type: &'static str
+pub hearth_gateway::RoomRoute::schema_hash: fn() -> alloc::string::String
+impl hearth_gateway::routes::RoomRoute
+pub const fn hearth_gateway::routes::RoomRoute::new(&'static str, &'static str, fn() -> alloc::string::String, u8) -> Self
+pub const fn hearth_gateway::routes::RoomRoute::with_container(self, &'static str) -> Self
+impl core::marker::Freeze for hearth_gateway::routes::RoomRoute
+impl core::marker::Send for hearth_gateway::routes::RoomRoute
+impl core::marker::Sync for hearth_gateway::routes::RoomRoute
+impl core::marker::Unpin for hearth_gateway::routes::RoomRoute
+impl core::marker::UnsafeUnpin for hearth_gateway::routes::RoomRoute
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::routes::RoomRoute
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::routes::RoomRoute
+pub struct hearth_gateway::WorkerFetcher
+impl hearth_server::fetcher::Fetcher for hearth_gateway::providers::WorkerFetcher
+pub async fn hearth_gateway::providers::WorkerFetcher::send(&self, hearth_server::fetcher::HttpReq) -> core::result::Result<hearth_server::fetcher::HttpResp, alloc::string::String>
+impl core::marker::Freeze for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Send for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Sync for hearth_gateway::providers::WorkerFetcher
+impl core::marker::Unpin for hearth_gateway::providers::WorkerFetcher
+impl core::marker::UnsafeUnpin for hearth_gateway::providers::WorkerFetcher
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_gateway::providers::WorkerFetcher
+impl core::panic::unwind_safe::UnwindSafe for hearth_gateway::providers::WorkerFetcher
+pub fn hearth_gateway::anonymous_player_id(&[u8], &str) -> hearth_protocol::frame::PlayerId
+pub async fn hearth_gateway::serve(worker::request::Request, worker::env::Env, &hearth_gateway::routes::GatewayConfig) -> worker::Result<worker::response::Response>
+pub fn hearth_gateway::verify_token(&[u8], &str, u64) -> core::result::Result<hearth_gateway::auth::Identity, hearth_gateway::auth::AuthError>

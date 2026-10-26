@@ -70,12 +70,12 @@ hearth::admin::registry_object!();
 /// Every room type this Worker serves. The `ROOM` binding and the class name are
 /// declared in `wrangler.toml`.
 fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
-        room_type: "{{room_type}}",
-        binding: "ROOM",
-        schema_hash: hearth::server::schema_hash_hex::<{{Room}}>,
-        max_clients: 4,
-    }];
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+        "{{room_type}}",
+        "ROOM",
+        hearth::server::schema_hash_hex::<{{Room}}>,
+        4,
+    )];
     &ROUTES
 }
 
@@ -88,17 +88,12 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response
     if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
         return hearth::admin::serve_admin(req, env, room_routes()).await;
     }
-    let config = hearth_gateway::GatewayConfig {
-        rooms: room_routes(),
-        // `Some(PlayerRoute { binding })` serves `GET /me`; `matchmaker: true`
-        // serves `/match` and `/lobby` when the HEARTH_MATCHMAKER binding exists.
-        player: None,
-        matchmaker: false,
-        // Login providers come from the worker env; the default enables anonymous.
-        auth: hearth_gateway::AuthConfig::default(),
-        // Per-IP and per-player rate limits; add the [[ratelimits]] bindings in
-        // wrangler.toml to turn them on. Without them, requests are unlimited.
-        limits: hearth_gateway::ratelimit::Limits::default(),
-    };
+    // Anonymous login, no `GET /me` and no matchmaker. Add
+    // `.player(PlayerRoute::new("BINDING"))` to serve `GET /me`, `.matchmaker(true)`
+    // for `/match` and `/lobby` (needs the HEARTH_MATCHMAKER binding), and
+    // `.auth(AuthConfig::from_env(&env)?)` for the other login providers. The
+    // default rate limits turn on once the [[ratelimits]] bindings exist in
+    // wrangler.toml; without them, requests are unlimited.
+    let config = hearth_gateway::GatewayConfig::new(room_routes());
     hearth_gateway::serve(req, env, &config).await
 }

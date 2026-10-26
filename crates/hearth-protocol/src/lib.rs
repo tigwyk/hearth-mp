@@ -1,11 +1,18 @@
-//! Hearth v0.1 wire protocol: frames, codec and patch ops.
+//! Hearth wire protocol v1: frames, codec and patch ops.
 //!
-//! The language-neutral specification for third-party SDK authors lives in
-//! `docs/protocol.md`.
+//! The normative, language-neutral specification is `spec/protocol-v1.md`; the
+//! conformance vectors are in `conformance/vectors/`.
 
+#![warn(missing_docs)]
+
+/// Frame encoding and decoding.
 pub mod codec;
+/// Frames, opcodes, error codes and close codes.
 pub mod frame;
+/// Applying patch ops to a state tree.
 pub mod patch;
+#[cfg(feature = "vectors")]
+pub mod vectors;
 
 pub use codec::{decode, encode, opcode, ProtocolError};
 pub use frame::{

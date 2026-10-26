@@ -27,6 +27,7 @@ impl Scope {
     }
 }
 
+#[doc(hidden)]
 /// The binding key for one request: `"ip:<ip>"` or `"p:<player_id>"`.
 ///
 /// A player limit without a verified player has no key, so it is skipped.
@@ -40,8 +41,11 @@ pub fn key(scope: Scope, ip: &str, player: Option<&PlayerId>) -> Option<String> 
 /// The outcome of one limit check.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Limit {
+    /// Under the limit.
     Ok,
+    /// Over the limit.
     Limited {
+        /// Seconds until the next period.
         retry_after_s: u32,
     },
     /// No such binding in this deployment: the request is allowed.
@@ -49,10 +53,15 @@ pub enum Limit {
 }
 
 /// Where the limits live and how long their period is.
+#[non_exhaustive]
 pub struct Limits {
+    /// The rate-limit binding for per-IP limits.
     pub ip_binding: &'static str,
+    /// Its period, seconds.
     pub ip_period_s: u32,
+    /// The rate-limit binding for per-player limits.
     pub player_binding: &'static str,
+    /// Its period, seconds.
     pub player_period_s: u32,
 }
 
@@ -97,6 +106,7 @@ pub async fn check(env: &Env, binding: &str, key: &str, period_s: u32) -> Limit 
     }
 }
 
+#[doc(hidden)]
 /// The 429 for a limited request, as data so it can be tested natively:
 /// `(status, headers, JSON body)`.
 pub fn response_for(scope: Scope, retry_after_s: u32) -> (u16, Vec<(String, String)>, String) {
@@ -111,6 +121,7 @@ pub fn response_for(scope: Scope, retry_after_s: u32) -> (u16, Vec<(String, Stri
     )
 }
 
+#[doc(hidden)]
 /// Build the Workers response for a limited request.
 pub fn limited(scope: Scope, retry_after_s: u32) -> worker::Result<Response> {
     let (status, headers, body) = response_for(scope, retry_after_s);

@@ -289,7 +289,7 @@ pub fn errors<R: Room>(
                 code,
                 message,
                 ref_seq,
-            } => Some((*code, message.clone(), *ref_seq)),
+            } => Some((code.clone(), message.clone(), *ref_seq)),
             _ => None,
         })
         .collect()

@@ -15,12 +15,22 @@ const TOKEN_URL: &str = "https://discord.com/api/oauth2/token";
 const ME_URL: &str = "https://discord.com/api/users/@me";
 
 /// The Discord application whose codes are accepted.
+#[non_exhaustive]
 pub struct DiscordConfig {
+    /// The Discord application's client id.
     pub client_id: String,
     /// The binding holding the OAuth2 client secret.
     pub secret_env: &'static str,
     /// Sent with the token exchange when the code came from a redirect flow.
     pub redirect_uri: Option<String>,
+}
+
+impl DiscordConfig {
+    /// Accept codes for the application `client_id`, whose OAuth2 secret is in the
+    /// `secret_env` binding; no redirect URI.
+    pub fn new(client_id: impl Into<String>, secret_env: &'static str) -> Self {
+        Self { client_id: client_id.into(), secret_env, redirect_uri: None }
+    }
 }
 
 /// `{"code": "<code>"}`.

@@ -1,0 +1,121 @@
+[
+  {
+    "direction": "s2c",
+    "expect": {
+      "event": {
+        "type": "patched"
+      },
+      "state_after": {
+        "n": 5
+      }
+    },
+    "inject": false,
+    "json": {
+      "op": "PATCH",
+      "ops": [
+        {
+          "op": "set",
+          "path": [
+            "n"
+          ],
+          "value": 5
+        }
+      ],
+      "seq": 2,
+      "z": 1
+    },
+    "msgpack_hex": "0484a26f70a55041544348a36f70739183a26f70a3736574a47061746891a16ea576616c756505a373657102a17a01",
+    "name": "patch_extra_field"
+  },
+  {
+    "direction": "s2c",
+    "expect": {
+      "event": {
+        "player_id": "p1",
+        "seat": 0,
+        "type": "joined"
+      }
+    },
+    "inject": false,
+    "json": {
+      "op": "JOIN_OK",
+      "player_id": "p1",
+      "seat": 0,
+      "z": {
+        "a": 1
+      }
+    },
+    "msgpack_hex": "0284a26f70a74a4f494e5f4f4ba9706c617965725f6964a27031a47365617400a17a81a16101",
+    "name": "join_ok_extra_field"
+  },
+  {
+    "direction": "s2c",
+    "expect": {
+      "event": {
+        "data": "x",
+        "name": "echo",
+        "type": "event"
+      }
+    },
+    "inject": true,
+    "json": {
+      "data": "x",
+      "name": "echo",
+      "op": "EVENT",
+      "z": 1
+    },
+    "msgpack_hex": "0684a464617461a178a46e616d65a46563686fa26f70a54556454e54a17a01",
+    "name": "event_extra_field"
+  },
+  {
+    "direction": "s2c",
+    "expect": "ignored",
+    "inject": true,
+    "json": null,
+    "msgpack_hex": "4082a26f70a6465554555245a17801",
+    "name": "unknown_binary_opcode"
+  },
+  {
+    "direction": "s2c",
+    "expect": "ignored",
+    "inject": true,
+    "json": {
+      "op": "FUTURE",
+      "x": 1
+    },
+    "msgpack_hex": null,
+    "name": "unknown_json_op"
+  },
+  {
+    "direction": "s2c",
+    "expect": "event_or_ignored",
+    "inject": true,
+    "json": {
+      "data": {
+        "v": 1
+      },
+      "name": "hearth.future",
+      "op": "EVENT"
+    },
+    "msgpack_hex": "0683a46461746181a17601a46e616d65ad6865617274682e667574757265a26f70a54556454e54",
+    "name": "future_hearth_event"
+  },
+  {
+    "direction": "s2c",
+    "expect": {
+      "event": {
+        "code": "FUTURE_CODE",
+        "type": "error"
+      }
+    },
+    "inject": true,
+    "json": {
+      "code": "FUTURE_CODE",
+      "message": "from the future",
+      "op": "ERROR",
+      "ref_seq": null
+    },
+    "msgpack_hex": "0984a4636f6465ab4655545552455f434f4445a76d657373616765af66726f6d2074686520667574757265a26f70a54552524f52a77265665f736571c0",
+    "name": "error_unknown_code"
+  }
+]

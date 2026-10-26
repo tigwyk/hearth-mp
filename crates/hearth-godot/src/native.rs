@@ -16,7 +16,7 @@ use godot::classes::{INode, Node, Os, Time, WebSocketPeer};
 use godot::global::Error as GodotError;
 use godot::prelude::*;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent, Reconnect, ReconnectPolicy};
-use hearth_protocol::{Encoding, ErrorCode, WireMsg};
+use hearth_protocol::{Encoding, WireMsg};
 use serde_json::Value;
 
 use crate::convert::{json_to_variant, variant_to_json};
@@ -44,6 +44,8 @@ pub struct HearthNative {
     retry_at_ms: Option<u64>,
     /// The next `JOIN_OK` is a resume, so it emits `reconnected`.
     resuming: bool,
+    /// Whether this socket delivered an `ERROR` frame (see `close_error`).
+    saw_error: bool,
     /// Interpolators created by `Hearth.interpolator()`, fed from every ticked
     /// `PATCH`.
     interpolators: Vec<Gd<HearthInterp>>,
@@ -72,6 +74,7 @@ impl INode for HearthNative {
             attempt: 0,
             retry_at_ms: None,
             resuming: false,
+            saw_error: false,
             interpolators: Vec::new(),
             debug_latency_ms: 0,
             outgoing: VecDeque::new(),
@@ -264,6 +267,9 @@ impl HearthNative {
                 self.deliver_due_outgoing(&mut peer, now_ms);
             }
             State::CLOSED => {
+                // Frames the latency injection still holds arrived before the
+                // close, so they are delivered first.
+                self.deliver_due_incoming(u64::MAX);
                 let code = socket_close_code(&peer);
                 let reason = peer.get_close_reason().to_string();
                 self.peer = None;
@@ -342,6 +348,7 @@ impl HearthNative {
     /// `error` signal is emitted and no socket is kept.
     fn open_socket(&mut self) -> bool {
         self.hello_sent = false;
+        self.saw_error = false;
         let mut peer = WebSocketPeer::new_gd();
         let error = peer.connect_to_url(&self.url);
         if error != GodotError::OK {
@@ -376,6 +383,13 @@ impl HearthNative {
     /// Handle a dropped socket: report intents whose fate is unknown, then
     /// schedule a retry (`reconnecting`) or give up (`disconnected`).
     fn handle_drop(&mut self, code: u16, reason: String, now_ms: u64) {
+        // Godot cannot read a frame that arrives in the same read as the close,
+        // so the ERROR before a fatal close may be lost: report it from the code.
+        if !self.saw_error {
+            if let Some(name) = close_error(code) {
+                self.emit_error(name, &reason, -1);
+            }
+        }
         let events = self.core.on_disconnected();
         self.emit_events(events);
 
@@ -478,7 +492,8 @@ impl HearthNative {
                     message,
                     ref_seq,
                 } => {
-                    let code = GString::from(error_code_name(code));
+                    self.saw_error = true;
+                    let code = GString::from(code.as_str());
                     let message = GString::from(message.as_str());
                     let ref_seq = ref_seq.map(i64::from).unwrap_or(-1);
                     self.signals().error().emit(&code, &message, ref_seq);
@@ -495,6 +510,8 @@ impl HearthNative {
                     }
                     self.signals().intents_unconfirmed().emit(&array);
                 }
+                // Events added by a later hearth-client release.
+                _ => {}
             }
         }
     }
@@ -527,22 +544,19 @@ fn send_frame(peer: &mut Gd<WebSocketPeer>, message: &WireMsg) {
     }
 }
 
-/// The wire name of an error code (`SCREAMING_SNAKE_CASE`), as GDScript sees it.
-fn error_code_name(code: ErrorCode) -> &'static str {
-    use ErrorCode::*;
-    match code {
-        BadFrame => "BAD_FRAME",
-        UnsupportedProtocol => "UNSUPPORTED_PROTOCOL",
-        SchemaMismatch => "SCHEMA_MISMATCH",
-        RoomFull => "ROOM_FULL",
-        RoomLocked => "ROOM_LOCKED",
-        NotJoined => "NOT_JOINED",
-        BadIntent => "BAD_INTENT",
-        IntentRejected => "INTENT_REJECTED",
-        JoinRejected => "JOIN_REJECTED",
-        RateLimited => "RATE_LIMITED",
-        FrameTooLarge => "FRAME_TOO_LARGE",
-        StateIncompatible => "STATE_INCOMPATIBLE",
-        Internal => "INTERNAL",
-    }
+/// The error code an assigned close code stands for, when its `ERROR` frame was
+/// lost (spec/protocol-v1.md section 9).
+fn close_error(code: u16) -> Option<&'static str> {
+    use hearth_protocol::close;
+    Some(match code {
+        close::BAD_FRAME => "BAD_FRAME",
+        close::SCHEMA_MISMATCH => "SCHEMA_MISMATCH",
+        close::ROOM_FULL => "ROOM_FULL",
+        close::ROOM_LOCKED => "ROOM_LOCKED",
+        close::RATE_LIMITED => "RATE_LIMITED",
+        close::FRAME_TOO_LARGE => "FRAME_TOO_LARGE",
+        close::STATE_INCOMPATIBLE => "STATE_INCOMPATIBLE",
+        close::JOIN_REJECTED => "JOIN_REJECTED",
+        _ => return None,
+    })
 }

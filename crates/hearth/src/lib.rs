@@ -48,6 +48,8 @@
 //! [`anyhow`] is re-exported (and is the error type of [`Result`]) so room code
 //! can `anyhow::bail!` / `anyhow::ensure!` without adding its own dependency.
 
+#![warn(missing_docs)]
+
 pub use anyhow;
 pub use hearth_admin as admin;
 pub use hearth_admin::registry_object;

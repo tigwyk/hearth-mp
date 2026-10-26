@@ -6,11 +6,11 @@ extends SceneTree
 ##
 ##   godot --headless --path examples/tictactoe-godot -s tests/reconnect_conformance.gd
 ##
-## The fixture path is relative to the project directory (`../../crates/...`),
+## The fixture path is relative to the project directory (`../../conformance/vectors/...`),
 ## so this test needs no server and no network.
 
 const Reconnect = preload("res://addons/hearth/hearth_reconnect.gd")
-const FIXTURE := "../../crates/hearth-client/tests/fixtures/reconnect_cases.json"
+const FIXTURE := "../../conformance/vectors/reconnect.json"
 
 
 func _init() -> void:
@@ -22,6 +22,9 @@ func _init() -> void:
 	var cases = JSON.parse_string(text)
 	if typeof(cases) != TYPE_ARRAY:
 		_fail("fixture is not a JSON array: " + path)
+		return
+	if cases.is_empty():
+		_fail("fixture has no cases: " + path)
 		return
 
 	var passed := 0

@@ -10,8 +10,8 @@ use crate::handoff::{HandoffEvent, SessionId};
 use crate::Result;
 
 /// How a room runs.
-#[non_exhaustive]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Mode {
     /// Wakes per message or alarm and hibernates between.
     Event,
@@ -22,8 +22,11 @@ pub enum Mode {
 
 /// Compile-time room configuration, emitted by `#[hearth::room]`.
 pub trait RoomConfig {
+    /// Event-driven or ticked.
     const MODE: Mode;
+    /// Seats per room.
     const MAX_CLIENTS: u8;
+    /// How long an empty room lives before it is disposed.
     const EMPTY_GRACE: Duration = Duration::from_secs(60);
     /// How long a dropped player's seat stays held. Set it with the
     /// `#[hearth::room(reconnect_grace_secs = N)]` attribute; `0` restores the
@@ -59,7 +62,9 @@ pub trait RoomConfig {
 /// headers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Client {
+    /// The verified player identity.
     pub player_id: PlayerId,
+    /// This player's seat.
     pub seat: u8,
     /// Whether the client's socket is live. A held seat appears in
     /// [`crate::Ctx::clients`] with `connected: false`.
@@ -77,6 +82,7 @@ pub struct JoinOpts(pub Value);
 
 /// Why a client left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Leave {
     /// The socket disappeared without a `LEAVE` frame.
     Closed,
@@ -108,9 +114,12 @@ impl From<String> for TimerKey {
 /// durable data in `State`, not in the struct's fields.
 #[allow(async_fn_in_trait)]
 pub trait Room: RoomConfig + Default + 'static {
+    /// The persisted state; its `#[sync]` fields reach clients.
     type State: HearthState;
+    /// What clients may send.
     type Intent: Schema + DeserializeOwned;
 
+    /// A player joined (not on a reconnect). An `Err` refuses them with `JOIN_REJECTED`.
     async fn on_join(
         &mut self,
         ctx: &mut crate::Ctx<Self>,
@@ -118,6 +127,7 @@ pub trait Room: RoomConfig + Default + 'static {
         opts: JoinOpts,
     ) -> Result<()>;
 
+    /// One intent from a player. An `Err` rejects it with `INTENT_REJECTED`, and the state changes are discarded.
     async fn on_intent(
         &mut self,
         ctx: &mut crate::Ctx<Self>,
@@ -125,6 +135,7 @@ pub trait Room: RoomConfig + Default + 'static {
         intent: Self::Intent,
     ) -> Result<()>;
 
+    /// A player left: voluntarily, closed and not back within the grace, or kicked.
     async fn on_leave(
         &mut self,
         ctx: &mut crate::Ctx<Self>,
@@ -144,10 +155,12 @@ pub trait Room: RoomConfig + Default + 'static {
         Ok(())
     }
 
+    /// A timer set with `ctx.set_timer` fired.
     async fn on_timer(&mut self, _ctx: &mut crate::Ctx<Self>, _key: TimerKey) -> Result<()> {
         Ok(())
     }
 
+    /// The room is being disposed; the last chance to report or clean up.
     async fn on_dispose(&mut self, _ctx: &mut crate::Ctx<Self>) -> Result<()> {
         Ok(())
     }
@@ -191,9 +204,12 @@ pub trait Room: RoomConfig + Default + 'static {
 /// to the room's clients.
 #[allow(async_fn_in_trait)]
 pub trait RoomRpc: Room {
+    /// What `on_call` accepts.
     type Rpc: Serialize + DeserializeOwned;
+    /// What `on_call` answers.
     type Reply: Serialize + DeserializeOwned;
 
+    /// One call from another Hearth object.
     async fn on_call(
         &mut self,
         ctx: &mut crate::Ctx<Self>,

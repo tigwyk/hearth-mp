@@ -3,7 +3,7 @@ class_name HearthReconnect
 ##
 ## After a socket drops, `decide()` says whether to retry and when. This script
 ## and the Rust core are both checked against
-## `crates/hearth-client/tests/fixtures/reconnect_cases.json`.
+## `conformance/vectors/reconnect.json`.
 
 ## Give up once this long has passed since the first drop.
 const WINDOW_MS := 30_000

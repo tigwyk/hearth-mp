@@ -41,8 +41,10 @@ type HmacSha256 = Hmac<Sha256>;
 pub const TIMESTAMP_HEADER: &str = "X-Hearth-Timestamp";
 /// The header carrying `hex(HMAC-SHA256(secret, "<timestamp>.<body>"))`.
 pub const SIGNATURE_HEADER: &str = "X-Hearth-Signature";
+#[doc(hidden)]
 /// How far a webhook timestamp may be from the receiver's clock.
 pub const MAX_SKEW_S: u64 = 300;
+#[doc(hidden)]
 /// The longest endpoint tail an allocator may return.
 pub const MAX_ENDPOINT_LEN: usize = 250;
 
@@ -66,6 +68,7 @@ pub struct WebhookAllocator<F: Fetcher> {
     pub public_url: String,
     /// Allows `ws://` endpoints for local development. Never set in production.
     pub allow_insecure_endpoints: bool,
+    /// How the allocator makes HTTP requests (`WorkerFetcher` in production).
     pub fetcher: F,
 }
 
@@ -150,6 +153,7 @@ fn endpoint_from(body: &str) -> Result<String, String> {
         .map_err(|_| "allocator answer must be JSON: {\"endpoint\": \"...\"}".to_owned())
 }
 
+#[doc(hidden)]
 /// Verify an allocator's webhook signature and freshness.
 ///
 /// `timestamp` is the `X-Hearth-Timestamp` header, `body` the raw request body
@@ -180,6 +184,7 @@ pub fn verify_webhook(
     )
 }
 
+#[doc(hidden)]
 /// Whether an allocator-provided endpoint is safe to hand to a client.
 ///
 /// Accepted schemes are `udp`, `wss` and `https`; `ws` is accepted only when
@@ -245,6 +250,7 @@ pub const DEFAULT_CONTAINER_PORT: u16 = 8080;
 /// Everything a container needs to start one session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StartRequest {
+    /// The session to start.
     pub sid: SessionId,
     /// The plaintext session secret. It is delivered only to the container's
     /// start message, never to a client.
@@ -252,10 +258,12 @@ pub struct StartRequest {
     /// `<public_url>/handoff/<sid>`: where the container reports lifecycle
     /// events (the SDK appends `/report`).
     pub report_url: String,
+    /// The port the container serves HTTP/WebSocket on.
     pub port: u16,
     /// The developer's extra environment. `HEARTH_*` names are ignored by the
     /// adapter, so a session's identity cannot be spoofed.
     pub env: Vec<(String, String)>,
+    /// The session's maximum duration, the container's self-destruct backstop.
     pub max_duration_ms: u64,
 }
 
@@ -276,6 +284,7 @@ pub trait ContainerStarter {
 /// One Cloudflare Container per session, reached through the gateway's
 /// `/handoff/{sid}/connect` WebSocket proxy.
 pub struct ContainerAllocator<S: ContainerStarter> {
+    /// Starts and stops each session's container.
     pub starter: S,
     /// The gateway's public base URL (`https://...` in production, `http://...`
     /// for local dev, which yields a `ws://` connect URL).

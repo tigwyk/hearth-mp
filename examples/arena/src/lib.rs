@@ -131,13 +131,12 @@ impl Room for ArenaRoom {
 hearth::admin::registry_object!();
 
 fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
-        room_type: "arena",
-        binding: "ARENA",
-        container: None,
-        schema_hash: hearth::server::schema_hash_hex::<ArenaRoom>,
-        max_clients: 16,
-    }];
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+        "arena",
+        "ARENA",
+        hearth::server::schema_hash_hex::<ArenaRoom>,
+        16,
+    )];
     &ROUTES
 }
 
@@ -155,11 +154,5 @@ async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response>
 }
 
 fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig {
-        rooms: room_routes(),
-        player: None,
-        matchmaker: false,
-        auth: hearth_gateway::AuthConfig::from_env(env)?,
-        limits: hearth_gateway::ratelimit::Limits::default(),
-    })
+    Ok(hearth_gateway::GatewayConfig::new(room_routes()).auth(hearth_gateway::AuthConfig::from_env(env)?))
 }

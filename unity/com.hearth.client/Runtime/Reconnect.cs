@@ -2,7 +2,7 @@ namespace Hearth
 {
     /// <summary>
     /// One outage's retry bookkeeping, around <see cref="HearthNative.ReconnectDecide"/>
-    /// (the same policy as the Godot client and <c>reconnect_cases.json</c>).
+    /// (the same policy as the Godot client and <c>conformance/vectors/reconnect.json</c>).
     /// </summary>
     internal sealed class Reconnect
     {

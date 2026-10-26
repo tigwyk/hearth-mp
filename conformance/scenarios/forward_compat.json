@@ -1,0 +1,99 @@
+{
+  "name": "forward_compat",
+  "about": "The server sends frames from a newer protocol revision (conformance/vectors/forward.json, inject: true); the client ignores or tolerates them and stays in sync.",
+  "clients": [
+    "a"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 1,
+            "intent": "Future"
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "EVENT",
+        "name": "echo",
+        "data": "x"
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "ERROR",
+        "code": "FUTURE_CODE"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 2,
+            "intent": {
+              "Echo": "after"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "EVENT",
+        "name": "echo",
+        "data": "after"
+      }
+    },
+    {
+      "client": "a",
+      "send": {
+        "op": "INTENT",
+        "intents": [
+          {
+            "seq": 3,
+            "intent": {
+              "Add": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "PATCH",
+        "state": {
+          "n": 1
+        }
+      }
+    }
+  ]
+}

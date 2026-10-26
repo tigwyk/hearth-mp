@@ -18,6 +18,8 @@
 //! as `wasm-bindgen` exports; both builds share the bodies in [`ops`]. The C
 //! header is generated from the plugin crate (see its `cbindgen.toml`).
 
+#![warn(missing_docs)]
+
 use std::cell::RefCell;
 use std::ffi::{c_char, CStr};
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -28,6 +30,7 @@ use hearth_protocol::{Encoding, WireMsg};
 mod interp;
 mod plugin;
 mod predict;
+#[doc(hidden)]
 pub mod web;
 
 /// Re-exported for [`plugin!`] expansions.
@@ -40,8 +43,11 @@ pub use predict::{HearthPredictor, LogicCtor};
 /// non-empty one must be passed to [`hearth_buf_free`] exactly once.
 #[repr(C)]
 pub struct HearthBuf {
+    /// The bytes, or null when empty.
     pub ptr: *mut u8,
+    /// Their length.
     pub len: usize,
+    /// The allocation's capacity (needed to free it).
     pub cap: usize,
 }
 
@@ -107,6 +113,7 @@ fn panic_message(panic: Box<dyn std::any::Any + Send>) -> String {
 }
 
 /// Shared bodies for the C ABI and the wasm exports.
+#[doc(hidden)]
 pub mod ops {
     use super::*;
     use hearth_protocol::Value;

@@ -4,12 +4,25 @@ use crate::frame::{Encoding, Frame, Opcode, WireMsg, MAX_FRAME_BYTES};
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProtocolError {
     #[error("frame exceeds the 64 KiB maximum")]
+    /// The frame exceeds [`MAX_FRAME_BYTES`](crate::MAX_FRAME_BYTES); checked before parsing.
     TooLarge,
     #[error("malformed frame: {0}")]
+    /// The frame did not decode: bad MessagePack/JSON, a missing field, or an empty binary frame.
     Malformed(String),
     #[error("opcode byte does not match the frame body")]
+    /// A binary frame's opcode byte disagrees with its body's `op`.
     OpcodeMismatch,
+    /// A frame this protocol version does not know: an unknown opcode byte
+    /// (`"0x40"`) or an unknown JSON `op` (`"FUTURE"`). Clients ignore these
+    /// (`spec/protocol-v1.md` section 12); servers answer `BAD_FRAME`.
+    #[error("unknown opcode {0}")]
+    UnknownOpcode(String),
 }
+
+/// Every JSON `op` this version knows, including the reserved `PING`.
+const KNOWN_OPS: [&str; 10] = [
+    "HELLO", "JOIN_OK", "FULL_STATE", "PATCH", "INTENT", "EVENT", "ACK", "PING", "ERROR", "LEAVE",
+];
 
 /// The opcode for a frame.
 pub const fn opcode(frame: &Frame) -> Opcode {
@@ -53,7 +66,7 @@ pub fn decode(msg: &WireMsg) -> Result<Frame, ProtocolError> {
                 return Err(ProtocolError::Malformed("empty frame".into()));
             };
             let expected = Opcode::from_u8(byte)
-                .ok_or_else(|| ProtocolError::Malformed(format!("unknown opcode 0x{byte:02x}")))?;
+                .ok_or_else(|| ProtocolError::UnknownOpcode(format!("0x{byte:02x}")))?;
             let frame: Frame = rmp_serde::from_slice(body)
                 .map_err(|err| ProtocolError::Malformed(err.to_string()))?;
             if opcode(&frame) != expected {
@@ -65,7 +78,17 @@ pub fn decode(msg: &WireMsg) -> Result<Frame, ProtocolError> {
             if text.len() > MAX_FRAME_BYTES {
                 return Err(ProtocolError::TooLarge);
             }
-            serde_json::from_str(text).map_err(|err| ProtocolError::Malformed(err.to_string()))
+            serde_json::from_str(text).map_err(|err| {
+                // An object whose `op` is a string this version does not know is
+                // a future frame, not a malformed one.
+                let op = serde_json::from_str::<serde_json::Value>(text)
+                    .ok()
+                    .and_then(|v| v.get("op").and_then(|op| op.as_str()).map(str::to_owned));
+                match op {
+                    Some(op) if !KNOWN_OPS.contains(&op.as_str()) => ProtocolError::UnknownOpcode(op),
+                    _ => ProtocolError::Malformed(err.to_string()),
+                }
+            })
         }
     }
 }

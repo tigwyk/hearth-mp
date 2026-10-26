@@ -20,6 +20,8 @@
 //! let intent = client.poll_send(0).unwrap();
 //! ```
 
+#![warn(missing_docs)]
+
 use std::collections::{BTreeSet, VecDeque};
 
 use hearth_protocol::{
@@ -43,6 +45,7 @@ pub const DEFAULT_MAX_INTENTS_PER_MSG: usize = 32;
 
 /// Client configuration.
 #[derive(Clone, Debug)]
+#[non_exhaustive]
 pub struct ClientConfig {
     /// `HearthState::schema_hash_hex()` of the room's state type.
     pub schema_hash: String,
@@ -73,24 +76,43 @@ impl ClientConfig {
 /// the Unity plugin hands to C#.
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ClientEvent {
     /// `JOIN_OK`: the socket is joined as this player and seat.
-    Joined { player_id: PlayerId, seat: u8 },
+    Joined {
+        /// The verified player identity.
+        player_id: PlayerId,
+        /// This player's seat.
+        seat: u8,
+    },
     /// `FULL_STATE`: the state was replaced; read it with [`ClientCore::state`].
     StateReset,
     /// `PATCH`: these ops were applied to the state.
-    Patched { ops: Vec<PatchOp> },
+    Patched {
+        /// The ops, as applied.
+        ops: Vec<PatchOp>,
+    },
     /// `ACK`: intents up to these sequence numbers were accepted.
     Acked {
+        /// The state sequence number after the accepted intents.
         state_seq: u64,
+        /// The accepted intent sequence numbers.
         intent_seqs: Vec<u32>,
     },
     /// `EVENT`: a named game event.
-    Event { name: String, data: Value },
+    Event {
+        /// The event name.
+        name: String,
+        /// The payload.
+        data: Value,
+    },
     /// `ERROR`: the server rejected something.
     Error {
+        /// What went wrong; unknown codes are [`ErrorCode::Unknown`].
         code: ErrorCode,
+        /// For humans; do not parse it.
         message: String,
+        /// The rejected intent, if the error is about one.
         ref_seq: Option<u32>,
     },
     /// A patch could not be applied. The state is unusable until the next
@@ -99,7 +121,10 @@ pub enum ClientEvent {
     /// Intents that were sent but never ACKed or rejected before the socket
     /// dropped. The server may or may not have applied them: never resend them
     /// silently. Reported once per drop, sorted ascending.
-    IntentsUnconfirmed { seqs: Vec<u32> },
+    IntentsUnconfirmed {
+        /// The intents of unknown fate, ascending.
+        seqs: Vec<u32>,
+    },
 }
 
 /// Sans-IO client session state.
@@ -167,7 +192,14 @@ impl ClientCore {
                 return Ok(Vec::new());
             }
         }
-        match decode(msg)? {
+        let frame = match decode(msg) {
+            Ok(frame) => frame,
+            // A frame from a newer protocol revision: ignored, no error, no close
+            // (spec/protocol-v1.md section 12).
+            Err(ProtocolError::UnknownOpcode(_)) => return Ok(Vec::new()),
+            Err(error) => return Err(error),
+        };
+        match frame {
             Frame::JoinOk { player_id, seat } => {
                 self.player_id = Some(player_id.clone());
                 self.awaiting_join = false;

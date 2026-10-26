@@ -257,13 +257,12 @@ hearth::matchmaker::matchmaker_object!();
 
 /// Every room type this Worker serves.
 fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
-        room_type: "tictactoe",
-        binding: "TICTACTOE",
-        container: None,
-        schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
-        max_clients: 2,
-    }];
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+        "tictactoe",
+        "TICTACTOE",
+        hearth::server::schema_hash_hex::<TicTacToe>,
+        2,
+    )];
     &ROUTES
 }
 
@@ -273,15 +272,10 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
 /// variables and secrets in production), so this deployment enables anonymous
 /// logins unless `HEARTH_AUTH_ANONYMOUS=0`, plus whatever else is configured.
 fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig {
-        rooms: room_routes(),
-        player: Some(hearth_gateway::PlayerRoute {
-            binding: "TTT_PLAYER",
-        }),
-        matchmaker: true,
-        auth: hearth_gateway::AuthConfig::from_env(env)?,
-        limits: hearth_gateway::ratelimit::Limits::default(),
-    })
+    Ok(hearth_gateway::GatewayConfig::new(room_routes())
+        .player(hearth_gateway::PlayerRoute::new("TTT_PLAYER"))
+        .matchmaker(true)
+        .auth(hearth_gateway::AuthConfig::from_env(env)?))
 }
 
 /// The gateway Worker entry: auth, routing, and the tictactoe room route.

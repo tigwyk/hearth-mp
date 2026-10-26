@@ -6,10 +6,7 @@ use serde_json::Value;
 
 #[test]
 fn default_policy_matches_every_reconnect_case() {
-    let raw = include_str!("fixtures/reconnect_cases.json");
-    let cases: Value = serde_json::from_str(raw).expect("the fixture is JSON");
-    let cases = cases.as_array().expect("the fixture is an array");
-    assert!(!cases.is_empty(), "the fixture has cases");
+    let cases = hearth_protocol::vectors::load("reconnect.json");
 
     let policy = ReconnectPolicy::default();
     for case in cases {

@@ -1,0 +1,34 @@
+{
+  "name": "handshake",
+  "about": "HELLO is answered with JOIN_OK (seat 0) and then FULL_STATE with this viewer's state.",
+  "clients": [
+    "a"
+  ],
+  "steps": [
+    {
+      "client": "a",
+      "send": "connect"
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "JOIN_OK",
+        "player_id": "a",
+        "seat": 0
+      }
+    },
+    {
+      "client": "a",
+      "expect": {
+        "op": "FULL_STATE",
+        "state": {
+          "n": 0,
+          "seats": {
+            "a": 0
+          },
+          "secret": {}
+        }
+      }
+    }
+  ]
+}

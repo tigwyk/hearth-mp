@@ -20,6 +20,7 @@ fn path(json: &str) -> Result<Vec<Value>, String> {
 }
 
 impl HearthInterp {
+    /// An interpolator for a room ticking at `tick_hz`.
     pub fn new(tick_hz: u8) -> Self {
         Self {
             clock: ClockSync::new(),
@@ -27,6 +28,7 @@ impl HearthInterp {
         }
     }
 
+    /// Track a JSON path; `"*"` segments match every key at their level.
     pub fn track(&mut self, path_json: &str) -> Result<(), String> {
         self.interp.track(path(path_json)?);
         Ok(())
@@ -71,6 +73,7 @@ impl HearthInterp {
 }
 
 /// The C ABI bodies.
+#[doc(hidden)]
 pub mod ffi {
     use std::ffi::c_char;
 

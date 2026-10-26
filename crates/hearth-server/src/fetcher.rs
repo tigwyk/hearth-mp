@@ -12,16 +12,22 @@ use std::cell::RefCell;
 /// One outbound HTTP call.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HttpReq {
+    /// `"GET"`, `"POST"`, ...
     pub method: &'static str,
+    /// The absolute URL.
     pub url: String,
+    /// Request headers.
     pub headers: Vec<(String, String)>,
+    /// The request body, if any.
     pub body: Option<String>,
 }
 
 /// An HTTP answer, decoded as text.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct HttpResp {
+    /// The HTTP status.
     pub status: u16,
+    /// The response body as text.
     pub body: String,
 }
 
@@ -29,6 +35,7 @@ pub struct HttpResp {
 /// uses the gateway's `WorkerFetcher`.
 #[allow(async_fn_in_trait)]
 pub trait Fetcher {
+    /// Send one request. `Err` is a transport failure; any HTTP status is `Ok`.
     async fn send(&self, req: HttpReq) -> Result<HttpResp, String>;
 }
 
@@ -41,6 +48,7 @@ pub struct CannedFetcher {
 }
 
 impl CannedFetcher {
+    /// A fetcher with no canned responses.
     pub fn new() -> Self {
         Self::default()
     }

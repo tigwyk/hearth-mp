@@ -1,4 +1,4 @@
-//! The `hearth_interp_*` exports against the shared `interp_cases.json` fixture
+//! The `hearth_interp_*` exports against the shared `conformance/vectors/interp.json`
 //! (v0.4 Task 5, the Unity half).
 
 use std::ffi::CString;
@@ -34,11 +34,7 @@ fn close(a: &Value, b: &Value) -> bool {
 
 #[test]
 fn interp_through_ffi_matches_fixture() {
-    let cases: Value = serde_json::from_str(include_str!(
-        "../../hearth-client/tests/fixtures/interp_cases.json"
-    ))
-    .unwrap();
-    for case in cases.as_array().unwrap() {
+    for case in &hearth_protocol::vectors::load("interp.json") {
         let name = &case["name"];
         let track = case.get("track").cloned().unwrap_or(json!(["value"]));
         let sample = case.get("sample").cloned().unwrap_or_else(|| track.clone());

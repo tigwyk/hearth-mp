@@ -66,6 +66,7 @@ pub fn anonymous_player_id(secret: &[u8], device_id: &str) -> PlayerId {
     PlayerId(format!("anon_{}", hex(&digest[..16])))
 }
 
+#[doc(hidden)]
 /// `"{provider}_{subject}"`, the only way a provider may mint a player id.
 ///
 /// The subject charset excludes separators and whitespace, so a subject cannot
@@ -82,6 +83,7 @@ pub fn namespaced(provider: &'static str, subject: &str) -> Result<PlayerId, Aut
     Ok(PlayerId(format!("{provider}_{subject}")))
 }
 
+#[doc(hidden)]
 /// A display name safe to echo in JSON and in a header.
 ///
 /// Trimmed, at most 64 Unicode scalar values, with control characters (Cc) and
@@ -102,6 +104,7 @@ fn provider_name(name: &str) -> Option<&'static str> {
     PROVIDERS.into_iter().find(|known| *known == name)
 }
 
+#[doc(hidden)]
 /// Issue a token: base64url-nopad of `{"pid","prv","name"?,"exp"}` plus `.` plus
 /// its base64url-nopad HMAC.
 pub fn issue_token(secret: &[u8], identity: &Identity, now_s: u64) -> String {
@@ -120,8 +123,8 @@ pub fn issue_token(secret: &[u8], identity: &Identity, now_s: u64) -> String {
 
 /// Verify a token's constant-time HMAC and expiry, and return its identity.
 ///
-/// A token without `prv` is an `"anon"` token minted before v0.3b, so tokens
-/// issued by earlier versions keep working until they expire.
+/// Every token names its provider in `prv`; one without it (minted before
+/// v0.3b, so at least 24 hours stale) is malformed.
 pub fn verify_token(secret: &[u8], token: &str, now_s: u64) -> Result<Identity, AuthError> {
     let (payload, signature) = token.split_once('.').ok_or(AuthError::Malformed)?;
     let signature = URL_SAFE_NO_PAD
@@ -148,10 +151,11 @@ pub fn verify_token(secret: &[u8], token: &str, now_s: u64) -> Result<Identity, 
     if now_s >= exp {
         return Err(AuthError::Expired);
     }
-    let provider = match claims.get("prv").and_then(|prv| prv.as_str()) {
-        None => ANON_PROVIDER,
-        Some(name) => provider_name(name).ok_or(AuthError::Malformed)?,
-    };
+    let provider = claims
+        .get("prv")
+        .and_then(|prv| prv.as_str())
+        .and_then(provider_name)
+        .ok_or(AuthError::Malformed)?;
     // An id outside its provider's namespace cannot be one we minted, and would
     // let a credential claim another provider's identity.
     if !pid.starts_with(provider)
@@ -173,6 +177,7 @@ pub fn verify_token(secret: &[u8], token: &str, now_s: u64) -> Result<Identity, 
     })
 }
 
+#[doc(hidden)]
 /// `^[A-Za-z0-9_-]{1,64}$`, without pulling in the regex crate.
 pub fn valid_room_name(name: &str) -> bool {
     (1..=64).contains(&name.len())
@@ -181,6 +186,7 @@ pub fn valid_room_name(name: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
+#[doc(hidden)]
 /// 16 random hex chars. A predictable name would be guessable, so RNG failure is fatal.
 pub fn mint_room_name() -> String {
     let mut buf = [0u8; 8];

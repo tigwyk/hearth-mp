@@ -149,10 +149,20 @@ fn opcode_byte_must_match_body_tag() {
 }
 
 #[test]
-fn unknown_opcode_and_garbage_are_malformed() {
+fn unknown_opcodes_are_their_own_error() {
+    assert_eq!(decode(&WireMsg::Binary(vec![0x40, 0x80])), Err(ProtocolError::UnknownOpcode("0x40".into())));
+    assert_eq!(
+        decode(&WireMsg::Text(r#"{"op":"FUTURE","x":1}"#.into())),
+        Err(ProtocolError::UnknownOpcode("FUTURE".into()))
+    );
+}
+
+#[test]
+fn garbage_is_malformed() {
     for wire in [
-        WireMsg::Binary(vec![0xFF]),
+        WireMsg::Binary(vec![0x04, 0xC1]),
         WireMsg::Binary(vec![]),
+        WireMsg::Text(r#"{"op":"PATCH"}"#.to_string()),
         WireMsg::Text("nope".to_string()),
         WireMsg::Text("{".to_string()),
     ] {

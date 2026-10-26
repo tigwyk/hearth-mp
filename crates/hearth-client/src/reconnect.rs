@@ -3,7 +3,7 @@
 //! After a socket drops, [`ReconnectPolicy::decide`] says whether to retry and
 //! when. It is mirrored by `HearthReconnect.decide` in
 //! `godot/addons/hearth/hearth_reconnect.gd`, and both are checked against
-//! `tests/fixtures/reconnect_cases.json`.
+//! `conformance/vectors/reconnect.json`.
 
 /// The decision for a dropped socket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +17,7 @@ pub enum Reconnect {
 
 /// Exponential-backoff retry policy for a dropped socket.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct ReconnectPolicy {
     /// Give up once this long has passed since the first drop, in milliseconds.
     pub window_ms: u64,

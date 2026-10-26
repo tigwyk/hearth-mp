@@ -185,3 +185,59 @@ Keep large identifiers as strings — `PlayerId` and the schema hash are strings
 for exactly this reason — or use a MsgPack client (the native Godot extension,
 Rust) which carries `i64` exactly. Do not rely on exact large integers in state
 if a JSON or GDScript client can see them.
+
+## Bundle size
+
+A Hearth Worker is one Wasm module plus a small JS shim. Cloudflare limits the
+compressed Worker size: 3 MiB on the Free plan and 10 MiB on Paid (check the
+current numbers at developers.cloudflare.com/workers/platform/limits). Every
+sample is far below both.
+
+Measured with `scripts/bundle-size.sh` (gzip of `build/index_bg.wasm`,
+`build/index.js` and `build/worker/shim.mjs` after `worker-build --release`):
+
+| Target | Before: raw / gzip | After: raw / gzip | Budget (gzip) |
+| --- | --- | --- | --- |
+| `examples/tictactoe` | 2342 / 714 KiB | 1915 / 550 KiB | 633 KiB |
+| `examples/arena` | 2153 / 679 KiB | 1805 / 529 KiB | 609 KiB |
+| `examples/arena-dedicated` | 2102 / 654 KiB | 1759 / 516 KiB | 594 KiB |
+| `hearth new` project | 2050 / 645 KiB | 1709 / 507 KiB | 584 KiB |
+
+"Before" is the default release profile. "After" is the workspace profile
+Hearth 1.0 uses, which `hearth new` writes into new projects too:
+
+```toml
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+```
+
+It does **not** set `panic = "abort"`. The profile is workspace-wide, and the
+Unity plugin catches panics at its C boundary by unwinding.
+
+Budgets live in `bundle-budget.toml` (the measured size plus 15%), and
+`scripts/check-stability.sh` fails when a target goes over. That catches a
+dependency that quietly doubles the module. The budget is a tracked metric, not
+a semver promise.
+
+What the largest module is made of (`twiggy top -n 20` on the tic-tac-toe build):
+
+- About 30% of the raw module is the Wasm "function names" section, which only
+  helps in stack traces. Release builds keep it so Worker errors name their
+  functions. Stripping it (`wasm-opt --strip-debug`, or `strip = "symbols"` in the
+  profile, tested before you rely on it) cuts the upload by roughly that much.
+- The rest is spread thin: the Durable Object glue (`webSocketMessage`, `fetch`,
+  `alarm` futures), serde code per state and frame type (MessagePack and JSON for
+  `PatchOp`, `RoomReport`, `Envelope`, the room's own state), `url` parsing and
+  float formatting. No single dependency dominates.
+
+Keeping a Worker small:
+
+- Keep heavy game logic behind cargo features, so the Worker builds only what
+  the room needs.
+- Prefer the platform's WebCrypto over crypto crates. The gateway already does,
+  for JWT signatures (v0.3b).
+- Every serialisable type the room touches adds serde code. Reuse types rather
+  than wrapping each in a new one.
+- Run `scripts/bundle-size.sh` after adding a dependency.

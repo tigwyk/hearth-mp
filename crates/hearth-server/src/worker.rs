@@ -111,6 +111,8 @@ impl WorkerHost {
     }
 }
 
+impl crate::__private::Sealed for WorkerHost {}
+
 impl Host for WorkerHost {
     type Socket = WebSocket;
 
@@ -225,6 +227,7 @@ pub struct WorkerSql {
 }
 
 impl WorkerSql {
+    /// The Durable Object for one room.
     pub fn new(state: Rc<State>) -> Self {
         Self { state }
     }
@@ -856,6 +859,7 @@ impl<R: Room> RoomObject<R> {
         }
     }
 
+    /// The hibernation API's `webSocketMessage`.
     pub async fn websocket_message(
         &self,
         ws: WebSocket,
@@ -874,6 +878,7 @@ impl<R: Room> RoomObject<R> {
         Ok(())
     }
 
+    /// The hibernation API's `webSocketClose`.
     pub async fn websocket_close(
         &self,
         ws: WebSocket,
@@ -887,6 +892,7 @@ impl<R: Room> RoomObject<R> {
         Ok(())
     }
 
+    /// The hibernation API's `webSocketError`.
     pub async fn websocket_error(
         &self,
         ws: WebSocket,
@@ -898,6 +904,7 @@ impl<R: Room> RoomObject<R> {
         Ok(())
     }
 
+    /// The Durable Object alarm.
     pub async fn alarm(&self) -> worker::Result<Response> {
         self.rt.lock().await.alarm().await;
         // The watchdog alarm: renew the loop's keepalive window and restart it
@@ -952,6 +959,7 @@ async fn tick_loop<R: Room>(
 /// `on_call` for a room that accepts object-to-object calls. The macro routes
 /// `/__hearth/call` here only for a room that implements [`RoomRpc`].
 impl<R: RoomRpc> RoomObject<R> {
+    /// An object-to-object call (`POST /__hearth/call`).
     pub async fn call(&self, mut req: Request) -> worker::Result<Response> {
         if req.method() != Method::Post {
             return Response::error("not found", 404);
@@ -1005,6 +1013,7 @@ impl<S: Service> ServiceObject<S> {
         }
     }
 
+    /// The Durable Object's HTTP entry point.
     pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
         match (req.method(), req.path().as_str()) {
             (Method::Post, CALL_PATH) => self.call(req).await,
@@ -1021,6 +1030,7 @@ impl<S: Service> ServiceObject<S> {
         service_call(self.binding, &self.rt, req).await
     }
 
+    /// The Durable Object alarm.
     pub async fn alarm(&self) -> worker::Result<()> {
         self.rt.lock().await.alarm().await;
         Ok(())
@@ -1073,6 +1083,7 @@ impl<S: PlayerService> PlayerObject<S> {
         }
     }
 
+    /// The Durable Object's HTTP entry point.
     pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
         match (req.method(), req.path().as_str()) {
             (Method::Post, CALL_PATH) => service_call(self.binding, &self.rt, req).await,
@@ -1095,6 +1106,7 @@ impl<S: PlayerService> PlayerObject<S> {
         }
     }
 
+    /// The Durable Object alarm.
     pub async fn alarm(&self) -> worker::Result<()> {
         self.rt.lock().await.alarm().await;
         Ok(())

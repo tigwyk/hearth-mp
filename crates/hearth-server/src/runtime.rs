@@ -47,7 +47,9 @@ const CREATE_STOPS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_stops (\
 /// A dedicated server that must be stopped, as the adapter's job runner sees it.
 #[derive(Clone, Debug)]
 pub struct StopJob {
+    /// The handoff session.
     pub sid: SessionId,
+    /// Its dedicated server's endpoint.
     pub endpoint: String,
 }
 
@@ -159,6 +161,7 @@ struct CapturedViews<Socket> {
 }
 
 impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
+    /// A runtime for one room over `host`; `binding` is its Durable Object binding name.
     pub fn new(host: H, binding: &'static str) -> Self {
         Self {
             host: Rc::new(host),
@@ -190,14 +193,17 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         }
     }
 
+    /// The host.
     pub fn host(&self) -> &H {
         self.host.as_ref()
     }
 
+    /// The loaded state, if any.
     pub fn state(&self) -> Option<&R::State> {
         self.state.as_ref()
     }
 
+    /// The current state sequence number.
     pub fn seq(&self) -> u64 {
         self.seq
     }
@@ -431,6 +437,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(!rows.is_empty())
     }
 
+    /// How many handoff sessions are live.
     pub fn active_sessions(&self) -> Result<u64> {
         let rows = self.host.sql().exec(
             "SELECT COUNT(*) AS n FROM hearth_sessions \
@@ -1851,18 +1858,21 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         Ok(clients)
     }
 
+    /// Handle one frame from `socket`.
     pub async fn message(&mut self, socket: H::Socket, msg: WireMsg) {
         if let Err(err) = self.handle_message(socket, msg).await {
             log_error(err);
         }
     }
 
+    /// `socket` closed or dropped: hold its seat for the grace period, or run `on_leave`.
     pub async fn close(&mut self, socket: H::Socket) {
         if let Err(err) = self.handle_close(socket).await {
             log_error(err);
         }
     }
 
+    /// The host's alarm fired: timers, ticks, grace expiries, disposal.
     pub async fn alarm(&mut self) {
         if let Err(err) = self.handle_alarm().await {
             log_error(err);
@@ -3646,6 +3656,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
 /// `on_call` for a room that accepts object-to-object calls. The handler runs
 /// as a normal pass, so its state change is patched to the room's clients.
 impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
+    /// Handle one call from another Hearth object.
     pub async fn call(
         &mut self,
         envelope: Envelope,
@@ -3723,6 +3734,7 @@ impl<R: RoomRpc, H: Host + 'static> RoomRuntime<R, H> {
 
 /// Drop the in-memory runtime as hibernation does; storage and sockets stay.
 impl<R: Room, H: Host + Clone + 'static> RoomRuntime<R, H> {
+    /// Drop in-memory state as a hibernating Durable Object would; the next event reloads it.
     pub fn hibernate(&mut self) {
         let host = H::clone(&self.host);
         *self = Self::new(host, self.binding);

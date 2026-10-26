@@ -8,6 +8,8 @@
 //! [`futures::executor::block_on`], because the runtime is sans-IO and the
 //! [`MemHost`] futures are always immediately ready.
 
+#![warn(missing_docs)]
+
 pub mod mem_host;
 pub mod world;
 
@@ -29,8 +31,11 @@ pub struct C(pub usize);
 /// One test client: its sans-IO core, the events decoded so far, and the close
 /// code the server sent (if any).
 pub struct TestClient {
+    /// The client core, fed every frame the socket received.
     pub core: ClientCore,
+    /// Every event the core produced, in order.
     pub events: Vec<ClientEvent>,
+    /// The close code and reason, once the room closed the socket.
     pub closed: Option<(u16, String)>,
 }
 
@@ -55,6 +60,7 @@ pub struct TestRoom<R: Room> {
 }
 
 impl<R: Room> TestRoom<R> {
+    /// A fresh room on a fresh in-memory host.
     pub fn new() -> Self {
         Self {
             host: MemHost::new(),
@@ -289,6 +295,7 @@ impl<R: Room> TestRoom<R> {
         self.runtime = None;
     }
 
+    /// One client's socket, core and events.
     pub fn client(&self, c: C) -> &TestClient {
         &self.clients[c.0]
     }
@@ -312,6 +319,7 @@ impl<R: Room> TestRoom<R> {
         }
     }
 
+    /// The room's SQLite.
     pub fn sql(&self) -> &dyn Sql {
         self.host.sql()
     }
@@ -470,13 +478,17 @@ impl<R: Room> Default for TestRoom<R> {
 
 /// One script step for [`fuzz_hibernation`].
 pub enum Step {
+    /// A player joins.
     Join(&'static str),
+    /// A player sends an intent.
     Intent(&'static str, Value),
+    /// A player leaves.
     Leave(&'static str),
     /// The socket drops with close code 1006.
     Drop(&'static str),
     /// A new socket for the same player sends a fresh `HELLO`.
     Resume(&'static str),
+    /// Move the clock forward, firing due alarms.
     Advance(Duration),
 }
 

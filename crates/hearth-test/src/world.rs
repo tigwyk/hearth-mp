@@ -59,6 +59,7 @@ pub struct ServiceRef {
 pub struct SqlHandle(MemHost);
 
 impl SqlHandle {
+    /// The object's SQLite.
     pub fn sql(&self) -> &dyn Sql {
         self.0.sql()
     }
@@ -291,6 +292,7 @@ pub struct TestWorld {
 }
 
 impl TestWorld {
+    /// An empty world at clock 0.
     pub fn new() -> Self {
         Self {
             inner: Rc::new(Inner {
@@ -464,6 +466,7 @@ impl TestWorld {
         self.join_with(room, player, Encoding::MsgPack, opts)
     }
 
+    /// Join `room` as `player` with this session identity and options.
     pub fn join_with(
         &mut self,
         room: &RoomRef,
@@ -549,6 +552,7 @@ impl TestWorld {
         c
     }
 
+    /// Send one intent; returns its seq.
     pub fn intent(&mut self, c: C, intent: impl serde::Serialize) -> u32 {
         let value = serde_json::to_value(intent).expect("intent serialises as JSON");
         let seq = self.inner.clients.borrow_mut()[c.0]
@@ -558,6 +562,7 @@ impl TestWorld {
         seq
     }
 
+    /// Send several intents in one frame.
     pub fn intents(&mut self, c: C, intents: Vec<Value>) {
         for intent in intents {
             self.inner.clients.borrow_mut()[c.0]
@@ -574,6 +579,7 @@ impl TestWorld {
         self.pump();
     }
 
+    /// The client's socket closes.
     pub fn disconnect(&mut self, c: C) {
         let socket = self.inner.client_sockets.borrow()[c.0];
         self.with_room_of(socket, |obj| {
@@ -635,6 +641,7 @@ impl TestWorld {
         }
     }
 
+    /// One client's socket, core and events.
     pub fn client(&self, c: C) -> Ref<'_, TestClient> {
         Ref::map(self.inner.clients.borrow(), |clients| &clients[c.0])
     }
@@ -657,10 +664,12 @@ impl TestWorld {
         C(index)
     }
 
+    /// Every frame an admin tail socket received, as JSON.
     pub fn tail_msgs(&self, c: C) -> Vec<Value> {
         self.inner.tails.borrow()[c.0].messages.clone()
     }
 
+    /// The close code and reason of an admin tail socket, once closed.
     pub fn tail_closed(&self, c: C) -> Option<(u16, String)> {
         self.inner.tails.borrow()[c.0].closed.clone()
     }
@@ -677,6 +686,7 @@ impl TestWorld {
         self.inspected(&service.key).unwrap_or(Value::Null)
     }
 
+    /// The room's inspect document, as the admin route builds it.
     pub fn inspect(&mut self, room: &RoomRef) -> Option<InspectDoc> {
         let json = self.inspected(&room.key)?;
         serde_json::from_value(json).ok()
@@ -690,6 +700,7 @@ impl TestWorld {
             .and_then(|slot| slot.obj.inspect())
     }
 
+    /// Dispose the room as the admin route does; `true` when it existed.
     pub fn force_dispose(&mut self, room: &RoomRef) -> bool {
         let disposed = self.with_object(&room.key, |obj| {
             Box::pin(async move { obj.force_dispose().await })
@@ -934,14 +945,18 @@ pub struct WorldHost {
 }
 
 impl WorldHost {
+    /// When the object's alarm is set for.
     pub fn alarm_at(&self) -> Option<u64> {
         self.alarm.get()
     }
 
+    /// The object's address.
     pub fn target(&self) -> &Target {
         &self.target
     }
 }
+
+impl hearth_server::__private::Sealed for WorldHost {}
 
 impl Host for WorldHost {
     type Socket = usize;

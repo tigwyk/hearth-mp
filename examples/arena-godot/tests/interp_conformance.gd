@@ -1,7 +1,7 @@
 extends SceneTree
 ## Snapshot-interpolation conformance (v0.4 Task 6 Step 1).
 ##
-## Replays every case in `crates/hearth-client/tests/fixtures/interp_cases.json`
+## Replays every case in `conformance/vectors/interp.json`
 ## through the pure-GDScript port `hearth_interp.gd` with the clock injected, so
 ## this test needs no GDExtension, no server and no network:
 ##
@@ -12,7 +12,7 @@ extends SceneTree
 ## to `["value"]`; `track` may contain `"*"` wildcards.
 
 const Interp = preload("res://addons/hearth/hearth_interp.gd")
-const FIXTURE := "../../crates/hearth-client/tests/fixtures/interp_cases.json"
+const FIXTURE := "../../conformance/vectors/interp.json"
 const DEFAULT_PATH := ["value"]
 
 
@@ -25,6 +25,9 @@ func _init() -> void:
 	var cases = JSON.parse_string(text)
 	if typeof(cases) != TYPE_ARRAY:
 		_fail("fixture is not a JSON array: " + fixture_path)
+		return
+	if cases.is_empty():
+		_fail("fixture has no cases: " + fixture_path)
 		return
 
 	var passed := 0

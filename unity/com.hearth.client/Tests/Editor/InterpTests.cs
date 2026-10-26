@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Hearth.Tests
 {
-    /// <summary><see cref="HearthInterpolator"/> against the shared <c>interp_cases.json</c> and a scripted ticked room.</summary>
+    /// <summary><see cref="HearthInterpolator"/> against the shared <c>conformance/vectors/interp.json</c> and a scripted ticked room.</summary>
     public class InterpTests
     {
         ClientLogicTests c;
@@ -36,10 +36,8 @@ namespace Hearth.Tests
         [Test]
         public void Fixture_CasesMatch()
         {
-            var path = System.IO.Path.Combine(System.IO.Path.GetFullPath("Packages/com.hearth.client"),
-                "../../crates/hearth-client/tests/fixtures/interp_cases.json");
             var room = c.Join();
-            foreach (var @case in JArray.Parse(File.ReadAllText(path)))
+            foreach (var @case in Vectors.Load("interp.json"))
             {
                 var track = @case["track"] ?? new JArray("value");
                 var sample = @case["sample"] ?? track;

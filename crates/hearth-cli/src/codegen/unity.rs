@@ -261,6 +261,7 @@ impl Cx<'_> {
                         .join(", ");
                     (params, Some(format!("new JObject {{ {pairs} }}")))
                 }
+                other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
             };
             match value {
                 None => writeln!(out, "        public static JToken {name}() => \"{name}\";"),
@@ -315,6 +316,7 @@ impl Cx<'_> {
             TypeRef::Named(name) if self.types.contains_key(name) => class_name(self.room, name),
             TypeRef::Tuple(_) => "JArray".into(),
             TypeRef::Unit | TypeRef::Named(_) => "JToken".into(),
+            other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
         }
     }
 
@@ -357,6 +359,7 @@ impl Cx<'_> {
             }
             TypeRef::Tuple(_) => leaf("Tuple"),
             TypeRef::Unit | TypeRef::Named(_) => "t => t".into(),
+            other => panic!("hearth codegen: this schema uses {other:?}, which this hearth-cli does not support; update hearth-cli"),
         }
     }
 

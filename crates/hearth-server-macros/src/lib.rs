@@ -12,6 +12,8 @@
 //! impl Service for Stats { /* ... */ }
 //! ```
 
+#![warn(missing_docs)]
+
 use proc_macro::TokenStream;
 use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use quote::{format_ident, quote};
@@ -38,11 +40,13 @@ struct RoomArgs {
 }
 
 #[proc_macro_attribute]
+/// Turn an `impl Room for X` into a Hearth room: its [`RoomConfig`](hearth_server::RoomConfig), schema export test and Durable Object glue. See the `hearth` crate docs for the attributes.
 pub fn room(attr: TokenStream, item: TokenStream) -> TokenStream {
     expand_room(&TokenStream2::from(attr), &TokenStream2::from(item)).into()
 }
 
 #[proc_macro_attribute]
+/// Turn an `impl Service for X` into a Hearth service object (a player record, a matchmaker): its `Callable` descriptor and Durable Object glue.
 pub fn service(attr: TokenStream, item: TokenStream) -> TokenStream {
     expand_service(&TokenStream2::from(attr), &TokenStream2::from(item)).into()
 }

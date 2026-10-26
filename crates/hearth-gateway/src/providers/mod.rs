@@ -29,6 +29,7 @@ const UPSTREAM_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Why a provider could not produce an identity. Each case maps to one status.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ProviderError {
     /// The provider is not enabled in this deployment.
     Disabled,
@@ -105,11 +106,17 @@ impl Fetcher for WorkerFetcher {
 }
 
 /// Which providers a deployment enables. The default enables anonymous only.
+#[non_exhaustive]
 pub struct AuthConfig {
+    /// `POST /auth/anonymous` is enabled.
     pub anonymous: bool,
+    /// `POST /auth/jwt`, when configured.
     pub jwt: Option<jwt::JwtConfig>,
+    /// `POST /auth/steam`, when configured.
     pub steam: Option<steam::SteamConfig>,
+    /// `POST /auth/itch` is enabled.
     pub itch: bool,
+    /// `POST /auth/discord`, when configured.
     pub discord: Option<discord::DiscordConfig>,
 }
 
@@ -215,6 +222,7 @@ fn required(var: &impl Fn(&str) -> Option<String>, name: &str) -> Result<String,
     var(name).ok_or_else(|| format!("{name} is required when the JWT provider is enabled"))
 }
 
+#[doc(hidden)]
 /// Whether a provider is enabled, without touching the network or the Worker env.
 pub fn check_enabled(cfg: &AuthConfig, provider: &str) -> Result<(), ProviderError> {
     let enabled = match provider {

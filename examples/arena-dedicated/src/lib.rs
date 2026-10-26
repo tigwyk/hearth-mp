@@ -143,6 +143,7 @@ impl Room for ArenaLobby {
             hearth::server::handoff::HandoffEvent::Result(_) => "result",
             hearth::server::handoff::HandoffEvent::Ended { .. } => "ended",
             hearth::server::handoff::HandoffEvent::Failed { .. } => "failed",
+            _ => "other",
         };
         ctx.state().log.push(name.to_owned());
         match event {
@@ -210,26 +211,20 @@ impl PlayerService for ArenaPlayer {
 
 /// Every room type this Worker serves.
 fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
-        room_type: "arena",
-        binding: "ARENA_LOBBY",
-        container: Some("ARENA_SERVER"),
-        schema_hash: hearth::server::schema_hash_hex::<ArenaLobby>,
-        max_clients: 8,
-    }];
+    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+        "arena",
+        "ARENA_LOBBY",
+        hearth::server::schema_hash_hex::<ArenaLobby>,
+        8,
+    )
+    .with_container("ARENA_SERVER")];
     &ROUTES
 }
 
 fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig {
-        rooms: room_routes(),
-        player: Some(hearth_gateway::PlayerRoute {
-            binding: "ARENA_PLAYER",
-        }),
-        matchmaker: false,
-        auth: hearth_gateway::AuthConfig::from_env(env)?,
-        limits: hearth_gateway::ratelimit::Limits::default(),
-    })
+    Ok(hearth_gateway::GatewayConfig::new(room_routes())
+        .player(hearth_gateway::PlayerRoute::new("ARENA_PLAYER"))
+        .auth(hearth_gateway::AuthConfig::from_env(env)?))
 }
 
 /// The gateway Worker entry: auth, routing and the lobby room route.
