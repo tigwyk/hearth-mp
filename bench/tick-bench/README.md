@@ -43,12 +43,13 @@ this, then remove the Worker afterwards.
 ```powershell
 cd bench/tick-bench
 npx wrangler deploy
-node run.mjs --url https://<worker>.<account>.workers.dev --hz 10,20 --secs 600 --work-us 0,2000
+node run.mjs --url https://<worker>.<account>.workers.dev --hz 10,15,20 --secs 60 --work-us 0,2000 --out results.deployed.json
 npx wrangler delete
 ```
 
-The full matrix is 8 runs (2 drivers × 2 rates × 2 CPU loads), all in parallel,
-about 10 minutes of wall time per deployment.
+The full matrix is 12 runs (2 drivers × 3 rates × 2 CPU loads), all in parallel,
+about one minute of wall time per deployment (the ADR run used 60 s; use 600 s
+for a longer sample). The committed `results.deployed.json` is that run.
 
 ## GraphQL Analytics (optional)
 
@@ -115,7 +116,7 @@ Hearth v0.3b cost model).
 
 ## ADR 0001 decision rule
 
-Pick the first option that holds, using the 20 Hz / `work_us = 2000` row:
+Pick the first option that holds:
 
 1. **Alarm** if `server.p99 interval_err_ms ≤ 12.5`, `missed / expected ≤ 1%`
    and no run was evicted.
@@ -123,13 +124,19 @@ Pick the first option that holds, using the 20 Hz / `work_us = 2000` row:
 3. Otherwise lower the supported `tick_hz` to the highest tested rate that meets
    the bar for either driver, and choose that driver.
 
+The deployed matrix (60 s per run, 10/15/20 Hz, `work_us` 0 and 2000) took option
+2: the alarm driver's p99 was 49-98 ms with 15-58% missed slots, the loop
+driver's was 0-1 ms with none. The run is committed as `results.deployed.json`;
+the deployed soak that validated the shipped runtime is in ADR 0001's
+"Validation" section.
+
 ## run.mjs options
 
 | flag | default | meaning |
 | --- | --- | --- |
 | `--url` | `http://127.0.0.1:8787` | Worker base URL (`http` or `https`; WebSocket scheme is derived) |
 | `--hz` | `20` | comma-separated tick rates |
-| `--secs` | `60` | run length; the matrix uses `600` |
+| `--secs` | `60` | run length; the deployed matrix used `60` |
 | `--work-us` | `0` | comma-separated CPU burn per tick in microseconds |
 | `--out` | `bench/tick-bench/results.json` | output path |
 | `--script-name` | `hearth-tick-bench` | deployed Worker name for the analytics filter |
@@ -137,9 +144,14 @@ Pick the first option that holds, using the 20 Hz / `work_us = 2000` row:
 
 ## Notes
 
-- `Date.now()` in Workers has 1 ms resolution, so `work_us` rounds up to the next
-  millisecond of CPU burn. At 20 Hz / `work_us = 2000` that is a few percent of
-  the 50 ms period, which is the same for both drivers.
+- `work_us` is approximate: the burn is a fixed iteration count, not a clock
+  loop. The deployed Workers runtime freezes `Date.now()` during synchronous
+  execution (a Spectre mitigation), so a wall-clock spin loop never exits there
+  and the object hits its CPU limit. Both drivers burn the same amount, which is
+  what the comparison needs.
+- At 15 Hz the absolute schedule is fractional. The loop waits an extra 1 ms when
+  a wake makes no progress; without that guard a rounded slot can spin until the
+  CPU limit (seen on the first deployed run).
 - The loop driver uses `state.wait_until` rather than a bare
   `wasm_bindgen_futures::spawn_local`: a detached future is cancelled when the
   `/start` request finishes, while `wait_until` is the Workers API that keeps the

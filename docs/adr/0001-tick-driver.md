@@ -1,8 +1,8 @@
 # ADR 0001: The tick driver and the maximum advertised tick rate
 
-- **Status:** provisional — local measurements only; the deployed validation in
-  v0.4 Task 1 Step 2 / Task 4 Step 3 is pending (this workspace has no Cloudflare
-  credentials, and the user chose local-only runs for now).
+- **Status:** accepted (2026-10-25) — the deployed benchmark rejects the alarm
+  driver, so the shipped adapter uses the in-object loop driver with a 20 Hz
+  ceiling.
 - **Date:** 2026-10-25
 - **Deciders:** Hearth maintainers
 - **Plan:** [v0.4 ticked rooms](../superpowers/plans/2026-10-25-hearth-v0.4-ticked-rooms.md),
@@ -96,55 +96,114 @@ the decision needs.
 
 ### Deployed tick benchmark
 
-**Not measured yet.** Requires `wrangler login` (or a
-`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` pair) and the user's explicit
-approval to deploy a benchmark Worker for ~10 minutes. When it happens:
-`node bench/tick-bench/run.mjs --url <deployed> --hz 10,15,20 --secs 180 --work-us 0,2000`,
-plus the GraphQL `durableObjectsInvocationsAdaptiveGroups` /
-`durableObjectsPeriodicGroups` request counts, recorded here.
+Run on 2026-10-25 against `hearth-tick-bench` (`wrangler deploy`, account
+`0db7de82d434c5218aca4e0eaa86c2cc`) with
+
+```sh
+node bench/tick-bench/run.mjs --url https://hearth-tick-bench.lee-0db.workers.dev \
+  --hz 10,15,20 --secs 60 --work-us 0,2000
+```
+
+Twelve durable objects ran in parallel, one per driver × rate × CPU load. Both
+CPU loads agreed within noise (the `work_us = 2000` rows differ by less than one
+tick and less than one millisecond of p99), so the table shows the
+`work_us = 0` rows:
+
+| driver | metric | 10 Hz | 15 Hz | 20 Hz |
+| --- | --- | --- | --- | --- |
+| Alarms API | ticks / expected | 507 / 600 | 506 / 900 | 505 / 1200 |
+| Alarms API | missed slots | 15.5% | 43.8% | 57.9% |
+| Alarms API | p99 schedule error | 98.0 ms | 65.7 ms | 49.0 ms |
+| in-object loop | ticks / expected | 600 / 600 | 900 / 900 | 1200 / 1200 |
+| in-object loop | missed slots | 0 | 0 | 0 |
+| in-object loop | p99 schedule error | 0.0 ms | 1.0 ms | 0.0 ms |
+
+The client-side receive jitter (one byte per tick over a hibernatable WebSocket)
+tells the same story: p99 receive interval 279–353 ms for the alarm driver and
+52–106 ms for the loop driver, i.e. the loop's 50 ms cadence survived the network
+hop with normal jitter and the alarm's did not.
+
+Two harness bugs had to be fixed before this table was valid. Both are
+deployed-runtime behaviour that local workerd cannot show, and both are recorded
+in the bench:
+
+- `Date.now()` is frozen during synchronous execution in the deployed Workers
+  runtime (a Spectre mitigation), so a "burn N µs by spinning on the clock" loop
+  never exits there and the object hits its CPU limit. The bench now burns a
+  fixed iteration count (approximate microseconds).
+- At 15 Hz, `start + n * 66.666… ms` can round onto a millisecond that the float
+  division floors one short. The loop woke with nothing to do and spun until the
+  CPU limit. It now waits 1 ms when a wake makes no progress.
+
+GraphQL request counts were not captured: the Analytics API rate-limited this
+account before the matrix ran, and `run.mjs` reads only
+`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`, which this workspace does not
+have. The billed shape is derivable from the measured ticks: the alarm driver
+pays roughly one request per wake (ticks plus the watchdog), the loop driver pays
+only its start/stats requests, and both bill duration for the whole run because a
+ticking room never meets the 10 s idle-hibernation condition under either driver.
 
 ## Decision
 
-**Provisional (pending deployed numbers): the alarm driver, 20 Hz ceiling.**
+**The in-object loop driver, with a 20 Hz ceiling (accepted 2026-10-25).**
 
-Reasoning that holds regardless of the deployed numbers: the alarm path already
-exists for timers and the outbox, it hibernates between ticks (no charged
-seconds while idle), and `next_wake()` already merges tick, timer and outbox
-deadlines. Choosing the loop driver needs positive evidence that the alarm
-driver misses the bar *in production*; the local numbers above cannot supply
-that (both drivers are inside the host's timer quantum there), so adding a
-second driver now would be speculative. The ceiling stays at 20 Hz because the
-plan requires the 5–20 Hz range; the deployed run may lower it.
+The decision rule required the alarm driver's p99 error to stay at or under
+12.5 ms and its missed/expected ratio at or under 1%. The deployed numbers miss
+both by a wide margin at every rate (49–98 ms, 15–58%), while the loop driver met
+the bar at every rate (0–1 ms, no missed slots). The rule therefore selects the
+loop driver, and the highest measured rate that meets the bar is 20 Hz, so the
+plan's 5–20 Hz range is the advertised range.
 
-If the deployed run shows the alarm driver missing the bar and the loop driver
-meeting it, this ADR flips to the loop driver and Task 4's adapter must grow the
-`spawn_local` path (the runtime side needs no change: it exposes `next_wake()` and
-`tick_if_due()` and does not care who calls them).
+Why holding the object open is the cheaper option, not just the accurate one:
+
+- A ticking room bills duration for as long as it ticks. The alarm driver would
+  have billed the same in practice: with a tick every 50–100 ms the object never
+  sees the 10 s of idleness that hibernation requires, so it never hibernates
+  while ticking. The loop driver additionally removes the per-wake request
+  charge: the alarm fires only for timers and the five-minute watchdog.
+- The loop needs a keepalive. A single outstanding `State::wait_until` operation
+  protects an object from eviction for at most 15 minutes, so the runtime
+  schedules a watchdog alarm every five minutes. The alarm renews the keepalive
+  (the adapter starts a fresh loop generation) and is the wake that restarts a
+  loop lost to an eviction. It still carries the room's timers and outbox
+  retries.
+- An eviction can lose the unpersisted ticks and the in-memory schedule. On the
+  first wake the room reloads the persisted tick, sends every still-connected
+  client a `FULL_STATE` (clients order ticked patches by tick, so they must reset
+  their high-water mark), and ticking resumes one period after the watchdog
+  wake. Room code does not change.
 
 ## Consequences
 
-- The runtime (`RoomRuntime::tick_if_due`) is driver-agnostic; only the Durable
-  Object adapter decides how the wake happens.
-- Tick rates below 5 Hz and above 20 Hz are compile errors, with the >20 message
+- The runtime stays driver-agnostic: `RoomRuntime::tick_if_due`,
+  `tick_deadline()` and a tick watchdog. `Host::loops_ticks()` tells the runtime
+  to leave the tick deadline out of the alarm schedule (the Durable Object
+  adapter returns `true`; the test harness keeps the alarm driver).
+- Tick rates below 5 Hz and above 20 Hz stay compile errors, with the >20 message
   naming Handoff.
-- The advertised ceiling is provisional until the deployed benchmark and the
-  Task 4 soak test run.
+- `hearth cost --ticked` models the loop driver: duration for the ticking
+  session, one watchdog alarm per room per five minutes, and no per-tick request
+  charge.
+- A deployment still has one alarm per room; the loop is per-room in-memory work
+  that runs only while that room is ticking.
 
 ## Validation
 
-Task 4's soak test (`node soak.mjs`, 8 clients, 300 s deployed / 60 s local)
-checks the patch jitter and the stop-ticking rule:
+The Task 4 soak test (`node soak.mjs`, 8 clients, 300 s) checks the ticked
+contract end to end against a deployed arena room:
 
+- **Deployed soak (2026-10-25, `https://hearth-arena.lee-0db.workers.dev`, 20 Hz,
+  `--secs 300 --bar-ms 12.5`):** passed — 8 clients, room tick 6055, every
+  `PATCH` carried `tick` and `t`, all clients ended within one tick of each other
+  (6048), adjacent-tick interval error p50/p95/p99 **0/0/0 ms** against the
+  12.5 ms bar, the admin inspect showed the room stopped ticking after every
+  player left (tick 6055 unchanged 10 s apart), and the synced avatars and coins
+  matched the arena sample.
 - **Local soak (2026-10-25, `wrangler dev`, 20 Hz, `--secs 45`):** passed —
-  room tick 918, adjacent-tick interval p50 4 ms / p95 18 ms / p99 20 ms over
-  60 s wall; every `PATCH` carried `tick` and `t`; ticks were monotonic; the
-  admin inspect showed the room stopped ticking after every player left (tick
-  unchanged 10 s apart). Local p99 is above the 12.5 ms bar, which says nothing
-  about production: it is the same host timer quantum as the local tick
-  benchmark above.
-- **Deployed soak:** _pending_ (local-only decision, see the status line).
-- **Deployed p99 patch interval:** _pending_.
+  room tick 918, adjacent-tick interval p50 4 ms / p95 18 ms / p99 20 ms;
+  same stop-ticking check. Local p99 is the host timer quantum, not production.
 
-The local soak is the correctness check: it exercises the arena room (20 Hz,
-buffered intents, catch-up, persist every 20, one alarm) over a real WebSocket
-server, plus interpolation and prediction on the Godot clients.
+The local soak and the Godot prediction smoke test are the correctness checks:
+they exercise the arena room (20 Hz, buffered intents, catch-up, persist every
+20, loop driver, watchdog) over a real WebSocket server, plus interpolation and
+prediction on the Godot clients.

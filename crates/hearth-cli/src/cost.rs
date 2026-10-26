@@ -60,8 +60,9 @@ pub struct Model {
     pub idle_hibernate_after_s: f64,
 }
 
-/// How a room is driven. `Ticked` is modelled ahead of the v0.4 ticked runtime,
-/// because the spec asks the estimate to take a tick rate.
+/// How a room is driven. `Ticked` is the shipped v0.4 runtime: an in-object loop
+/// keeps the room awake while it ticks, so a tick is a duration cost, not a
+/// request; one watchdog alarm per five minutes renews that loop.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum CostMode {
     Event,
@@ -104,6 +105,7 @@ pub struct Quantities {
     pub msgs_per_player: f64,
     pub ws_msgs: f64,
     pub ticks: f64,
+    pub watchdog_alarms: f64,
     pub connects: f64,
     pub do_requests: f64,
     pub worker_requests: f64,
@@ -126,9 +128,18 @@ pub fn quantities(input: &CostInput, pricing: &Pricing) -> Quantities {
         CostMode::Event => 0.0,
         CostMode::Ticked { hz, .. } => rooms * hz * s,
     };
+    // The v0.4 adapter drives ticks from an in-object loop, so a tick is not a
+    // Durable Object request. One watchdog alarm per five minutes renews that
+    // loop (and recovers it after an eviction); see ADR 0001. The loop keeps the
+    // object in memory, which the duration charge below already models.
+    let watchdog_alarms = match input.mode {
+        CostMode::Event => 0.0,
+        CostMode::Ticked { .. } => rooms * (s / 300.0),
+    };
     // One auth call, then one WebSocket upgrade per session.
     let connects = input.ccu * input.sessions_per_player_day * 30.0;
-    let do_requests = ws_msgs / pricing.durable_objects.ws_incoming_ratio + connects + ticks;
+    let do_requests =
+        ws_msgs / pricing.durable_objects.ws_incoming_ratio + connects + watchdog_alarms;
     let worker_requests = connects + connects;
     let room_msg_rate = input.room_size * msgs_per_player;
     let active_fraction = match input.mode {
@@ -151,6 +162,7 @@ pub fn quantities(input: &CostInput, pricing: &Pricing) -> Quantities {
         msgs_per_player,
         ws_msgs,
         ticks,
+        watchdog_alarms,
         connects,
         do_requests,
         worker_requests,
@@ -239,7 +251,7 @@ fn assumptions(input: &CostInput, pricing: &Pricing, q: &Quantities) -> Vec<Stri
             q.connects
         ),
         format!(
-            "do_requests = ws_msgs / {:.0} + connects + ticks = {:.0}",
+            "do_requests = ws_msgs / {:.0} + connects + watchdog_alarms = {:.0}",
             pricing.durable_objects.ws_incoming_ratio, q.do_requests
         ),
         format!(
@@ -290,8 +302,12 @@ fn assumptions(input: &CostInput, pricing: &Pricing, q: &Quantities) -> Vec<Stri
     } = input.mode
     {
         assumptions.push(format!(
-            "ticks = rooms * {hz} Hz * S = {:.0} alarm invocations",
+            "ticks = rooms * {hz} Hz * S = {:.0} simulated ticks (loop driver: duration, not requests)",
             q.ticks
+        ));
+        assumptions.push(format!(
+            "watchdog_alarms = rooms * S / 300 = {:.0} alarms (one per room per five minutes)",
+            q.watchdog_alarms
         ));
         assumptions.push(format!(
             "persist_every_ticks = {persist_every_ticks} (one state row per {persist_every_ticks} ticks)"

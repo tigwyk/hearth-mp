@@ -37,7 +37,7 @@ const DEFAULT_SECS: u64 = 60;
 // `#[worker::durable_object]`'s wasm-bindgen expansion spells the crate as bare
 // `wasm_bindgen` (the same workaround as the Hearth room macro).
 #[allow(unused_imports)]
-use worker::wasm_bindgen as wasm_bindgen;
+use worker::wasm_bindgen;
 
 fn now_ms() -> f64 {
     // V8's Date.now has millisecond resolution; see the README.
@@ -51,11 +51,20 @@ fn scheduled_time(slot_ms: f64) -> ScheduledTime {
 }
 
 /// Burn `work_us` microseconds of CPU, the way a game tick would.
+///
+/// This cannot spin on `Date.now()`: the deployed Workers runtime freezes the
+/// clock during synchronous execution (a Spectre mitigation), so a wall-clock
+/// loop never exits there and the tick times out with a 500. A fixed iteration
+/// count is platform-stable enough for the comparison (both drivers burn the
+/// same amount per tick); `work_us` is therefore approximate in microseconds.
 fn burn(work_us: u64) {
-    let until = now_ms() + work_us as f64 / 1000.0;
-    while now_ms() < until {
-        std::hint::black_box(());
+    let mut x = 0x9e37_79b9_7f4a_7c15_u64;
+    for _ in 0..work_us.saturating_mul(1_000) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
     }
+    std::hint::black_box(x);
 }
 
 /// One byte per connected client per tick; the client measures arrival times.
@@ -80,9 +89,7 @@ struct StartParams {
 
 impl StartParams {
     fn from_request(req: &Request) -> std::result::Result<Self, String> {
-        let query: StartQuery = req
-            .query()
-            .map_err(|_| "invalid query string".to_owned())?;
+        let query: StartQuery = req.query().map_err(|_| "invalid query string".to_owned())?;
         let params = Self {
             hz: query.hz.unwrap_or(DEFAULT_HZ),
             secs: query.secs.unwrap_or(DEFAULT_SECS),
@@ -157,12 +164,15 @@ impl Run {
     /// One wake: run the slot that contains `now`. A late wake skips the slots it
     /// missed (counted as `missed`) instead of running them back to back, and the
     /// absolute schedule means the error does not accumulate.
-    fn advance(&mut self, now: f64, state: &State) {
+    ///
+    /// Returns `false` when `now` is still before the next slot (an early wake):
+    /// the caller must wait again, or a float-rounding case can spin forever.
+    fn advance(&mut self, now: f64, state: &State) -> bool {
         let current = ((now - self.start_ms) / self.period_ms)
             .floor()
             .clamp(0.0, self.expected as f64) as u64;
         if current < self.next_slot {
-            return; // Woke early; the driver waits for the slot again.
+            return false; // Woke early; the driver waits for the slot again.
         }
         self.missed += current - self.next_slot;
         let scheduled = self.start_ms + current as f64 * self.period_ms;
@@ -176,6 +186,7 @@ impl Run {
             self.missed = self.expected.saturating_sub(self.ticks);
             self.stopped = true;
         }
+        true
     }
 }
 
@@ -330,10 +341,7 @@ impl AlarmTicker {
             .as_ref()
             .map(Run::next_slot_ms)
             .expect("begin just stored a run");
-        self.state
-            .storage()
-            .set_alarm(scheduled_time(next))
-            .await?;
+        self.state.storage().set_alarm(scheduled_time(next)).await?;
         Response::empty().map(|response| response.with_status(204))
     }
 }
@@ -374,12 +382,7 @@ impl worker::DurableObject for AlarmTicker {
             (!run.stopped).then(|| run.next_slot_ms())
         };
         match next {
-            Some(next) => {
-                self.state
-                    .storage()
-                    .set_alarm(scheduled_time(next))
-                    .await?
-            }
+            Some(next) => self.state.storage().set_alarm(scheduled_time(next)).await?,
             None => self.state.storage().delete_alarm().await?,
         }
         Response::empty()
@@ -520,11 +523,18 @@ async fn loop_ticks(state: Rc<State>, run: Rc<RefCell<Option<Run>>>, generation:
         if current.generation != generation || current.stopped {
             return;
         }
-        current.advance(now_ms(), &state);
+        let ticked = current.advance(now_ms(), &state);
         let stopped = current.stopped;
         drop(borrow);
         if stopped {
             return;
+        }
+        if !ticked {
+            // A fractional period can round the slot onto the current
+            // millisecond while the float division still floors one short; one
+            // millisecond of progress avoids a tight spin that hits the DO CPU
+            // limit (seen at 15 Hz on the first deployed run).
+            worker::Delay::from(Duration::from_millis(1)).await;
         }
     }
 }

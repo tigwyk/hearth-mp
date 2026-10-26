@@ -1,0 +1,404 @@
+{
+  "generated_at": "2026-10-26T00:38:43.729Z",
+  "url": "https://hearth-tick-bench.lee-0db.workers.dev",
+  "secs": 60,
+  "script_name": "hearth-tick-bench",
+  "window": {
+    "started_at": "2026-10-26T00:37:40.317Z",
+    "ended_at": "2026-10-26T00:38:43.559Z"
+  },
+  "runs": [
+    {
+      "driver": "alarm",
+      "hz": 10,
+      "work_us": 0,
+      "name": "alarm-10-0-mvoj1yuh-hrrjjf",
+      "server": {
+        "ticks": 507,
+        "expected": 600,
+        "missed": 93,
+        "interval_err_ms": {
+          "p50": 49,
+          "p95": 94,
+          "p99": 98,
+          "max": 99
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 507,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 111.251,
+          "p95": 145.07,
+          "p99": 279.469,
+          "max": 418.182,
+          "mean": 118.369
+        },
+        "drop_ratio": 0.155
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 10,
+      "work_us": 2000,
+      "name": "alarm-10-2000-mvoj1yui-zbveam",
+      "server": {
+        "ticks": 499,
+        "expected": 600,
+        "missed": 101,
+        "interval_err_ms": {
+          "p50": 48,
+          "p95": 95,
+          "p99": 99,
+          "max": 99
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 499,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 111.391,
+          "p95": 154.374,
+          "p99": 353.181,
+          "max": 670.025,
+          "mean": 120.4
+        },
+        "drop_ratio": 0.169
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 15,
+      "work_us": 0,
+      "name": "alarm-15-0-mvoj1yui-dsebza",
+      "server": {
+        "ticks": 506,
+        "expected": 900,
+        "missed": 394,
+        "interval_err_ms": {
+          "p50": 33.666748046875,
+          "p95": 64,
+          "p99": 65.666748046875,
+          "max": 111
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 506,
+        "expected": 900,
+        "interval_ms": {
+          "p50": 113.424,
+          "p95": 147.813,
+          "p99": 228.658,
+          "max": 328.452,
+          "mean": 118.832
+        },
+        "drop_ratio": 0.438
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 15,
+      "work_us": 2000,
+      "name": "alarm-15-2000-mvoj1yui-x7u09w",
+      "server": {
+        "ticks": 447,
+        "expected": 900,
+        "missed": 453,
+        "interval_err_ms": {
+          "p50": 32.666748046875,
+          "p95": 63.666748046875,
+          "p99": 66,
+          "max": 70
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 447,
+        "expected": 900,
+        "interval_ms": {
+          "p50": 113.613,
+          "p95": 171.491,
+          "p99": 689.719,
+          "max": 998.594,
+          "mean": 134.594
+        },
+        "drop_ratio": 0.504
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 20,
+      "work_us": 0,
+      "name": "alarm-20-0-mvoj1yui-zsr4am",
+      "server": {
+        "ticks": 505,
+        "expected": 1200,
+        "missed": 695,
+        "interval_err_ms": {
+          "p50": 25,
+          "p95": 47,
+          "p99": 49,
+          "max": 83
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 505,
+        "expected": 1200,
+        "interval_ms": {
+          "p50": 113.571,
+          "p95": 147.839,
+          "p99": 230.22,
+          "max": 275.667,
+          "mean": 119.034
+        },
+        "drop_ratio": 0.58
+      },
+      "error": null
+    },
+    {
+      "driver": "alarm",
+      "hz": 20,
+      "work_us": 2000,
+      "name": "alarm-20-2000-mvoj1yui-ypqbjn",
+      "server": {
+        "ticks": 502,
+        "expected": 1200,
+        "missed": 698,
+        "interval_err_ms": {
+          "p50": 25,
+          "p95": 48,
+          "p99": 49,
+          "max": 49
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 502,
+        "expected": 1200,
+        "interval_ms": {
+          "p50": 111.323,
+          "p95": 148.447,
+          "p99": 327.23,
+          "max": 638.038,
+          "mean": 119.688
+        },
+        "drop_ratio": 0.582
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 10,
+      "work_us": 0,
+      "name": "loop-10-0-mvoj1yui-l1gaww",
+      "server": {
+        "ticks": 600,
+        "expected": 600,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 600,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 99.976,
+          "p95": 101.124,
+          "p99": 102.599,
+          "max": 339.203,
+          "mean": 99.98
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 10,
+      "work_us": 2000,
+      "name": "loop-10-2000-mvoj1yui-pim5qe",
+      "server": {
+        "ticks": 600,
+        "expected": 600,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 600,
+        "expected": 600,
+        "interval_ms": {
+          "p50": 99.922,
+          "p95": 103.214,
+          "p99": 105.816,
+          "max": 107.718,
+          "mean": 100.058
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 15,
+      "work_us": 0,
+      "name": "loop-15-0-mvoj1yui-jse298",
+      "server": {
+        "ticks": 900,
+        "expected": 900,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0.333251953125,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 900,
+        "expected": 900,
+        "interval_ms": {
+          "p50": 66.71,
+          "p95": 68.343,
+          "p99": 70.419,
+          "max": 405.833,
+          "mean": 66.661
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 15,
+      "work_us": 2000,
+      "name": "loop-15-2000-mvoj1yui-5sxjtb",
+      "server": {
+        "ticks": 900,
+        "expected": 900,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0.333251953125,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 900,
+        "expected": 900,
+        "interval_ms": {
+          "p50": 66.604,
+          "p95": 69.338,
+          "p99": 71.011,
+          "max": 366.681,
+          "mean": 66.751
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 20,
+      "work_us": 0,
+      "name": "loop-20-0-mvoj1yui-23u0ky",
+      "server": {
+        "ticks": 1200,
+        "expected": 1200,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 1200,
+        "expected": 1200,
+        "interval_ms": {
+          "p50": 49.978,
+          "p95": 51.522,
+          "p99": 52.482,
+          "max": 56.583,
+          "mean": 49.993
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    },
+    {
+      "driver": "loop",
+      "hz": 20,
+      "work_us": 2000,
+      "name": "loop-20-2000-mvoj1yui-fqudmm",
+      "server": {
+        "ticks": 1200,
+        "expected": 1200,
+        "missed": 0,
+        "interval_err_ms": {
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0
+        },
+        "evicted": false
+      },
+      "client": {
+        "received": 1200,
+        "expected": 1200,
+        "interval_ms": {
+          "p50": 49.86,
+          "p95": 53.705,
+          "p99": 55.917,
+          "max": 62.483,
+          "mean": 50.082
+        },
+        "drop_ratio": 0
+      },
+      "error": null
+    }
+  ],
+  "analytics": {
+    "skipped": "set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID to query the GraphQL Analytics API",
+    "estimate": {
+      "memory_gb": 0.128,
+      "per_driver": {
+        "alarm": {
+          "durable_objects": 6,
+          "wall_seconds": 360,
+          "estimated_duration_gb_s": 46.08,
+          "requests_estimate": 2984
+        },
+        "loop": {
+          "durable_objects": 6,
+          "wall_seconds": 360,
+          "estimated_duration_gb_s": 46.08,
+          "requests_estimate": 5418
+        }
+      }
+    }
+  }
+}

@@ -367,6 +367,40 @@ fn dispose_stops_ticking() {
 }
 
 #[test]
+fn watchdog_alarm_restarts_a_hibernated_room() {
+    let mut r = new_room();
+    let a = r.join("a", json!({}));
+    r.advance(Duration::from_millis(200));
+    assert_eq!(r.ticks(), 2);
+
+    // Drop the runtime as hibernation does, then advance past the tick
+    // watchdog deadline and fire the alarm: the fresh instance reloads the
+    // persisted state (ticks 1-2 were never persisted), resyncs the still-
+    // attached clients with a FULL_STATE and restarts the schedule instead of
+    // staying dead. Production relies on this after an eviction, where the loop
+    // driver's in-object future is gone.
+    r.hibernate();
+    r.stall(Duration::from_secs(300));
+    r.advance(Duration::from_millis(100));
+    assert_eq!(
+        r.ticks(),
+        1,
+        "the tick counter restarts at the persisted tick"
+    );
+    // A tick with no state change sends no patch, so provoke one: the resynced
+    // client must apply it even though its old high-water tick was higher.
+    r.intent(a, json!({"SetVel": 1}));
+    r.advance(Duration::from_millis(100));
+    assert_eq!(r.ticks(), 2);
+    assert_eq!(
+        r.client(a).core.last_tick().map(|(tick, _)| tick),
+        Some(2),
+        "the resynced client applies the restarted schedule"
+    );
+    assert_eq!(r.client(a).core.state()["pos"], json!({"a": 1}));
+}
+
+#[test]
 fn event_mode_unchanged() {
     let mut r = TestRoom::<CounterRoom>::new();
     let a = r.join("a", json!({}));

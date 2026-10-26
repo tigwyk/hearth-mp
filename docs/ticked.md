@@ -84,14 +84,15 @@ The rules:
 - **Overruns are logged.** When a wake's steps take longer than one period of
   wall time, the room logs `{"hearth":"tick_overrun","ms":N}`.
 - **Timers and the outbox keep working.** Each room has one Durable Object
-  alarm; `next_wake()` is the earliest of the next tick and the next timer (the
-  outbox retry is one of those timer rows). A ticked room that stops ticking
-  (nobody connected) still wakes for its timers.
+  alarm. While a room ticks, the in-object loop drives the ticks and the alarm
+  carries only the timers, the outbox retry and a five-minute tick watchdog (see
+  section 3). A ticked room that stops ticking (nobody connected) still wakes for
+  its timers.
 
 Event rooms are unchanged: no buffering, no `tick`/`t`, one handler pass per
 incoming message.
 
-## 3. The 5–20 Hz range and the provisional driver decision
+## 3. The 5–20 Hz range and the tick driver
 
 `tick_hz` is required in ticked mode and must be in `5..=20`; `persist_every`
 defaults to 20 and must be at least 1. Mistakes are compile errors:
@@ -109,17 +110,29 @@ The scheduler works in whole milliseconds, so rates that do not divide 1000
 fixed `dt` (66.666 ms, floored to whole microseconds). 5, 10 and 20 Hz are
 exact.
 
-**The driver choice is provisional.** [ADR 0001](adr/0001-tick-driver.md) picks
-an **alarm driver** — the tick is one alarm wake per period, so the room can
-hibernate between ticks and shares its single alarm with timers and the outbox —
-and advertises a **20 Hz ceiling**. That decision comes from local-only
-measurements on `wrangler dev`, not from Cloudflare: local workerd is dominated
-by the host timer quantum, so it cannot settle the deployed latency question.
-The deployed benchmark and the deployed soak run that could lower the ceiling or
-flip the driver have not been executed yet (only local runs exist). If the
-deployed numbers show the alarm driver missing the bar, ADR 0001 flips to a
-held-open loop driver; the runtime is driver-agnostic (`next_wake()` plus
-`tick_if_due()`), so room code does not change.
+**The tick driver is chosen by measurement** ([ADR 0001](adr/0001-tick-driver.md)).
+A deployed benchmark drove two Durable Objects — one waking on the Alarms API,
+one looping in-object — at 10/15/20 Hz for 60 s each, with 0 and 2000 µs of CPU
+burned per tick. Both `work_us` variants agreed, so the table shows one:
+
+| driver | metric | 10 Hz | 15 Hz | 20 Hz |
+| --- | --- | --- | --- | --- |
+| Alarms API | p99 schedule error | 98 ms | 66 ms | 49 ms |
+| Alarms API | missed slots | 15.5% | 43.8% | 57.9% |
+| in-object loop | p99 schedule error | 0 ms | 1 ms | 0 ms |
+| in-object loop | missed slots | 0 / 600 | 0 / 900 | 0 / 1200 |
+
+The decision rule was fixed before the numbers: the alarm driver wins unless it
+misses p99 ≤ 12.5 ms and ≤ 1% missed; it missed both at every rate, so the
+shipped adapter ticks from an in-object loop (a `Future` that waits on
+`worker::Delay`, held open with `State::wait_until`) and leaves the alarm to the
+timers, the outbox retry and a five-minute watchdog. The watchdog is what makes
+the loop survivable: a single outstanding `wait_until` operation protects an
+object from eviction for at most 15 minutes, so each watchdog alarm renews it,
+and after an eviction the alarm is also the wake that restarts the loop. Without
+it, an evicted room whose clients only watch would stop ticking until someone
+sent input. The ceiling stays **20 Hz** (the loop met the bar at every measured
+rate); above 20 Hz use Handoff (v0.5).
 
 ## 4. Persistence and the crash window
 
@@ -135,6 +148,17 @@ never replays intents after a restart. Intents that were buffered in memory when
 the room was evicted are lost; the client already sees every
 sent-but-unacknowledged intent as `IntentsUnconfirmed` when the socket drops,
 and must never resend them silently.
+
+A ticked room that wakes from an eviction therefore holds a state and tick number
+older than what its still-connected clients saw, and its in-object loop is gone.
+Two things make that recoverable. On the first wake, the room sends every
+still-connected client a fresh `FULL_STATE`, which resets the client's state and
+its tick high-water mark (clients order ticked patches strictly by tick). And the
+five-minute watchdog alarm restarts the tick loop even when no client event
+arrives. The lost simulated time is not replayed: ticking resumes one period
+after the recovery wake, so the gap can be up to the watchdog interval. Eviction
+is rare (a deploy, or a host decision — the loop's pending `wait_until` prevents
+the idle eviction), and the room continues from the persisted tick.
 
 Event rooms keep their v0.1 rule (persist on every handler pass), so this
 section only applies to ticked rooms.
@@ -295,24 +319,21 @@ gameplay that depends on the client's predicted state being authoritative.
 
 ## 8. Cost of a ticked room
 
-Ticked mode is billed differently from event mode: the room does not hibernate
-until the last client leaves, so duration is billed for the whole session, and
-every tick is an alarm invocation. `hearth cost` models it:
+Ticked mode is billed differently from event mode: the in-object loop keeps the
+room awake for the whole session, so duration is billed while it ticks. A tick is
+**not** a Durable Object request — the alarm only fires the five-minute watchdog
+and the timers. `hearth cost` models it:
 
 ```sh
 hearth cost --ccu 1000 --room-size 16 --intents 10 --ticked 20 --persist-every 20
 ```
 
-`--ticked <hz>` models one alarm request per tick, `active_fraction = 1` (never
-hibernating) and one state row written per `--persist-every` ticks, on top of
-the incoming-message and connection lines. The full model and the pricing table
-are in [cost.md](cost.md). Tick rate is the main lever: halving `tick_hz`
-halves the tick requests, and raising `persist_every` raises the crash window
-while lowering rows written.
-
-The cost numbers assume the alarm driver from ADR 0001. If the deployed
-benchmark flips the driver to a held-open loop, the tick billing shape changes
-(current numbers are provisional for the same reason as the 20 Hz ceiling).
+`--ticked <hz>` models `active_fraction = 1` (never hibernating while ticking),
+one watchdog alarm per room per five minutes, and one state row written per
+`--persist-every` ticks, on top of the incoming-message and connection lines. The
+full model and the pricing table are in [cost.md](cost.md). Tick rate barely
+changes the request bill now; it changes how much simulation runs, and
+`persist_every` trades the crash window against rows written.
 
 ## 9. The arena sample
 

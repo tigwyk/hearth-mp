@@ -58,13 +58,14 @@ All quantities are monthly. `S` is `seconds_per_month` (30.4 days).
 rooms            = ccu / room_size
 msgs_per_player  = min(intents, 20)                  # SDK batching cap
 ws_msgs          = ccu * msgs_per_player * S         # incoming WebSocket messages
-ticks            = rooms * hz * S                    # ticked mode only: one alarm per tick
+ticks            = rooms * hz * S                    # ticked: simulated ticks (loop driver)
+watchdog_alarms  = ticked: rooms * S / 300           # one alarm per room per 5 minutes
 connects         = ccu * sessions * 30
-do_requests      = ws_msgs / 20 + connects + ticks   # 20 incoming WS msgs = 1 request
+do_requests      = ws_msgs / 20 + connects + watchdog_alarms
 worker_requests  = connects + connects               # auth call + WebSocket upgrade
 room_msg_rate    = room_size * msgs_per_player
 active_fraction  = event: min(1, room_msg_rate * 10) # 10 s idle window before hibernation
-                   ticked: 1
+                   ticked: 1                         # the tick loop keeps the object awake
 gb_s             = rooms * active_fraction * S * 0.128   # billed at 128 MB per object
 rows_written     = event:  rooms * room_msg_rate * S     # one state row per handler pass
                    ticked: rooms * (hz / persist_every) * S
@@ -87,10 +88,14 @@ Two consequences worth internalising:
   and sending one intent per frame instead of batches multiplies it. Keep the
   SDK's batching on.
 
-`--ticked <hz>` models the ticked-mode runtime (see [ticked.md](ticked.md)):
-every tick is an alarm invocation, the room never hibernates while a client is
-connected, and state persists every `--persist-every` ticks (`setAlarm` and each
-persisted row are rows written).
+`--ticked <hz>` models the shipped ticked-mode runtime (see [ticked.md](ticked.md)):
+the room ticks from an in-object loop, which keeps it in memory, so duration is
+billed for the whole time it is ticking. Alarms cannot hold a 5–20 Hz cadence
+(the deployed benchmark measured 49–98 ms p99 error and 15–58% skipped slots at
+10–20 Hz), so a tick is not a Durable Object request; the model counts one
+watchdog alarm per room per five minutes (it renews the loop and restarts it
+after an eviction) plus one state row per `--persist-every` ticks. See
+[ADR 0001](adr/0001-tick-driver.md).
 
 ## The pricing table
 

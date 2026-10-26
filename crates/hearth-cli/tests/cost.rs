@@ -113,15 +113,19 @@ fn batching_caps_messages_at_20() {
 }
 
 #[test]
-fn ticked_bills_full_duration_and_ticks() {
+fn ticked_bills_full_duration_and_watchdog_alarms() {
     let pricing = test_pricing();
     let input = ticked_input(1000.0, 4.0, 2.0, 10.0, 20);
     let q = quantities(&input, &pricing);
     assert_eq!(q.active_fraction, 1.0);
-    // 250 rooms * 10 Hz * 1e6 s.
+    // 250 rooms * 10 Hz * 1e6 s. The ticked runtime drives these from an
+    // in-object loop, so they are duration, not Durable Object requests.
     assert_eq!(q.ticks, 2_500_000_000.0);
-    // ws 2e9 / 20 + 60,000 connects + 2.5e9 alarm requests.
-    assert_eq!(q.do_requests, 2_600_060_000.0);
+    // 250 rooms * 1e6 s / 300 s: one watchdog alarm per room per five minutes.
+    assert_eq!(q.watchdog_alarms, 250.0 * 1_000_000.0 / 300.0);
+    // ws 2e9 / 20 + 60,000 connects + the watchdog alarms; ticks add none.
+    let expected = 100_000_000.0 + 60_000.0 + q.watchdog_alarms;
+    assert!((q.do_requests - expected).abs() < 1e-6);
     let estimate = estimate(&input, &pricing);
     let requests = estimate
         .items

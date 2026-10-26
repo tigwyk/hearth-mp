@@ -10,12 +10,14 @@
 //! API, the registry and object-to-object calls. Hearth builds those requests
 //! itself, so a player can never reach them.
 
+use std::cell::Cell;
 use std::rc::Rc;
+use std::time::Duration;
 
 use futures::lock::Mutex;
 use hearth_protocol::{PlayerId, Value, WireMsg, PING_TEXT, PONG_TEXT};
 use worker::{
-    console_log, Date, DateInit, Env, Method, Request, RequestInit, Response, ScheduledTime,
+    console_log, Date, DateInit, Delay, Env, Method, Request, RequestInit, Response, ScheduledTime,
     SqlCursor, SqlStorageValue, State, WebSocket, WebSocketIncomingMessage, WebSocketPair,
     WebSocketRequestResponsePair,
 };
@@ -177,6 +179,14 @@ impl Host for WorkerHost {
         self.env.durable_object(binding).is_ok()
     }
 
+    /// Ticks are driven by [`tick_loop`]; the alarm only fires timers and the
+    /// tick watchdog. The deployed benchmark (ADR 0001) is why: the Alarms API
+    /// delivered 50 ms ticks with a p99 error of 49-98 ms and skipped 15-58% of
+    /// slots, while the in-object loop held 0-1 ms p99 and skipped none.
+    fn loops_ticks(&self) -> bool {
+        true
+    }
+
     fn log_line(&self, json: &str) {
         console_log!("{json}");
     }
@@ -290,7 +300,24 @@ pub async fn call_object(
 pub struct RoomObject<R: Room> {
     state: Rc<State>,
     binding: &'static str,
-    rt: Mutex<RoomRuntime<R, WorkerHost>>,
+    rt: Rc<Mutex<RoomRuntime<R, WorkerHost>>>,
+    tick_loop: Rc<TickLoop>,
+}
+
+/// Bookkeeping for the in-object tick loop. The loop itself lives in
+/// `State::wait_until`, which is what keeps a ticking object in memory.
+struct TickLoop {
+    generation: Cell<u64>,
+    running: Cell<bool>,
+}
+
+impl Default for TickLoop {
+    fn default() -> Self {
+        Self {
+            generation: Cell::new(0),
+            running: Cell::new(false),
+        }
+    }
 }
 
 impl<R: Room> RoomObject<R> {
@@ -305,14 +332,37 @@ impl<R: Room> RoomObject<R> {
         Self {
             state,
             binding,
-            rt: Mutex::new(RoomRuntime::new(host, binding)),
+            rt: Rc::new(Mutex::new(RoomRuntime::new(host, binding))),
+            tick_loop: Rc::new(TickLoop::default()),
         }
+    }
+
+    /// Start the tick loop if the room is ticking, or renew its keepalive.
+    ///
+    /// Alarms call this with `renew` so each watchdog alarm starts a fresh
+    /// `wait_until` operation (a pending operation prevents eviction for at most
+    /// 15 minutes) and restarts the loop after an eviction. Every other event
+    /// only has to start the loop when it is not running.
+    async fn ensure_tick_loop(&self, renew: bool) {
+        if self.rt.lock().await.tick_deadline().is_none() {
+            return;
+        }
+        if self.tick_loop.running.get() && !renew {
+            return;
+        }
+        let generation = self.tick_loop.generation.get().wrapping_add(1);
+        self.tick_loop.generation.set(generation);
+        self.tick_loop.running.set(true);
+        let rt = Rc::clone(&self.rt);
+        let loop_state = Rc::clone(&self.tick_loop);
+        self.state
+            .wait_until(async move { tick_loop(rt, loop_state, generation).await });
     }
 
     /// Dispatch the room's internal paths. The Gateway and the admin router
     /// build these URLs themselves; a player request never reaches this object.
     pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
-        match req.path().as_str() {
+        let response = match req.path().as_str() {
             "/__hearth/connect" => self.connect(req).await,
             "/__hearth/inspect" => self.inspect(req).await,
             "/__hearth/dispose" => self.dispose(req).await,
@@ -324,7 +374,10 @@ impl<R: Room> RoomObject<R> {
                     .to_owned(),
             )),
             _ => Response::error("not found", 404),
-        }
+        };
+        // A join may have started ticking; a dispose may have stopped it.
+        self.ensure_tick_loop(false).await;
+        response
     }
 
     /// The player connect endpoint. The Gateway has already verified the player
@@ -418,6 +471,9 @@ impl<R: Room> RoomObject<R> {
             WebSocketIncomingMessage::Binary(bytes) => WireMsg::Binary(bytes),
         };
         self.rt.lock().await.message(ws, msg).await;
+        // A first intent or a recovered socket restarts a lost loop, and the
+        // first join starts ticking.
+        self.ensure_tick_loop(false).await;
         Ok(())
     }
 
@@ -429,6 +485,7 @@ impl<R: Room> RoomObject<R> {
         _was_clean: bool,
     ) -> worker::Result<()> {
         self.rt.lock().await.close(ws).await;
+        self.ensure_tick_loop(false).await;
         Ok(())
     }
 
@@ -438,12 +495,55 @@ impl<R: Room> RoomObject<R> {
         _error: worker::Error,
     ) -> worker::Result<()> {
         self.rt.lock().await.close(ws).await;
+        self.ensure_tick_loop(false).await;
         Ok(())
     }
 
     pub async fn alarm(&self) -> worker::Result<Response> {
         self.rt.lock().await.alarm().await;
+        // The watchdog alarm: renew the loop's keepalive window and restart it
+        // after an eviction, even when no client event woke the object.
+        self.ensure_tick_loop(true).await;
         Response::empty()
+    }
+}
+
+/// Drive ticks while the room is ticking.
+///
+/// The loop lives inside `State::wait_until`, which keeps the object in memory;
+/// the runtime alarm watchdog re-enters here with a new generation so each
+/// keepalive operation gets a fresh eviction window. The loop exits when ticking
+/// stops or a newer loop supersedes it.
+async fn tick_loop<R: Room>(
+    rt: Rc<Mutex<RoomRuntime<R, WorkerHost>>>,
+    loop_state: Rc<TickLoop>,
+    generation: u64,
+) {
+    loop {
+        if loop_state.generation.get() != generation {
+            break;
+        }
+        let Some(deadline) = rt.lock().await.tick_deadline() else {
+            break;
+        };
+        let now = Date::now().as_millis();
+        if deadline > now {
+            Delay::from(Duration::from_millis(deadline - now)).await;
+        }
+        if loop_state.generation.get() != generation {
+            break;
+        }
+        let before = rt.lock().await.tick_deadline();
+        rt.lock().await.tick_if_due().await;
+        let after = rt.lock().await.tick_deadline();
+        if before == after {
+            // Nothing rescheduled (a failed tick): do not spin. The schedule is
+            // integer milliseconds, so this guard is defensive only.
+            Delay::from(Duration::from_millis(10)).await;
+        }
+    }
+    if loop_state.generation.get() == generation {
+        loop_state.running.set(false);
     }
 }
 
@@ -473,6 +573,7 @@ impl<R: RoomRpc> RoomObject<R> {
             return msgpack_error(CallError::ReentrantCall(me));
         }
         let reply = self.rt.lock().await.call(envelope, &name).await;
+        self.ensure_tick_loop(false).await;
         msgpack_reply(&reply)
     }
 }

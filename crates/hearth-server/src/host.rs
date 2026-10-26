@@ -151,6 +151,14 @@ pub trait Host {
         false
     }
 
+    /// Whether the adapter drives ticks from an in-object loop instead of the
+    /// alarm (the production Durable Object adapter does; the test harness and
+    /// other hosts keep the alarm driver). A loop host leaves the tick deadline
+    /// out of the alarm schedule and relies on the tick watchdog alarm instead.
+    fn loops_ticks(&self) -> bool {
+        false
+    }
+
     /// Append one structured JSON line to the deployment's logs.
     fn log_line(&self, _json: &str) {}
 

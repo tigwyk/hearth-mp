@@ -30,6 +30,11 @@ const REGISTRY_NAME: &str = "global";
 /// Binding of the optional matchmaker. A room whose gateway told it which
 /// matchmaker pools it also reports there.
 const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
+/// How often a ticking room schedules a watchdog alarm. The alarm renews the
+/// loop driver's `wait_until` keepalive (whose eviction window is 15 minutes)
+/// and restarts the loop after an eviction. One alarm per five minutes is
+/// negligible next to one per tick, and a missed recovery window is bounded.
+const TICK_WATCHDOG_MS: u64 = 300_000;
 
 /// Event-mode room runtime. One instance lives behind the room's async mutex;
 /// `new` after hibernation rebuilds everything from the [`Host`] (SQLite and
@@ -70,6 +75,9 @@ pub struct RoomRuntime<R: Room, H: Host> {
     last_saved_tick: u64,
     /// Absolute time of the next tick; `None` when the room is not ticking.
     next_tick_ms: Option<u64>,
+    /// Absolute time of the watchdog alarm that renews a loop driver's
+    /// keepalive and restarts ticking after an eviction. Only set while ticking.
+    tick_watchdog_ms: Option<u64>,
     /// Intents received between ticks, applied at the start of the next tick in
     /// arrival order. Lost on eviction; the client then sees them unconfirmed.
     pending: Vec<(PlayerId, u32, R::Intent)>,
@@ -131,6 +139,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             tick: 0,
             last_saved_tick: 0,
             next_tick_ms: None,
+            tick_watchdog_ms: None,
             pending: Vec::new(),
         }
     }
@@ -157,9 +166,25 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     /// is one of those rows) or its next tick, whichever comes first.
     pub fn next_wake(&self) -> Option<u64> {
         let timer = store::next_timer(self.host.sql()).ok().flatten();
-        match (timer, self.next_tick_ms) {
-            (Some(timer), Some(tick)) => Some(timer.min(tick)),
-            (timer, tick) => timer.or(tick),
+        // A loop host wakes for the tick in the object itself, so its alarm is
+        // only ever the watchdog (plus timers). The alarm driver (tests, other
+        // hosts) must still be armed for the next tick.
+        let tick = if self.host.loops_ticks() {
+            None
+        } else {
+            self.next_tick_ms
+        };
+        let watchdog = self.tick_watchdog_ms;
+        [timer, tick, watchdog].into_iter().flatten().min()
+    }
+
+    /// The deadline the loop driver should wait for, or `None` when the room is
+    /// not ticking. Event mode always answers `None`.
+    pub fn tick_deadline(&self) -> Option<u64> {
+        if Self::ticked_mode() {
+            self.next_tick_ms
+        } else {
+            None
         }
     }
 
@@ -646,15 +671,25 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     }
 
     /// Keep the tick schedule in sync with the connected clients.
+    ///
+    /// This runs at the end of every handler pass and on an alarm, never on a
+    /// tick, so the watchdog deadline below does not slide while the loop driver
+    /// ticks. The watchdog alarm is what renews the loop's keepalive and
+    /// restarts ticking after an eviction.
     async fn sync_ticking(&mut self) -> Result<()> {
         if !Self::ticked_mode() {
             return Ok(());
         }
+        let now = self.host.now_ms();
         if !self.joined().is_empty() {
             if self.next_tick_ms.is_none() {
-                self.next_tick_ms = Some(self.host.now_ms().saturating_add(Self::tick_period_ms()));
+                self.next_tick_ms = Some(now.saturating_add(Self::tick_period_ms()));
+            }
+            if self.tick_watchdog_ms.is_none_or(|at| at <= now) {
+                self.tick_watchdog_ms = Some(now.saturating_add(TICK_WATCHDOG_MS));
             }
         } else if self.next_tick_ms.take().is_some() {
+            self.tick_watchdog_ms = None;
             // Stopping: accepted intents must not be lost, and the tick number
             // is persisted with the state.
             self.drain_pending().await?;
@@ -773,6 +808,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.tick = 0;
         self.last_saved_tick = 0;
         self.next_tick_ms = None;
+        self.tick_watchdog_ms = None;
         self.pending.clear();
     }
 
@@ -1851,7 +1887,14 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             }
         }
         if self.state.is_some() {
-            self.reschedule_alarm().await?;
+            if Self::ticked_mode() {
+                // An alarm is also the recovery path for a ticked room whose
+                // loop driver was lost to an eviction: it restarts the schedule
+                // (and renews the watchdog) without a client event.
+                self.sync_ticking().await?;
+            } else {
+                self.reschedule_alarm().await?;
+            }
         } else {
             self.host.set_alarm(None).await?;
         }
@@ -2279,6 +2322,23 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             self.locked = false;
             self.last_saved = Some(bytes);
             self.last_saved_locked = false;
+        }
+        // A ticked room can wake from an eviction with a persisted state and
+        // tick number older than what its still-connected clients saw (the
+        // unpersisted ticks were lost). Clients order ticked patches strictly by
+        // tick, so without a fresh FULL_STATE they would drop every patch until
+        // the counter passed their old high-water mark, and the diffs in between
+        // would not match their state. Event rooms never need this.
+        if Self::ticked_mode() && self.state.is_some() && !self.joined().is_empty() {
+            let seq = self.seq;
+            for (socket, attachment) in self.joined() {
+                let view = self
+                    .state
+                    .as_ref()
+                    .expect("state loaded")
+                    .view(&attachment.player_id);
+                self.send_frame(&socket, &attachment, Frame::FullState { seq, state: view });
+            }
         }
         Ok(self.incompatible)
     }
