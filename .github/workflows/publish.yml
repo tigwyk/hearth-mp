@@ -38,7 +38,7 @@ jobs:
       - if: env.CARGO_REGISTRY_TOKEN != ''
         name: Publish the crates that are not live yet
         run: |
-          for attempt in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             # Publishable workspace crates (publish != []) whose version is not on crates.io yet.
             missing=$(cargo metadata --no-deps --format-version 1 | jq -r '
               .packages[] | select(.publish != []) | "\(.name) \(.version)"' |
@@ -47,7 +47,7 @@ jobs:
                 [ "$code" = 200 ] || echo "-p $name"
               done)
             if [ -z "$missing" ]; then echo "All crates are live."; exit 0; fi
-            echo "Publishing:" $missing
+            echo "Publishing: $missing"
             # shellcheck disable=SC2086 # intentional word splitting into -p flags
             if cargo publish --locked $missing 2>&1 | tee publish.log; then continue; fi
             grep -q "429 Too Many Requests" publish.log || { echo "::error::publish failed"; exit 1; }
