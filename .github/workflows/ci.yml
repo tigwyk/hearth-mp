@@ -284,6 +284,9 @@ jobs:
         with:
           projectPath: examples/tictactoe-unity
           testMode: all
+          # Pinned: "latest" needs an unauthenticated GitHub API call, which shared
+          # runners hit the rate limit on (403).
+          cliVersion: v0.1.72
           artifactsPath: unity-test-results
       - if: always() && env.UNITY_LICENSE != ''
         uses: actions/upload-artifact@v7
