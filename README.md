@@ -1,11 +1,29 @@
 # Hearth MP
 
+[![CI](https://github.com/tigwyk/hearth-mp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/tigwyk/hearth-mp/actions/workflows/ci.yml)
+[![Crates.io](https://img.shields.io/crates/v/hearth-mp.svg)](https://crates.io/crates/hearth-mp)
+[![MSRV](https://img.shields.io/badge/MSRV-1.91-blue.svg)](https://www.rust-lang.org)
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licence)
+
+**[Get started](#quickstart) · [Documentation](#docs) · [Examples](#examples) · [Contributing](#contributing) · [Report an issue](https://github.com/tigwyk/hearth-mp/issues)**
+
 Add multiplayer to your game: authoritative rooms in Rust on Cloudflare Durable
 Objects. Implement one `Room` trait; the framework owns sockets, state sync,
 persistence, hibernation and auth. Godot and Unity SDKs are included.
 
 The crates are `hearth-mp` and `hearth-mp-*` (Rust path `hearth_mp`), and the CLI
 is `hearth-mp`. Why the name: [docs/release/naming.md](docs/release/naming.md).
+
+**What's included**
+
+- A Rust room framework with authoritative state, typed intents, reconnects,
+  authentication, matchmaking, and room-to-room RPC.
+- A CLI to scaffold, run, deploy, inspect, and estimate costs for a game server.
+- Godot and Unity clients with generated typed state classes.
+- A versioned wire protocol and a conformance suite for client implementations.
+
+Hearth is pre-1.0, so APIs and packaging may change. Check the compatibility
+limits below before choosing it for a game.
 
 **Hard line:** Hearth v0.1 rooms are event-driven. Anything needing more than
 ~20 Hz authoritative simulation, UDP, or more than ~100 MB of live state per
@@ -89,7 +107,7 @@ scripts/build-unity-native.sh            # or --only windows|linux|macos|android
 ```
 
 ```
-https://github.com/<owner>/hearth-rs.git?path=unity/com.hearth.client
+https://github.com/tigwyk/hearth-mp.git?path=unity/com.hearth.client
 ```
 
 Add a `HearthClient` component and generate typed state from the server crate:
@@ -198,6 +216,14 @@ owner); unmarked fields stay server-side. State changes are diffed and pushed as
 patches, and one handler pass is atomic: if a handler returns `Err`, its state
 changes, events and timers are rolled back.
 
+## Examples
+
+- [Tic-tac-toe server](examples/tictactoe), with [Godot](examples/tictactoe-godot)
+  and [Unity](examples/tictactoe-unity) clients.
+- [Dedicated-server arena](examples/arena-dedicated), including a Godot client
+  and a sample fleet allocator.
+- [Arena with shared Rust game logic](examples/arena).
+
 ## Docs
 
 - [Wire protocol v1](docs/protocol.md): frames, opcodes, patch ops, handshake.
@@ -221,6 +247,22 @@ changes, events and timers are rolled back.
   SDKs.
 - [v0.1 implementation plan](docs/superpowers/plans/2026-10-25-hearth-v0.1-event-rooms.md)
 
+## Contributing
+
+Contributions are welcome. For larger changes, open an
+[issue](https://github.com/tigwyk/hearth-mp/issues) first to discuss the approach.
+Keep changes focused, include tests or documentation when relevant, and run the
+same core checks used by CI before opening a pull request:
+
+```sh
+cargo fmt --all --check
+cargo test --workspace --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+```
+
+The workspace requires Rust 1.91 or newer. The CI workflow also runs platform,
+Wasm, Godot, Unity, and end-to-end checks.
+
 ## Licence
 
-MIT OR Apache-2.0
+[MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE)
