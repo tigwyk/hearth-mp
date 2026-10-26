@@ -1,6 +1,6 @@
 {
   "name": "com.hearth.client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "displayName": "Hearth Client",
   "description": "Unity client for Hearth game rooms on Cloudflare Durable Objects: async join, typed state with OnChange events, reconnect, WebGL support.",
   "unity": "2022.3",

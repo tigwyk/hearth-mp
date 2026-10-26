@@ -16,7 +16,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "arena"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arena-logic",
  "hearth-mp",
@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "arena-dedicated"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp",
  "hearth-mp-gateway",
@@ -39,7 +39,7 @@ dependencies = [
 
 [[package]]
 name = "arena-godot-ext"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arena-logic",
  "godot",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "arena-logic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-client",
  "hearth-mp-protocol",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "hearth-mp-admin",
@@ -674,7 +674,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-admin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "hearth-mp-gateway",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-server",
  "hearth-mp-sync",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "arena-logic",
  "hearth-mp-protocol",
@@ -710,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-conformance-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "futures",
@@ -727,7 +727,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-gateway"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64 0.22.1",
  "futures",
@@ -744,7 +744,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-godot"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "godot",
  "hearth-mp-client",
@@ -754,7 +754,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-handoff-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-server",
  "serde",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-matchmaker"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "getrandom 0.2.17",
@@ -778,7 +778,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-protocol",
  "rmp-serde",
@@ -789,7 +789,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-server"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-server-macros"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp",
  "hearth-mp-sync",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-sync"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-protocol",
  "hearth-mp-sync-derive",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-sync-derive"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-test"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "fastrand",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-unity-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-client",
  "hearth-mp-protocol",
@@ -869,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "hearth-mp-unity-plugin"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp-client",
  "hearth-mp-protocol",
@@ -1741,7 +1741,7 @@ dependencies = [
 
 [[package]]
 name = "tictactoe"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "hearth-mp",
  "hearth-mp-client",
