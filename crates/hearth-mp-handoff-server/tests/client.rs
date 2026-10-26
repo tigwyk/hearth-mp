@@ -55,6 +55,9 @@ impl Stub {
             while !stop_for_thread.load(Ordering::SeqCst) {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        // Windows hands out accepted sockets in the listener's
+                        // non-blocking mode; the request may not have arrived yet.
+                        stream.set_nonblocking(false).expect("blocking stream");
                         if let Some(recorded) = read_request(&mut stream) {
                             let (status, body) = respond(&recorded);
                             requests_for_thread
