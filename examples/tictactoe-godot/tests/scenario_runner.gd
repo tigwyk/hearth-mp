@@ -111,7 +111,7 @@ func _run_scenario(url: String, schema: String, scenario: Dictionary) -> void:
 					client.join("conf", room, send.get("opts", {}))
 				"INTENT":
 					for message in send["intents"]:
-						client.send_intent(_ints(message["intent"]))
+						client.send_intent(message["intent"])
 				"LEAVE":
 					client.leave()
 
@@ -181,25 +181,6 @@ func _matches(pattern: Variant, value: Variant) -> bool:
 	if pattern == null:
 		return value == null
 	return typeof(pattern) == typeof(value) and pattern == value
-
-
-## JSON.parse_string reads every number as a float; integral ones go back to
-## int, as game code would pass them (an i64 intent field rejects `1.0`).
-func _ints(value: Variant) -> Variant:
-	match typeof(value):
-		TYPE_FLOAT:
-			return int(value) if value == floorf(value) else value
-		TYPE_ARRAY:
-			var out := []
-			for item in value:
-				out.append(_ints(item))
-			return out
-		TYPE_DICTIONARY:
-			var out := {}
-			for key in value:
-				out[key] = _ints(value[key])
-			return out
-	return value
 
 
 func _schema(url: String) -> String:

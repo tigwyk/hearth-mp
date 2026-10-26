@@ -75,6 +75,8 @@ const _MATCH_ATTEMPTS := 4
 const _JOIN_TIMEOUT_MS := 10000
 ## HTTP attempts per call when the gateway answers 429: the first try plus 2.
 const _MAX_ATTEMPTS_PER_REQUEST := 3
+## Seconds before a gateway call that gets no answer fails with HTTP_FAILED.
+const _HTTP_TIMEOUT_S := 15.0
 
 
 func _ready() -> void:
@@ -403,6 +405,7 @@ func _request(
 ) -> Dictionary:
 	for attempt in _MAX_ATTEMPTS_PER_REQUEST:
 		var request := HTTPRequest.new()
+		request.timeout = _HTTP_TIMEOUT_S
 		add_child(request)
 		var headers := PackedStringArray(["Content-Type: application/json"])
 		if authenticated:

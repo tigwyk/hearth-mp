@@ -93,6 +93,10 @@ namespace Hearth
         /// <summary>Set while <see cref="JoinAsync(string, string, JObject)"/> waits for <c>JOIN_OK</c> + <c>FULL_STATE</c>.</summary>
         TaskCompletionSource<HearthRoom> pendingJoin;
         HearthRoom pendingRoom;
+        long joinDeadlineMs;
+
+        /// <summary>A join with no <c>JOIN_OK</c> + <c>FULL_STATE</c> by then fails with <c>TIMEOUT</c>.</summary>
+        internal long JoinTimeoutMs = 15000;
 
         internal long NowMs => (clock ??= Stopwatch.StartNew()).ElapsedMilliseconds;
 
@@ -199,6 +203,7 @@ namespace Hearth
             target.Name = room;
             pendingRoom = target;
             pendingJoin = new TaskCompletionSource<HearthRoom>(TaskCreationOptions.RunContinuationsAsynchronously);
+            joinDeadlineMs = NowMs + JoinTimeoutMs;
             reconnect.Reset();
             OpenSocket();
             return pendingJoin.Task;
@@ -228,6 +233,11 @@ namespace Hearth
             if (disposed || core == null)
                 return;
             var now = NowMs;
+            if (pendingJoin != null && now >= joinDeadlineMs)
+            {
+                Fail(new HearthException("TIMEOUT", $"no JOIN_OK from {pendingRoom?.RoomType}/{pendingRoom?.Name} within {JoinTimeoutMs} ms"));
+                return;
+            }
             if (transport == null)
             {
                 if (!reconnect.TakeDue(now))

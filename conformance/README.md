@@ -35,6 +35,9 @@ cargo run -p hearth-conformance-server            # 127.0.0.1:8790; --port to ch
 
 - `POST /auth/anonymous {"device_id": "a"}` answers `{"token": "a", "player_id": "a"}`:
   the token is the player id, so an SDK runs its normal login and join flow.
+  It deliberately accepts any `[A-Za-z0-9_-]+` id, so scenarios can name clients
+  `a` and `b`; a real gateway requires 8–128 characters (`spec/protocol-v1.md`
+  section 13), so an SDK's generated device ids must be at least 8 long.
 - `GET /schema/conf` answers `{"schema_hash": "..."}`.
 - `ws://127.0.0.1:8790/rooms/conf/<room>?token=<player>` is the room socket.
 

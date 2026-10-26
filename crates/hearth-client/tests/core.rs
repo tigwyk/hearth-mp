@@ -722,3 +722,22 @@ fn no_event_when_nothing_in_flight() {
     core.queue_intent(json!({"Add": 2}));
     assert!(core.on_disconnected().is_empty());
 }
+
+#[test]
+fn full_state_over_64_kib_is_accepted() {
+    // The 64 KiB cap is for frames to the server; a big room's FULL_STATE is not one.
+    for encoding in [Encoding::MsgPack, Encoding::Json] {
+        let mut core = ClientCore::new(config(encoding));
+        let blob = "x".repeat(hearth_protocol::MAX_FRAME_BYTES * 2);
+        let events = recv(
+            &mut core,
+            &Frame::FullState {
+                seq: 1,
+                state: json!({ "blob": blob }),
+            },
+            encoding,
+        );
+        assert_eq!(events, vec![ClientEvent::StateReset]);
+        assert_eq!(core.state()["blob"].as_str().map(str::len), Some(blob.len()));
+    }
+}

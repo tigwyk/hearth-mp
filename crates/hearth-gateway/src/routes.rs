@@ -533,14 +533,7 @@ async fn handoff_connect(
 
     // Build the container's request here instead of forwarding the client's: the
     // container only ever sees this URL, and identity comes from the redeem.
-    let headers = Headers::new();
-    for (name, value) in req.headers().entries() {
-        let lower = name.to_ascii_lowercase();
-        if lower == "host" || lower == "authorization" || lower.starts_with("x-hearth-") {
-            continue;
-        }
-        headers.set(&name, &value)?;
-    }
+    let headers = forwarded_headers(&req)?;
     headers.set(PLAYER_HEADER, &redeemed.player_id.0)?;
     headers.set(PROVIDER_HEADER, &redeemed.provider)?;
     if let Some(display_name) = &redeemed.display_name {
@@ -598,13 +591,7 @@ async fn connect(
     // Build the room's request here instead of forwarding the client's: the room
     // only ever sees `https://room/__hearth/connect`, and the player identity and
     // room name come from verified values, never from client headers.
-    let headers = Headers::new();
-    for (name, value) in req.headers().entries() {
-        if name.eq_ignore_ascii_case("host") || name.eq_ignore_ascii_case("authorization") {
-            continue;
-        }
-        headers.set(&name, &value)?;
-    }
+    let headers = forwarded_headers(&req)?;
     headers.set(PLAYER_HEADER, &identity.player_id.0)?;
     headers.set(ROOM_HEADER, &format!("{room_type}/{name}"))?;
     // Both values come from the *verified* token, so a room can trust them; the
@@ -809,6 +796,25 @@ async fn call_matchmaker(
         .await
         .map_err(|err| err.to_string())?;
     serde_json::from_value(value).map_err(|err| format!("matchmaker reply did not decode: {err}"))
+}
+
+/// The client's headers minus `Host`, `Authorization` and every `X-Hearth-*`
+/// header, which only the gateway may set from verified values.
+fn forwarded_headers(req: &Request) -> Result<Headers> {
+    let headers = Headers::new();
+    for (name, value) in req.headers().entries() {
+        if forwarded_header(&name) {
+            headers.set(&name, &value)?;
+        }
+    }
+    Ok(headers)
+}
+
+#[doc(hidden)]
+/// Whether a client header may reach a room or container.
+pub fn forwarded_header(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower != "host" && lower != "authorization" && !lower.starts_with("x-hearth-")
 }
 
 #[doc(hidden)]

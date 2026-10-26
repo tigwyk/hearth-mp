@@ -29,6 +29,19 @@ pub fn number_repr(number: &Number) -> NumberRepr {
     }
 }
 
+/// A GDScript float as JSON. A whole number within ±2^53 goes out as an integer:
+/// GDScript readily turns ints into floats (the web client's JSON parser makes
+/// every number one), and the server's integer fields reject `3.0`. Float
+/// fields accept `3` just as well.
+pub fn float_to_json(float: f64) -> Value {
+    const EXACT: f64 = 9_007_199_254_740_992.0; // 2^53
+    if float.fract() == 0.0 && float.abs() <= EXACT {
+        Value::from(float as i64)
+    } else {
+        Value::from(float)
+    }
+}
+
 /// The protocol requires dictionary keys to be strings. GDScript may use either
 /// `String` or `StringName`; any other key type cannot be represented as JSON.
 pub fn key_is_string(ty: VariantType) -> bool {
@@ -125,7 +138,7 @@ pub fn variant_to_json(value: &Variant) -> Result<Value, String> {
         VariantType::NIL => Ok(Value::Null),
         VariantType::BOOL => Ok(Value::Bool(value.to::<bool>())),
         VariantType::INT => Ok(Value::from(value.to::<i64>())),
-        VariantType::FLOAT => Ok(Value::from(value.to::<f64>())),
+        VariantType::FLOAT => Ok(float_to_json(value.to::<f64>())),
         VariantType::STRING => Ok(Value::String(value.to::<GString>().to_string())),
         VariantType::STRING_NAME => Ok(Value::String(value.to::<StringName>().to_string())),
         VariantType::ARRAY => {

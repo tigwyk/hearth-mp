@@ -1,10 +1,12 @@
-use crate::frame::{Encoding, Frame, Opcode, WireMsg, MAX_FRAME_BYTES};
+use crate::frame::{Encoding, Frame, Opcode, WireMsg};
 
-/// Error returned by [`decode`]. `TooLarge` is checked before any parsing.
+/// Error returned by [`decode`].
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ProtocolError {
     #[error("frame exceeds the 64 KiB maximum")]
-    /// The frame exceeds [`MAX_FRAME_BYTES`](crate::MAX_FRAME_BYTES); checked before parsing.
+    /// The frame exceeds [`MAX_FRAME_BYTES`](crate::MAX_FRAME_BYTES). [`decode`] no
+    /// longer returns it: the cap is on frames *to* the server, which checks the
+    /// size itself, while state frames from the server may be larger.
     TooLarge,
     #[error("malformed frame: {0}")]
     /// The frame did not decode: bad MessagePack/JSON, a missing field, or an empty binary frame.
@@ -54,14 +56,12 @@ pub fn encode(frame: &Frame, encoding: Encoding) -> WireMsg {
     }
 }
 
-/// Decode a wire message. Length is checked first, then the opcode byte, then
-/// the body; the body's own `op` tag must agree with the opcode byte.
+/// Decode a wire message: the opcode byte, then the body, whose own `op` tag
+/// must agree with the opcode byte. It does not check the size; a server checks
+/// [`MAX_FRAME_BYTES`](crate::MAX_FRAME_BYTES) before calling it.
 pub fn decode(msg: &WireMsg) -> Result<Frame, ProtocolError> {
     match msg {
         WireMsg::Binary(bytes) => {
-            if bytes.len() > MAX_FRAME_BYTES {
-                return Err(ProtocolError::TooLarge);
-            }
             let Some((&byte, body)) = bytes.split_first() else {
                 return Err(ProtocolError::Malformed("empty frame".into()));
             };
@@ -75,9 +75,6 @@ pub fn decode(msg: &WireMsg) -> Result<Frame, ProtocolError> {
             Ok(frame)
         }
         WireMsg::Text(text) => {
-            if text.len() > MAX_FRAME_BYTES {
-                return Err(ProtocolError::TooLarge);
-            }
             serde_json::from_str(text).map_err(|err| {
                 // An object whose `op` is a string this version does not know is
                 // a future frame, not a malformed one.

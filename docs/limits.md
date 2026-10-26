@@ -35,7 +35,9 @@ so do not send one per rendered frame.
   the intents, run `on_intent`, persist state, flush patches. A handler that
   needs seconds of CPU is doing too much; split the work across messages.
 - **Incoming frame: 64 KiB**, checked before any deserialisation. A larger frame
-  is not decoded; the socket is closed with code 4006.
+  is not decoded; the socket is closed with code 4006. This caps frames *to* the
+  room only: a `FULL_STATE` to a client may be larger, up to the platform's own
+  WebSocket message limit.
 - **Players per room: `max_clients`** (1–255), declared on `#[hearth::room]`.
   The platform's 32,768 WebSockets per Durable Object is far above room scale.
 - **State tree: JSON data types only**, object keys are always strings. State is

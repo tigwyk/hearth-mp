@@ -17,4 +17,4 @@ pub use providers::{
     check_enabled, AuthConfig, CannedFetcher, Fetcher, HttpReq, HttpResp, ProviderError,
     WorkerFetcher,
 };
-pub use routes::{mm_room, serve, GatewayConfig, PlayerRoute, RoomRoute};
+pub use routes::{forwarded_header, mm_room, serve, GatewayConfig, PlayerRoute, RoomRoute};

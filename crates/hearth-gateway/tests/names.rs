@@ -27,3 +27,22 @@ fn other_names_are_not_matchmaker_rooms() {
         assert_eq!(mm_room(name), None, "{name} is not a matchmaker room");
     }
 }
+
+#[test]
+fn identity_headers_from_clients_are_dropped() {
+    // A client must not reach a room as "Admin" or claim a matchmaker pool.
+    for name in [
+        "X-Hearth-Display-Name",
+        "x-hearth-matchmaker",
+        "X-HEARTH-PLAYER-ID",
+        "X-Hearth-Provider",
+        "X-Hearth-Anything-New",
+        "Host",
+        "authorization",
+    ] {
+        assert!(!hearth_gateway::forwarded_header(name), "{name} must be dropped");
+    }
+    for name in ["Upgrade", "Sec-WebSocket-Key", "Sec-WebSocket-Protocol", "User-Agent"] {
+        assert!(hearth_gateway::forwarded_header(name), "{name} must be forwarded");
+    }
+}

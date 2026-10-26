@@ -129,11 +129,19 @@ fn schema_hash_survives_json_as_exact_string() {
 }
 
 #[test]
-fn oversize_rejected_before_parse() {
-    let big_binary = WireMsg::Binary(vec![0x05; MAX_FRAME_BYTES + 1]);
-    assert_eq!(decode(&big_binary), Err(ProtocolError::TooLarge));
-    let big_text = WireMsg::Text("x".repeat(MAX_FRAME_BYTES + 1));
-    assert_eq!(decode(&big_text), Err(ProtocolError::TooLarge));
+fn state_frames_over_the_intent_cap_decode() {
+    // The 64 KiB cap is on frames to the server (it checks the size itself); a
+    // client must accept a larger FULL_STATE.
+    let frame = Frame::FullState {
+        seq: 1,
+        state: json!({ "blob": "x".repeat(MAX_FRAME_BYTES * 2) }),
+    };
+    for encoding in [Encoding::MsgPack, Encoding::Json] {
+        let msg = encode(&frame, encoding);
+        assert!(matches!(&msg, WireMsg::Binary(b) if b.len() > MAX_FRAME_BYTES)
+            || matches!(&msg, WireMsg::Text(t) if t.len() > MAX_FRAME_BYTES));
+        assert_eq!(decode(&msg), Ok(frame.clone()));
+    }
 }
 
 #[test]

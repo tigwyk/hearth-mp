@@ -50,6 +50,18 @@ namespace Hearth.Tests
         }
 
         [Test]
+        public void Join_Fails_With_Timeout_When_The_Server_Never_Answers()
+        {
+            client.JoinTimeoutMs = 0;
+            var join = client.JoinAsync("tictactoe", "r1");
+            Socket.Push(TransportEvent.Opened());
+            client.Tick();
+            Assert.IsTrue(join.IsFaulted, "a silent server fails the join");
+            Assert.AreEqual("TIMEOUT", ((HearthException)join.Exception.InnerException).Code);
+            Assert.IsNull(client.Room);
+        }
+
+        [Test]
         public void Join_Connects_With_Token_And_Sends_Hello()
         {
             client.SchemaHash = "00000000000000aa";

@@ -35,6 +35,7 @@ pub fn godot_core::builtin::variant::Variant::nil() -> Self
 pub fn godot_core::builtin::variant::Variant::object(alloc::vec::Vec<(alloc::string::String, Self)>) -> Self
 pub fn godot_core::builtin::variant::Variant::string(alloc::string::String) -> Self
 pub fn hearth_godot::convert::build<B: hearth_godot::convert::BuildVariant>(&serde_json::value::Value) -> B
+pub fn hearth_godot::convert::float_to_json(f64) -> serde_json::value::Value
 pub fn hearth_godot::convert::json_to_variant(&serde_json::value::Value) -> godot_core::builtin::variant::Variant
 pub fn hearth_godot::convert::key_is_string(godot_ffi::gen::central::VariantType) -> bool
 pub fn hearth_godot::convert::number_repr(&serde_json::number::Number) -> hearth_godot::convert::NumberRepr

@@ -20,8 +20,10 @@ implementation is the `hearth-protocol` and `hearth-client` crates, and
 - The client selects the socket's encoding with its first frame, `HELLO`: a
   binary `HELLO` makes the socket MessagePack, a text `HELLO` makes it JSON.
   Both sides MUST use that encoding for every later frame on that socket.
-- **Frame size.** A receiver MUST reject an incoming frame larger than
-  **65536 bytes** before decoding it. The server closes the socket with 4006.
+- **Frame size.** The server MUST reject a frame from a client larger than
+  **65536 bytes** before decoding it, and closes the socket with 4006. Frames
+  from the server (`FULL_STATE` above all) have no protocol cap: a client MUST
+  NOT apply the 65536-byte limit to them.
 - **Keepalive.** A client MAY send the text message `hearth:ping`; the server
   answers with the text message `hearth:pong` without waking the room. These two
   messages are not frames: they MUST NOT be parsed as JSON, and they are valid
@@ -378,7 +380,7 @@ bounded number of times. Unknown room types answer **404**.
 
 | Method and path | Auth | Request | Success | Errors |
 | --- | --- | --- | --- | --- |
-| `POST /auth/anonymous` | none | `{"device_id": string}` | 200 `{"token", "player_id", "display_name"}` | 400 bad body, 404 provider disabled |
+| `POST /auth/anonymous` | none | `{"device_id": string}` (8–128 characters) | 200 `{"token", "player_id", "display_name"}` | 400 bad body, 404 provider disabled |
 | `POST /auth/jwt` | none | `{"jwt": string}` | 200 as above | 400, 401 rejected, 404 disabled, 502 upstream failure |
 | `POST /auth/steam` | none | `{"ticket": hex string}` | 200 as above | 400, 401, 404, 502 |
 | `POST /auth/itch` | none | `{"api_key": string}` | 200 as above | 400, 401, 404, 502 |

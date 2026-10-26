@@ -92,8 +92,29 @@ func connect_to_room(url: String, schema_hash: String, opts: Dictionary) -> void
 func send_intent(intent) -> int:
 	var seq := _next_intent_seq
 	_next_intent_seq += 1
-	_pending.append({"seq": seq, "intent": intent})
+	_pending.append({"seq": seq, "intent": _whole_floats_to_ints(intent)})
 	return seq
+
+
+## JSON.stringify writes 3.0 as `3.0`, which the server's integer fields reject,
+## and JSON.parse_string makes every state number a float. A whole float within
+## ±2^53 goes out as an int, as the native backend sends it; float fields accept
+## `3` just as well.
+static func _whole_floats_to_ints(value: Variant) -> Variant:
+	match typeof(value):
+		TYPE_FLOAT:
+			return int(value) if value == floorf(value) and absf(value) <= 9007199254740992.0 else value
+		TYPE_ARRAY:
+			var out := []
+			for item in value:
+				out.append(_whole_floats_to_ints(item))
+			return out
+		TYPE_DICTIONARY:
+			var out := {}
+			for key in value:
+				out[key] = _whole_floats_to_ints(value[key])
+			return out
+	return value
 
 
 func leave() -> void:
