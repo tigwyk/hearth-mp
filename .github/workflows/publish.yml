@@ -1,0 +1,57 @@
+name: Publish crates
+
+# Publishes the library crates to crates.io. Safe to re-run: crates whose
+# version is already live are skipped, and a 429 (new-crate rate limit: a burst
+# of 5, then one per 10 minutes) is waited out instead of failing the job.
+# Called by release.yml; run it by hand (ref = a tag) to finish an interrupted publish.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Tag to publish, e.g. v0.1.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - if: env.CARGO_REGISTRY_TOKEN == ''
+        run: echo "::notice::crates.io publish skipped; add the CARGO_REGISTRY_TOKEN secret"
+      - if: env.CARGO_REGISTRY_TOKEN != ''
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+      - if: env.CARGO_REGISTRY_TOKEN != ''
+        uses: dtolnay/rust-toolchain@stable
+      - if: env.CARGO_REGISTRY_TOKEN != ''
+        name: Publish the crates that are not live yet
+        run: |
+          for attempt in $(seq 1 12); do
+            # Publishable workspace crates (publish != []) whose version is not on crates.io yet.
+            missing=$(cargo metadata --no-deps --format-version 1 | jq -r '
+              .packages[] | select(.publish != []) | "\(.name) \(.version)"' |
+              while read -r name version; do
+                code=$(curl -s -o /dev/null -w '%{http_code}' -A "hearth-mp-release" "https://crates.io/api/v1/crates/$name/$version")
+                [ "$code" = 200 ] || echo "-p $name"
+              done)
+            if [ -z "$missing" ]; then echo "All crates are live."; exit 0; fi
+            echo "Publishing:" $missing
+            # shellcheck disable=SC2086 # intentional word splitting into -p flags
+            if cargo publish --locked $missing 2>&1 | tee publish.log; then continue; fi
+            grep -q "429 Too Many Requests" publish.log || { echo "::error::publish failed"; exit 1; }
+            echo "Rate limited; waiting 10 minutes"
+            sleep 610
+          done
+          echo "::error::gave up after 12 attempts"; exit 1
