@@ -69,9 +69,14 @@ impl<L: Logic> Predictor<L> {
         if let Some(max_acked) = acked.iter().copied().max() {
             self.unacked.retain(|(seq, _)| *seq > max_acked);
         }
-        let Ok(mut state) = serde_json::from_value::<L::State>(server_state.clone()) else {
-            return;
-        };
+        if let Ok(state) = serde_json::from_value::<L::State>(server_state.clone()) {
+            self.rebuild(state);
+        }
+    }
+
+    /// Rebuild from an already-decoded authoritative state and replay the
+    /// unacked inputs.
+    fn rebuild(&mut self, mut state: L::State) {
         for (_, input) in &self.unacked {
             L::step(&mut state, &[(self.me.clone(), input.clone())], self.dt);
         }
@@ -86,5 +91,81 @@ impl<L: Logic> Predictor<L> {
     /// The locally predicted state.
     pub fn predicted(&self) -> &L::State {
         &self.predicted
+    }
+}
+
+/// An object-safe predictor over JSON, so a native plugin can hold predictors
+/// for different [`Logic`] types behind one handle type (the Unity
+/// `hearth_predictor_*` exports). Unlike [`Predictor::on_authoritative`], a
+/// state or input that does not decode is an `Err`, so the caller can report it.
+pub trait DynPredictor {
+    /// Record input `seq` (JSON for `L::Input`) and step immediately.
+    fn input(&mut self, seq: u32, input: &Value) -> Result<(), String>;
+    /// Reconcile with the authoritative state (JSON for `L::State`).
+    fn on_authoritative(&mut self, state: &Value, acked: &[u32]) -> Result<(), String>;
+    /// Drop inputs the server reported as unconfirmed.
+    fn on_unconfirmed(&mut self, seqs: &[u32]);
+    /// The predicted state as JSON.
+    fn predicted(&self) -> Result<Value, String>;
+}
+
+impl<L> DynPredictor for Predictor<L>
+where
+    L: Logic,
+    L::Input: DeserializeOwned,
+{
+    fn input(&mut self, seq: u32, input: &Value) -> Result<(), String> {
+        let input = serde_json::from_value(input.clone()).map_err(|e| format!("bad input: {e}"))?;
+        Predictor::input(self, seq, input);
+        Ok(())
+    }
+
+    fn on_authoritative(&mut self, state: &Value, acked: &[u32]) -> Result<(), String> {
+        let state = serde_json::from_value::<L::State>(state.clone())
+            .map_err(|e| format!("authoritative state does not match the logic state: {e}"))?;
+        if let Some(max_acked) = acked.iter().copied().max() {
+            self.unacked.retain(|(seq, _)| *seq > max_acked);
+        }
+        self.rebuild(state);
+        Ok(())
+    }
+
+    fn on_unconfirmed(&mut self, seqs: &[u32]) {
+        Predictor::on_unconfirmed(self, seqs);
+    }
+
+    fn predicted(&self) -> Result<Value, String> {
+        serde_json::to_value(&self.predicted).map_err(|e| e.to_string())
+    }
+}
+
+/// A boxed [`DynPredictor`] for `L`.
+pub fn boxed<L>(me: PlayerId, tick_hz: u8) -> Box<dyn DynPredictor>
+where
+    L: Logic + 'static,
+    L::Input: DeserializeOwned,
+{
+    Box::new(Predictor::<L>::new(me, tick_hz))
+}
+
+/// The built-in 1-D logic (`"hearth.echo1d"`) the Unity package tests and docs
+/// use: the state is `{"x": n}` (other fields are ignored) and each input, clamped
+/// to `-1..=1`, is added to `x`.
+pub struct Echo1d;
+
+/// [`Echo1d`]'s state.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, serde::Deserialize)]
+pub struct Echo1dState {
+    pub x: i64,
+}
+
+impl Logic for Echo1d {
+    type State = Echo1dState;
+    type Input = i64;
+
+    fn step(state: &mut Echo1dState, inputs: &[(PlayerId, i64)], _dt: Duration) {
+        for (_, input) in inputs {
+            state.x += (*input).clamp(-1, 1);
+        }
     }
 }

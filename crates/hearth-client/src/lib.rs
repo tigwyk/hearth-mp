@@ -32,7 +32,7 @@ mod predict;
 mod reconnect;
 
 pub use interp::{ClockSync, Interpolator};
-pub use predict::{Logic, Predictor};
+pub use predict::{boxed, DynPredictor, Echo1d, Echo1dState, Logic, Predictor};
 pub use reconnect::{Reconnect, ReconnectPolicy};
 
 /// Default outgoing message rate limit, in messages per second.

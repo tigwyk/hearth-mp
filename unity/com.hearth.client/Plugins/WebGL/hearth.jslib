@@ -21,6 +21,7 @@ var HearthLib = {
                 Hearth.lastError = "hearth core is not loaded";
                 return fallback;
             }
+            Hearth.lastError = "";
             try {
                 return body(Hearth.core);
             } catch (e) {
@@ -127,8 +128,82 @@ var HearthLib = {
         return Hearth.call(0, function (c) { return c.client_seq(h); });
     },
 
+    HearthCore_LastTickT: function (h) {
+        return Hearth.call(0, function (c) { return c.client_last_tick_t(h); });
+    },
+
+    // ---- interpolators (v0.4) -------------------------------------------
+
+    HearthInterp_New: function (tickHz) {
+        return Hearth.call(0, function (c) { return c.interp_new(tickHz); });
+    },
+
+    HearthInterp_Free: function (h) {
+        Hearth.call(0, function (c) { c.interp_free(h); });
+    },
+
+    HearthInterp_Track: function (h, pathPtr) {
+        var path = UTF8ToString(pathPtr);
+        return Hearth.call(0, function (c) { return c.interp_track(h, path) ? 1 : 0; });
+    },
+
+    HearthInterp_OnPatch: function (h, statePtr, serverT, localMs) {
+        var state = UTF8ToString(statePtr);
+        return Hearth.call(0, function (c) { return c.interp_on_patch(h, state, serverT, localMs) ? 1 : 0; });
+    },
+
+    HearthInterp_Reset: function (h) {
+        Hearth.call(0, function (c) { c.interp_reset(h); });
+    },
+
+    HearthInterp_Sample: function (h, pathPtr, localMs) {
+        var path = UTF8ToString(pathPtr);
+        return Hearth.str(Hearth.call("", function (c) { return c.interp_sample(h, path, localMs); }));
+    },
+
+    HearthInterp_SampleAt: function (h, pathPtr, renderT) {
+        var path = UTF8ToString(pathPtr);
+        return Hearth.str(Hearth.call("", function (c) { return c.interp_sample_at(h, path, renderT); }));
+    },
+
     HearthCore_ReconnectDecide: function (code, firstDropMs, attempt, nowMs) {
         return Hearth.call(-1, function (c) { return c.reconnect_decide(code, firstDropMs, attempt, nowMs); });
+    },
+
+    // ---- predictors (v0.4b) ---------------------------------------------
+
+    HearthPredictor_New: function (logicPtr, mePtr, tickHz) {
+        var logic = UTF8ToString(logicPtr);
+        var me = UTF8ToString(mePtr);
+        return Hearth.call(0, function (c) { return c.predictor_new(logic, me, tickHz); });
+    },
+
+    HearthPredictor_Free: function (h) {
+        Hearth.call(0, function (c) { c.predictor_free(h); });
+    },
+
+    HearthPredictor_Input: function (h, seq, jsonPtr) {
+        var json = UTF8ToString(jsonPtr);
+        return Hearth.call(0, function (c) { return c.predictor_input(h, seq, json) ? 1 : 0; });
+    },
+
+    HearthPredictor_OnAuthoritative: function (h, statePtr, ackedPtr) {
+        var state = UTF8ToString(statePtr);
+        var acked = UTF8ToString(ackedPtr);
+        return Hearth.call(0, function (c) { return c.predictor_on_authoritative(h, state, acked) ? 1 : 0; });
+    },
+
+    HearthPredictor_OnUnconfirmed: function (h, seqsPtr) {
+        var seqs = UTF8ToString(seqsPtr);
+        Hearth.call(0, function (c) { c.predictor_on_unconfirmed(h, seqs); });
+    },
+
+    HearthPredictor_State: function (h) {
+        return Hearth.str(Hearth.call("", function (c) { return c.predictor_state(h); }));
+    },
+
+    HearthPredictor_Names: function () {
+        return Hearth.str(Hearth.call("[]", function (c) { return c.predictor_names(); }));
     },
 
     // ---- WebSocket ------------------------------------------------------

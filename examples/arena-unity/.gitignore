@@ -1,0 +1,18 @@
+/Library/
+/Temp/
+/Logs/
+/UserSettings/
+/obj/
+/Build/
+/Builds/
+*.csproj
+*.sln
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta
+
+# Built by: scripts/build-unity-native.sh --crate examples/arena-unity-plugin --out examples/arena-unity/Assets/Plugins/Hearth
+/Assets/Plugins/Hearth/**/*.dll
+/Assets/Plugins/Hearth/**/*.so
+/Assets/Plugins/Hearth/**/*.a
+/Assets/Plugins/Hearth/**/*.bundle
+/Assets/Plugins/Hearth/WebGL~/

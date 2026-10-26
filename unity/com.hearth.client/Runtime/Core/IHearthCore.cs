@@ -34,5 +34,8 @@ namespace Hearth
 
         /// <summary>The last state sequence applied.</summary>
         ulong Seq { get; }
+
+        /// <summary>The server time of the newest ticked <c>PATCH</c>; 0 before one (or in event rooms).</summary>
+        ulong LastTickT { get; }
     }
 }

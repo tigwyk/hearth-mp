@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "com.hearth.client": "file:../../../unity/com.hearth.client",
+    "com.unity.test-framework": "1.8.0",
+    "com.unity.modules.imgui": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0",
+    "com.unity.modules.unitywebrequest": "1.0.0"
+  },
+  "testables": [
+    "com.hearth.client"
+  ]
+}

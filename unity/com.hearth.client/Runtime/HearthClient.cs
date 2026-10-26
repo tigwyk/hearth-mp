@@ -58,6 +58,25 @@ namespace Hearth
         /// <summary>True once the socket has joined and not given up.</summary>
         public bool Connected => transport != null && joined;
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        /// <summary>Debug builds: delay every outgoing frame and incoming event by this many ms (one way).</summary>
+        [SerializeField] int debugLatencyMs;
+
+        public int DebugLatencyMs
+        {
+            get => debugLatencyMs;
+            set => debugLatencyMs = Math.Max(0, value);
+        }
+
+        int Latency => debugLatencyMs;
+#else
+        int Latency => 0;
+#endif
+        readonly System.Collections.Generic.Queue<(long due, TransportEvent ev)> delayedIn =
+            new System.Collections.Generic.Queue<(long, TransportEvent)>();
+        readonly System.Collections.Generic.Queue<(long due, byte[] data, bool text)> delayedOut =
+            new System.Collections.Generic.Queue<(long, byte[], bool)>();
+
         internal Func<IHearthTransport> TransportFactory = DefaultTransport;
         internal Func<string, IHearthCore> CoreFactory = DefaultCore;
 
@@ -78,6 +97,8 @@ namespace Hearth
         internal long NowMs => (clock ??= Stopwatch.StartNew()).ElapsedMilliseconds;
 
         internal ulong Seq => core != null && !disposed ? core.Seq : 0;
+
+        internal ulong LastTickT => core != null && !disposed ? core.LastTickT : 0;
 
         static IHearthTransport DefaultTransport()
         {
@@ -213,33 +234,63 @@ namespace Hearth
                     return;
                 OpenSocket();
             }
+            var latency = Latency;
             while (transport != null && transport.TryReceive(out var ev))
             {
-                switch (ev.Kind)
+                if (latency > 0)
                 {
-                    case TransportEventKind.Opened:
-                        var hello = core.Hello(optsJson, out var helloText);
-                        transport.Send(hello, helloText);
-                        helloSent = true;
-                        break;
-                    case TransportEventKind.Message:
-                        Dispatch(core.Handle(ev.Data, ev.Text));
-                        break;
-                    case TransportEventKind.Closed:
-                        transport.Dispose();
-                        transport = null;
-                        HandleDrop(ev.Code, ev.Reason, now);
-                        break;
+                    delayedIn.Enqueue((now + latency, ev));
+                    continue;
                 }
-                // A handler may have destroyed the client or left the room.
-                if (disposed || core == null)
+                if (!Handle(ev, now))
+                    return;
+            }
+            while (delayedIn.Count > 0 && delayedIn.Peek().due <= now)
+            {
+                if (!Handle(delayedIn.Dequeue().ev, now))
                     return;
             }
             if (transport == null || !helloSent)
                 return;
             byte[] frame;
             while ((frame = core.PollSend((ulong)now, out var text)) != null)
-                transport.Send(frame, text);
+                Send(frame, text, now);
+            while (delayedOut.Count > 0 && delayedOut.Peek().due <= now)
+            {
+                var (_, data, isText) = delayedOut.Dequeue();
+                transport.Send(data, isText);
+            }
+        }
+
+        /// <summary>Apply one transport event. False when a handler destroyed the client or left the room.</summary>
+        bool Handle(TransportEvent ev, long now)
+        {
+            switch (ev.Kind)
+            {
+                case TransportEventKind.Opened:
+                    var hello = core.Hello(optsJson, out var helloText);
+                    Send(hello, helloText, now);
+                    helloSent = true;
+                    break;
+                case TransportEventKind.Message:
+                    Dispatch(core.Handle(ev.Data, ev.Text));
+                    break;
+                case TransportEventKind.Closed:
+                    transport?.Dispose();
+                    transport = null;
+                    delayedOut.Clear();
+                    HandleDrop(ev.Code, ev.Reason, now);
+                    break;
+            }
+            return !(disposed || core == null);
+        }
+
+        void Send(byte[] data, bool text, long now)
+        {
+            if (Latency > 0)
+                delayedOut.Enqueue((now + Latency, data, text));
+            else
+                transport.Send(data, text);
         }
 
         void OpenSocket()
@@ -349,6 +400,8 @@ namespace Hearth
                 return;
             transport.Dispose();
             transport = null;
+            delayedIn.Clear();
+            delayedOut.Clear();
             HandleDrop(1006, "debug drop", NowMs);
         }
 #endif
@@ -371,8 +424,11 @@ namespace Hearth
             core = null;
             joined = false;
             reconnect.Reset();
+            delayedIn.Clear();
+            delayedOut.Clear();
             if (Room != null)
             {
+                Room.RaiseClosed();
                 Room.Client = null;
                 Room = null;
             }

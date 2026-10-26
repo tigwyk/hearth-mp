@@ -73,6 +73,8 @@ namespace Hearth
 
         public ulong Seq => (ulong)Native.HearthCore_Seq(handle);
 
+        public ulong LastTickT => (ulong)Native.HearthCore_LastTickT(handle);
+
         public void Dispose()
         {
             if (handle == 0)
@@ -98,7 +100,24 @@ namespace Hearth
             [DllImport("__Internal")] internal static extern string HearthCore_OnDisconnected(uint h);
             [DllImport("__Internal")] internal static extern string HearthCore_State(uint h);
             [DllImport("__Internal")] internal static extern double HearthCore_Seq(uint h);
+            [DllImport("__Internal")] internal static extern double HearthCore_LastTickT(uint h);
+
+            [DllImport("__Internal")] internal static extern uint HearthInterp_New(int tickHz);
+            [DllImport("__Internal")] internal static extern void HearthInterp_Free(uint h);
+            [DllImport("__Internal")] internal static extern int HearthInterp_Track(uint h, string pathJson);
+            [DllImport("__Internal")] internal static extern int HearthInterp_OnPatch(uint h, string stateJson, double serverT, double localMs);
+            [DllImport("__Internal")] internal static extern void HearthInterp_Reset(uint h);
+            [DllImport("__Internal")] internal static extern string HearthInterp_Sample(uint h, string pathJson, double localMs);
+            [DllImport("__Internal")] internal static extern string HearthInterp_SampleAt(uint h, string pathJson, double renderT);
             [DllImport("__Internal")] internal static extern double HearthCore_ReconnectDecide(int code, double firstDropMs, int attempt, double nowMs);
+
+            [DllImport("__Internal")] internal static extern uint HearthPredictor_New(string logic, string me, int tickHz);
+            [DllImport("__Internal")] internal static extern void HearthPredictor_Free(uint h);
+            [DllImport("__Internal")] internal static extern int HearthPredictor_Input(uint h, uint seq, string inputJson);
+            [DllImport("__Internal")] internal static extern int HearthPredictor_OnAuthoritative(uint h, string stateJson, string ackedJson);
+            [DllImport("__Internal")] internal static extern void HearthPredictor_OnUnconfirmed(uint h, string seqsJson);
+            [DllImport("__Internal")] internal static extern string HearthPredictor_State(uint h);
+            [DllImport("__Internal")] internal static extern string HearthPredictor_Names();
         }
     }
 }

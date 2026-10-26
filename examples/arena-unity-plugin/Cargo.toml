@@ -1,0 +1,24 @@
+[package]
+name = "arena-unity-plugin"
+description = "Hearth v0.4b sample: the Unity native plugin with the arena's shared logic, for prediction."
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Its own workspace: this cdylib is also named hearth_unity, and building it in
+# the main workspace would collide with the stock plugin in the shared target/.
+[workspace]
+
+[lib]
+# Unity loads this library in place of the stock one, so it keeps the name.
+name = "hearth_unity"
+crate-type = ["cdylib", "staticlib"]
+
+[features]
+webgl = ["dep:wasm-bindgen"]
+
+[dependencies]
+hearth-unity-core = { path = "../../crates/hearth-unity-core" }
+arena-logic = { path = "../arena-logic" }
+wasm-bindgen = { version = "0.2.129", optional = true }

@@ -841,11 +841,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-unity"
+name = "hearth-unity-core"
 version = "0.1.0"
 dependencies = [
  "hearth-client",
  "hearth-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "hearth-unity-plugin"
+version = "0.1.0"
+dependencies = [
+ "hearth-client",
+ "hearth-protocol",
+ "hearth-unity-core",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-test",

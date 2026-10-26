@@ -8,8 +8,10 @@ namespace Hearth.Editor
 {
     /// <summary>
     /// WebGL builds load the wasm core from <c>StreamingAssets/hearth/</c>. This
-    /// copies the package's <c>Runtime/StreamingAssets~</c> files there before the
-    /// build and removes them afterwards, so the project stays clean.
+    /// copies it there before the build and removes it afterwards, so the project
+    /// stays clean. A project's own core (<c>Assets/Plugins/Hearth/WebGL~</c>, from
+    /// <c>build-unity-native.sh --crate .. --out Assets/Plugins/Hearth</c>) wins over
+    /// the package's stock one in <c>Runtime/StreamingAssets~</c>.
     /// </summary>
     internal sealed class WebGLCopyHook : IPreprocessBuildWithReport, IPostprocessBuildWithReport
     {
@@ -18,8 +20,11 @@ namespace Hearth.Editor
 
         public int callbackOrder => 0;
 
-        static string Source =>
-            Path.Combine(Path.GetFullPath("Packages/com.hearth.client"), "Runtime", "StreamingAssets~");
+        const string ProjectCore = "Assets/Plugins/Hearth/WebGL~";
+
+        static string Source => Directory.Exists(ProjectCore)
+            ? Path.GetFullPath(ProjectCore)
+            : Path.Combine(Path.GetFullPath("Packages/com.hearth.client"), "Runtime", "StreamingAssets~");
 
         public void OnPreprocessBuild(BuildReport report)
         {

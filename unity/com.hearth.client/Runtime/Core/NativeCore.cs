@@ -62,6 +62,8 @@ namespace Hearth
 
         public ulong Seq => Native.hearth_client_seq(handle);
 
+        public ulong LastTickT => Native.hearth_client_last_tick_t(handle);
+
         public void Dispose() => handle.Dispose();
 
         [StructLayout(LayoutKind.Sequential)]
@@ -113,9 +115,26 @@ namespace Hearth
             [DllImport(Lib)] internal static extern HearthBuf hearth_client_on_disconnected(HearthCoreHandle c);
             [DllImport(Lib)] internal static extern HearthBuf hearth_client_state(HearthCoreHandle c);
             [DllImport(Lib)] internal static extern ulong hearth_client_seq(HearthCoreHandle c);
+            [DllImport(Lib)] internal static extern ulong hearth_client_last_tick_t(HearthCoreHandle c);
             [DllImport(Lib)] internal static extern long hearth_reconnect_decide(ushort code, ulong firstDropMs, uint attempt, ulong nowMs);
             [DllImport(Lib)] internal static extern void hearth_buf_free(HearthBuf b);
             [DllImport(Lib)] internal static extern HearthBuf hearth_last_error();
+
+            [DllImport(Lib)] internal static extern HearthInterpHandle hearth_interp_new(byte tickHz);
+            [DllImport(Lib)] internal static extern void hearth_interp_free(IntPtr p);
+            [DllImport(Lib)] internal static extern byte hearth_interp_track(HearthInterpHandle p, byte[] pathJson);
+            [DllImport(Lib)] internal static extern byte hearth_interp_on_patch(HearthInterpHandle p, byte[] stateJson, ulong serverT, ulong localMs);
+            [DllImport(Lib)] internal static extern void hearth_interp_reset(HearthInterpHandle p);
+            [DllImport(Lib)] internal static extern HearthBuf hearth_interp_sample(HearthInterpHandle p, byte[] pathJson, ulong localMs);
+            [DllImport(Lib)] internal static extern HearthBuf hearth_interp_sample_at(HearthInterpHandle p, byte[] pathJson, ulong renderT);
+
+            [DllImport(Lib)] internal static extern HearthPredictorHandle hearth_predictor_new(byte[] logic, byte[] me, byte tickHz);
+            [DllImport(Lib)] internal static extern void hearth_predictor_free(IntPtr p);
+            [DllImport(Lib)] internal static extern byte hearth_predictor_input(HearthPredictorHandle p, uint seq, byte[] inputJson);
+            [DllImport(Lib)] internal static extern byte hearth_predictor_on_authoritative(HearthPredictorHandle p, byte[] stateJson, byte[] ackedJson);
+            [DllImport(Lib)] internal static extern void hearth_predictor_on_unconfirmed(HearthPredictorHandle p, byte[] seqsJson);
+            [DllImport(Lib)] internal static extern HearthBuf hearth_predictor_state(HearthPredictorHandle p);
+            [DllImport(Lib)] internal static extern HearthBuf hearth_predictor_names();
         }
     }
 }

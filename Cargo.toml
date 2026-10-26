@@ -8,6 +8,8 @@ members = [
     "examples/arena-logic",
     "examples/tictactoe",
 ]
+# Builds its own cdylib named hearth_unity; see its Cargo.toml.
+exclude = ["examples/arena-unity-plugin"]
 
 [workspace.package]
 version = "0.1.0"

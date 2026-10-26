@@ -47,6 +47,41 @@ namespace Hearth
         /// <summary>The client gave up: a deliberate or fatal close, or the reconnect window is spent.</summary>
         public event Action<ushort, string> OnDisconnected;
 
+        readonly List<HearthInterpolator> interpolators = new List<HearthInterpolator>();
+
+        /// <summary>
+        /// A snapshot interpolator for ticked rooms, fed from every ticked patch from
+        /// now on. Each path is field/map-key strings and list-index ints; <c>"*"</c>
+        /// matches every key at its level, for example
+        /// <c>room.Interpolator(new object[] { "avatars", "*", "pos" })</c>.
+        /// </summary>
+        public HearthInterpolator Interpolator(params object[][] paths) => Interpolator(HearthInterpolator.TickHz, paths);
+
+        /// <summary>An interpolator for another tick rate (the fixture tests).</summary>
+        internal HearthInterpolator Interpolator(int tickHz, params object[][] paths)
+        {
+            if (Client == null)
+                throw new InvalidOperationException("the room is closed");
+            var client = Client;
+            var interp = new HearthInterpolator(this, () => client.NowMs, tickHz, paths);
+            interpolators.Add(interp);
+            return interp;
+        }
+
+        internal void RemoveInterpolator(HearthInterpolator interp) => interpolators.Remove(interp);
+
+        /// <summary>The client closed this room (left, rejoined elsewhere, or was destroyed); nothing fires after it.</summary>
+        internal event Action Closed;
+
+        internal void RaiseClosed()
+        {
+            foreach (var interp in interpolators.ToArray())
+                interp.Dispose();
+            var closed = Closed;
+            Closed = null;
+            Raise(closed);
+        }
+
         /// <summary>Queue an intent; returns its seq (>= 1). Sent on the next <c>Update</c>.</summary>
         public uint Send(JToken intent)
         {
@@ -77,6 +112,8 @@ namespace Hearth
         internal void ApplyReset(JToken state)
         {
             RawState = state;
+            foreach (var interp in interpolators)
+                interp.Reset();
             Guard(AfterReset);
             Raise(OnStateReset);
         }
@@ -90,6 +127,13 @@ namespace Hearth
                 patchLog.Dequeue();
 #endif
             Guard(() => AfterPatch(ops));
+            // Fed before OnPatched so a handler can sample at once.
+            if (interpolators.Count > 0 && Client != null && Client.LastTickT != 0)
+            {
+                var json = Json.Compact(state);
+                foreach (var interp in interpolators)
+                    interp.OnPatch(json, Client.LastTickT);
+            }
             if (OnPatched != null)
                 Guard(() => OnPatched(ops));
         }

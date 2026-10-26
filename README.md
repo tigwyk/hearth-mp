@@ -109,7 +109,9 @@ Every callback runs on the main thread. Drops are retried (`OnReconnecting`,
 `OnReconnected`); `OnDisconnected` fires only when the client gives up. WebGL
 uses the wasm core (`--only webgl`) and the browser's WebSocket. `Window/Hearth`
 shows each client's live state and patches, and can start `hearth dev` when you
-press Play. The sample is `examples/tictactoe-unity`.
+press Play. The sample is `examples/tictactoe-unity`. Prediction with your
+shared Rust logic in a custom native plugin: [docs/ticked.md](docs/ticked.md#8-prediction-in-unity)
+and `examples/arena-unity`.
 
 ## A room
 

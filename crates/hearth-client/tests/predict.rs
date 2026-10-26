@@ -109,3 +109,36 @@ fn diverges_then_reconciles() {
     predictor.on_authoritative(&json!({ "value": 50 }), &[2]);
     assert_eq!(predictor.predicted().value, 53);
 }
+
+// ---- v0.4b: the object-safe predictor the Unity plugin uses ---------------
+
+#[test]
+fn dyn_predictor_matches_generic() {
+    use hearth_client::{boxed, Echo1d};
+    let mut generic = Predictor::<Echo1d>::new(me(), 20);
+    let mut dynamic = boxed::<Echo1d>(me(), 20);
+    for (seq, input) in [(1, 1), (2, 5), (3, -1)] {
+        generic.input(seq, input);
+        dynamic.input(seq, &json!(input)).unwrap();
+    }
+    generic.on_authoritative(&json!({"x": 10}), &[1]);
+    dynamic.on_authoritative(&json!({"x": 10}), &[1]).unwrap();
+    assert_eq!(
+        serde_json::to_value(generic.predicted()).unwrap(),
+        dynamic.predicted().unwrap()
+    );
+    assert_eq!(dynamic.predicted().unwrap(), json!({"x": 10}));
+}
+
+#[test]
+fn bad_state_shape_is_err() {
+    let mut dynamic = hearth_client::boxed::<hearth_client::Echo1d>(me(), 20);
+    let error = dynamic.on_authoritative(&json!({"y": 1}), &[]).unwrap_err();
+    assert!(error.contains("does not match"), "{error}");
+}
+
+#[test]
+fn bad_input_is_err() {
+    let mut dynamic = hearth_client::boxed::<hearth_client::Echo1d>(me(), 20);
+    assert!(dynamic.input(1, &json!("left")).is_err());
+}

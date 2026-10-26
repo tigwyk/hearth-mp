@@ -240,17 +240,19 @@ interpolation still works; only the delay is smaller than ideal.
 ### Unity
 
 ```csharp
-var interp = room.Interpolator(new[] { new[] { "avatars", "*", "pos" } });
+var interp = room.Interpolator(new object[] { "avatars", "*", "pos" });
 Vector2 pos = interp.SampleVector2("avatars", playerId, "pos");
 ```
 
-`HearthInterpolator` exposes `Sample`, `SampleVector2` and `SampleFloat`, is fed
-from every `OnPatched` with the patch's `t`, and implements `IDisposable`.
-v0.4 ships interpolation for Unity; prediction is the next plan (v0.4b).
+`HearthInterpolator` exposes `Sample` (a `JToken`, null before there is a
+value), `SampleVector2` and `SampleFloat`. It is fed from every ticked patch,
+with the patch's `t`, before `OnPatched` fires; a `FULL_STATE` clears it, and
+`Dispose` (or the room closing) frees it. Path segments are strings for fields
+and map keys and ints for list indices. Like the Godot wrapper it assumes 20 Hz.
 
 ## 7. Prediction (Godot)
 
-Prediction is optional and only Godot supports it in v0.4. The server stays the
+Prediction is optional; this section covers Godot, and section 8 Unity. The server stays the
 authority: the client predicts locally to hide its own input latency and then
 reconciles to the server when an authoritative state arrives.
 
@@ -314,10 +316,101 @@ The server also clamps what it accepts: the arena's `Move` clamps each `dir`
 component to `-1..=1`, so a client sending `{"dir":[5,0]}` moves exactly like
 `{"dir":[1,0]}`. Prediction cannot cheat the simulation.
 
-Not in v0.4: rollback, lag compensation, Unity prediction. Do not build
+Not supported: rollback and lag compensation. Do not build
 gameplay that depends on the client's predicted state being authoritative.
 
-## 8. Cost of a ticked room
+## 8. Prediction in Unity
+
+Unity predicts with the same shared logic crate, compiled into the native
+plugin. The stock plugin only knows a built-in test logic, so a game that
+predicts builds its own plugin.
+
+1. **Create the plugin crate.** A cdylib whose library is also named
+   `hearth_unity`, so it drops in for the stock binaries
+   (`examples/arena-unity-plugin`):
+
+   ```toml
+   [lib]
+   name = "hearth_unity"
+   crate-type = ["cdylib", "staticlib"]
+
+   [features]
+   webgl = ["dep:wasm-bindgen"]
+
+   [dependencies]
+   hearth-unity-core = { path = "../../crates/hearth-unity-core" }
+   arena-logic = { path = "../arena-logic" }
+   wasm-bindgen = { version = "0.2.129", optional = true }
+   ```
+
+   ```rust
+   hearth_unity_core::plugin! { logic: { "arena" => arena_logic::Arena } }
+   ```
+
+   `plugin!` emits every Hearth export into this crate (the `#[no_mangle]`
+   functions live in the cdylib itself, which LTO cannot strip) plus the
+   `hearth_predictor_*` exports, which open a logic by name. `"hearth.echo1d"`
+   (a 1-D counter, `{"x": n}` plus inputs clamped to `-1..=1`) is always
+   registered; the package tests use it. Give the crate its own `[workspace]`
+   or exclude it from yours: two cdylibs named `hearth_unity` in one target
+   directory collide.
+
+2. **Build it into the project.**
+
+   ```sh
+   scripts/build-unity-native.sh --crate examples/arena-unity-plugin \
+       --out examples/arena-unity/Assets/Plugins/Hearth
+   ```
+
+   Binaries go to `Assets/Plugins/Hearth/<Platform>/` and the WebGL core to
+   `Assets/Plugins/Hearth/WebGL~`, which the package's WebGL build hook uses
+   instead of its own. Add the scripting define `HEARTH_CUSTOM_PLUGIN` (Player
+   Settings → Scripting Define Symbols, for every platform you ship): the
+   package's stock binaries carry the define constraint `!HEARTH_CUSTOM_PLUGIN`,
+   so with it set your plugin is the only `hearth_unity` and Unity does not
+   report two plugins with one name.
+
+3. **Predict.** Send each input through the predictor instead of `room.Send`,
+   with the logic's input next to the room intent when the two differ
+   (`Assets/Scripts/Arena.cs`):
+
+   ```csharp
+   room = await client.JoinAsync<ArenaRoomArena>("arena", name);
+   predictor = new HearthPredictor<ArenaRoomArena>(room, "arena", 20);
+   others = room.Interpolator(new object[] { "avatars", "*", "pos" });
+
+   // Each FixedUpdate (20 Hz) while a key is held, and once on release:
+   var d = new JArray(dir.x, dir.y);
+   predictor.Input(ArenaRoomIntents.Move(d), new JObject { ["dir"] = d.DeepClone() });
+
+   // Draw yourself from the prediction, everyone else from the interpolator:
+   var me = predictor.State.Avatars[room.PlayerId].Pos;
+   var other = others.SampleVector2("avatars", otherId, "pos");
+   ```
+
+   `Input` returns the seq `room.Send` returned, so later ACKs drop exactly the
+   inputs the server applied, even for inputs queued while disconnected.
+   `predictor.State` is a typed mirror with the same `OnChange` events as
+   `room.State`; it is rebuilt from the authoritative state on every patch and
+   ACK, with the unacknowledged inputs replayed. Smooth the drawn position as in
+   Godot (15% per frame, snap above 2 units). `HearthClient.DebugLatencyMs`
+   (editor and development builds) delays every send and receive for testing.
+
+4. **Failures.** An unknown logic name (or a plugin built without prediction)
+   throws `HearthException("PREDICTOR_UNAVAILABLE")` listing the registered
+   names. If the logic state does not match the room's state, or the logic
+   panics, the predictor disables itself: `Poisoned` turns true, `OnError` fires
+   once, and `State` follows the authoritative state from then on. The panic is
+   caught at the plugin boundary on native platforms; on WebGL a Rust panic
+   aborts the wasm call, which the bridge reports the same way.
+
+The determinism rules in section 7 apply unchanged. On WebGL, build the core
+with `--only webgl` alongside the native targets; on Android and iOS the custom
+`.so`/`.a` files replace the stock ones the same way. The arena sample's PlayMode
+test (`examples/arena-unity/Assets/Tests`) runs the Godot smoke checks against
+`wrangler dev` in `examples/arena`.
+
+## 9. Cost of a ticked room
 
 Ticked mode is billed differently from event mode: the in-object loop keeps the
 room awake for the whole session, so duration is billed while it ticks. A tick is
@@ -335,7 +428,7 @@ full model and the pricing table are in [cost.md](cost.md). Tick rate barely
 changes the request bill now; it changes how much simulation runs, and
 `persist_every` trades the crash window against rows written.
 
-## 9. The arena sample
+## 10. The arena sample
 
 `examples/arena` is a 20 Hz, 16-player top-down arena; `examples/arena-logic` is
 its shared deterministic simulation. The room buffers `Move` intents, applies
