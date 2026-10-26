@@ -38,6 +38,7 @@ jobs:
       - if: env.CARGO_REGISTRY_TOKEN != ''
         name: Publish the crates that are not live yet
         run: |
+          set -o pipefail # the default step shell has none; cargo's status must survive the tee
           for _ in $(seq 1 12); do
             # Publishable workspace crates (publish != []) whose version is not on crates.io yet.
             missing=$(cargo metadata --no-deps --format-version 1 | jq -r '
