@@ -5,7 +5,7 @@ the Rust path is `hearth_mp`, and the CLI binary is `hearth-mp` (`cargo
 hearth-mp`). The frozen protocol v1 strings keep `hearth` (see
 [`scripts/wire-constants.txt`](../../scripts/wire-constants.txt)).
 
-**Repository host:** not decided yet. Record it here before the first push.
+**Repository host (2026-10-26):** <https://github.com/tigwyk/hearth-mp> (public).
 
 > Trademark availability is not legal clearance; consult a trademark attorney
 > before committing to a name.
