@@ -15,10 +15,13 @@ single-sourced at `godot/addons/hearth` and copied in by `scripts/sync-addon.ps1
 - `tests/handoff_smoke.gd` — the Task 3 container handoff smoke test: two
   clients ready up, receive `handoff`, `connect_handoff`, get the
   gateway-redeemed identity and the 30 Hz time broadcasts, then the session ends.
-  **Written and `--check-only`-loadable, but not run locally on Windows**:
-  `wrangler dev` cannot run Cloudflare Containers on Windows (it needs WSL), so
-  this test needs a Linux-hosted `wrangler dev`/CI or a deployed gateway. With a
-  container-capable gateway URL:
+  **Validated on 2026-10-25 against a deployed container-capable gateway**, both
+  natively and with `HEARTH_FORCE_WEB=1` (exit 0, all checks pass). It still
+  cannot run locally on Windows: `wrangler dev` does not run Cloudflare
+  Containers there (it needs WSL), so use a Linux-hosted `wrangler dev`/CI or a
+  deployed gateway. Only the Task 3 e2e's check 6 (killing the container
+  mid-match → `Failed{lost}` after 60 s) remains unverified, since it is
+  local-Docker-only. With a container-capable gateway URL:
 
       $env:HEARTH_URL = "<container-capable gateway>"
       godot --headless --path examples/arena-dedicated/godot-client -s tests/handoff_smoke.gd

@@ -120,8 +120,8 @@ Prices change: when Cloudflare updates either page, edit `pricing.toml`, set
 ## What the estimate deliberately leaves out
 
 - **Worker CPU time.** 30M CPU ms/month are included, then `$0.02`/million. The
-  estimate assumes your handlers stay inside the allowance; a CPU-heavy room mode
-  is a v0.4 concern.
+  estimate assumes your handlers stay inside the allowance; a CPU-heavy room
+  design is outside this estimate.
 - **Durable Object rows read.** 25 billion/month included; Hearth's own state
   table is small and this has never been the binding limit.
 - **Rounding.** Cloudflare rounds each billable unit up before charging (500k
@@ -134,6 +134,12 @@ Prices change: when Cloudflare updates either page, edit `pricing.toml`, set
 - **Egress.** Data transfer out of Workers is free, so it is not a line item.
 - **Game-client hosting.** Wherever you host the Godot or Unity build is not
   Cloudflare and not counted here.
+- **Cloudflare Containers and dedicated servers (handoff).** A v0.5 handoff that
+  runs on Cloudflare Containers bills vCPU, memory and disk per running second on
+  your Cloudflare account (see
+  [Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/));
+  a fleet on your own infrastructure bills normally. `hearth cost` models only
+  the coordination room and its gateway requests, never the match server.
 - **The Workers Free plan.** The model assumes the Workers Paid plan, because
   Durable Objects in production want it and the `$5` base is the total's floor.
 

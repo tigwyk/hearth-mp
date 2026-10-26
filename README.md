@@ -176,6 +176,9 @@ changes, events and timers are rolled back.
   lobby, region hints, room metadata, and private rooms.
 - [Ticked rooms](docs/ticked.md): fixed-step 5–20 Hz rooms, snapshot
   interpolation, and shared-logic prediction.
+- [Handoff to a dedicated server](docs/handoff.md): single-use tickets, a signed
+  webhook allocator for your own fleet, Cloudflare Containers, and the server
+  SDKs.
 - [v0.1 implementation plan](docs/superpowers/plans/2026-10-25-hearth-v0.1-event-rooms.md)
 
 ## Licence

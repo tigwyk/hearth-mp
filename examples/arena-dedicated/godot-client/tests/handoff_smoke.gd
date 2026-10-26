@@ -1,14 +1,17 @@
 extends SceneTree
 ## End-to-end handoff smoke test for the Godot SDK (plan v0.5 Task 4).
 ##
-## Needs the Task 3 container setup: `wrangler dev` in examples/arena-dedicated
-## with Cloudflare Containers enabled (wrangler refuses local containers on
-## Windows, so this needs WSL or a container-capable host), and the
-## arena-dedicated server image built. Status: written and `--check-only`
-## loadable, but NOT run locally on Windows — it needs a Linux-hosted
-## `wrangler dev`/CI or a deployed gateway. Then:
+## Needs the Task 3 container setup: a container-capable gateway (`wrangler dev`
+## on a host that can run Cloudflare Containers, or a deployed Worker) with the
+## arena-dedicated server image. `wrangler dev` refuses local containers on
+## Windows (it needs WSL), so local Windows runs are not supported.
 ##
-##   $env:HEARTH_URL = "http://127.0.0.1:8790"
+## Status: PASSED on 2026-10-25 against a deployed container-capable gateway,
+## both natively and with HEARTH_FORCE_WEB=1 (exit 0, all checks below). The
+## only unverified part of the Task 3 e2e is check 6 there (killing the
+## container mid-match → Failed{lost} after 60 s), which is local-Docker-only.
+##
+##   $env:HEARTH_URL = "<container-capable gateway>"
 ##   godot --headless --path examples/arena-dedicated/godot-client \
 ##     -s tests/handoff_smoke.gd
 ##

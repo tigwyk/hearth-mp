@@ -1,21 +1,23 @@
 # Hearth limits
 
-**Hearth v0.1 rooms are event-driven. Anything needing more than ~20 Hz
-authoritative simulation, UDP, or more than ~100MB of live state per match is
-the wrong fit; use a dedicated server (Handoff mode arrives in v0.5).**
+**Hearth rooms are event-driven or ticked. Anything needing UDP, more than ~20 Hz
+authoritative simulation, or more than ~100MB of live state per match is the
+wrong fit; use `ctx.handoff` to a dedicated server
+([docs/handoff.md](handoff.md)).**
 
-Hearth runs one authoritative Durable Object per match and hibernates between
-events. That is what makes idle rooms cost about nothing, and it is also the
-source of every limit on this page. Event mode is the only mode implemented in
-v0.1.
+Hearth runs one authoritative Durable Object per match. Event mode hibernates
+between messages; ticked mode holds a fixed-step loop open while players are
+connected (v0.4). That hibernation is what makes idle rooms cost about nothing,
+and it is also the source of every limit on this page. Beyond the limits, a room
+can hand its players to a dedicated server (v0.5, [handoff.md](handoff.md)).
 
 ## Cost profile per mode
 
 | Mode | How it runs | Fits | Cost profile | Available |
 | --- | --- | --- | --- | --- |
 | Event (default) | Wakes per message or alarm, hibernates between | Turn-based, card/board, party games, async ("your move" over days), lobbies, social hubs | Billed per message; idle rooms near free | v0.1 |
-| Ticked | Alarm-driven fixed tick, 5–20 Hz, while players are connected | Co-op, top-down action, .io-style, MMO-lite zones with tolerant netcode | Billed wall-clock while ticking; stops when room empties | v0.4 |
-| Handoff | Room does matchmaking and session state, then issues a ticket to a dedicated server (Cloudflare Containers or the dev's own fleet) | Shooters, fighting games, physics-heavy action | Hearth only bills for the coordination part | v0.5 |
+| Ticked | Loop-driven fixed tick, 5–20 Hz, while players are connected | Co-op, top-down action, .io-style, MMO-lite zones with tolerant netcode | Billed wall-clock while ticking; stops when room empties | v0.4 |
+| Handoff | A room capability: the room keeps the lobby and session state, then hands players to a dedicated server with single-use tickets (Cloudflare Containers or the dev's own fleet) | Shooters, fighting games, physics-heavy action | Hearth bills only the coordination part; the dedicated server bills separately | v0.5 |
 
 Incoming messages are what Cloudflare bills; outgoing patches and events are
 free. Hearth's client SDKs therefore batch intents (20 messages/s and 32 intents

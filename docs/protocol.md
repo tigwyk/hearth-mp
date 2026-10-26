@@ -158,6 +158,35 @@ encoding. Errors: wrong `protocol` → `UNSUPPORTED_PROTOCOL` and close 4000; wr
 Out-of-band events are not part of state sync. They arrive after the `PATCH`
 for the same handler, in the order the handler emitted them.
 
+#### Reserved events
+
+Names starting with `hearth.` are reserved for the framework. A room cannot send
+them: `ctx.send` and `ctx.broadcast` drop the event and log
+`reserved_event_name`, so the frame never reaches a client. An SDK must route
+these names to dedicated handlers and never to the application's generic event
+callback.
+
+Handoff (v0.5, see `docs/handoff.md`) uses two of them.
+
+`hearth.handoff` is private to one player: the dedicated server's endpoint and
+that player's single-use ticket, valid for 60 s.
+
+```json
+{ "op": "EVENT", "name": "hearth.handoff",
+  "data": { "sid": "hs_..._0123456789abcdef", "endpoint": "udp://1.2.3.4:7777",
+            "ticket": "<32 hex characters>", "expires_ms": 1760000000000 } }
+```
+
+`hearth.handoff_ended` is private per player: the session is over.
+
+```json
+{ "op": "EVENT", "name": "hearth.handoff_ended",
+  "data": { "sid": "hs_..._0123456789abcdef", "reason": "match over" } }
+```
+
+Both are ordinary `EVENT` frames on the wire; reserved names carry no new frame
+opcode.
+
 ### `ERROR` — server → client
 
 ```json
@@ -289,6 +318,8 @@ reason.
 - [ ] Ignore a `PATCH` whose `seq` is not greater than the current sequence; in a
       ticked room compare `tick` instead, and reset the comparison on `FULL_STATE`.
 - [ ] Treat a bad patch path as a desync and wait for `FULL_STATE`.
+- [ ] Route `hearth.*` event names to dedicated handlers, never to the
+      application's generic event callback.
 - [ ] Batch intents (default ≤ 32 per message) and cap send rate (default ≤ 20/s).
 - [ ] Assign intent sequence numbers from 1, incrementing by exactly 1.
 - [ ] Send `hearth:ping` as a text frame; accept `hearth:pong` text frames.

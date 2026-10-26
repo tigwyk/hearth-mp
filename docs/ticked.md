@@ -21,8 +21,8 @@ and is near-free when nobody is playing.
 Choose ticked mode when the game needs continuous motion at a steady rate
 (input every tick, positions that must be applied on a common clock). Stay in
 event mode for anything that only reacts to player input. Above ~20 Hz, or for
-UDP, use a dedicated server (Handoff, v0.5) — 20 Hz is the framework's current
-hard ceiling (provisional, see section 3).
+UDP, use a dedicated server (`ctx.handoff`, see [handoff.md](handoff.md)) — 20 Hz
+is the framework's current hard ceiling (accepted in section 3).
 
 ## 2. The tick contract
 
@@ -103,7 +103,7 @@ defaults to 20 and must be at least 1. Mistakes are compile errors:
 | `tick_hz = 40` (or below 5) | `tick_hz must be 5..=20; above 20 Hz use a dedicated server (Handoff, v0.5)` |
 | `tick_hz`/`persist_every` on an event room | `tick_hz needs mode = "ticked"` / `persist_every needs mode = "ticked"` |
 | `persist_every = 0` | `persist_every must be at least 1` |
-| `mode = "handoff"` | `handoff rooms arrive in Hearth v0.5` |
+| `mode = "handoff"` | `handoff is not a room mode; call ctx.handoff(...) from an event or ticked room (see docs/handoff.md)` |
 
 The scheduler works in whole milliseconds, so rates that do not divide 1000
 (e.g. 15 Hz) schedule ticks every 66 ms while still handing `on_tick` the same
@@ -365,5 +365,5 @@ checks always run.
 - [Wire protocol v1](protocol.md): frames, patch ops, the optional `tick`/`t`.
 - [Limits](limits.md): the event/ticked/handoff cost profile and hard limits.
 - [Cost estimate](cost.md): the model behind `hearth cost --ticked`.
-- [ADR 0001](adr/0001-tick-driver.md): the provisional driver decision and its
-  measurements.
+- [ADR 0001](adr/0001-tick-driver.md): the accepted in-object loop driver decision
+  and its measurements.

@@ -252,6 +252,9 @@ in the dashboard in production. Filter on the `hearth` field to find them.
 | `state_incompatible` | The persisted state does not match this build's schema. Force-dispose the room. |
 | `tick_dropped` | A ticked room woke late and skipped `n` ticks (at most 3 catch-up steps run per wake). |
 | `tick_overrun` | A ticked room's steps took longer than one tick period (`ms` holds the time spent). |
+| `handoff_retry` | A handoff allocation attempt failed and will be retried after the backoff (`attempt` and `msg` hold the attempt number and error). |
+| `handoff_unknown_player` | A room asked for a handoff with a player who is not seated; the request was dropped. |
+| `reserved_event_name` | A room tried to send a framework-reserved `hearth.*` event; the send was dropped (`name` holds it). |
 | `meta_error` | The room's lobby/matchmaker metadata could not be written; the room keeps running. |
 | `report_error` | A room report could not be queued for the matchmaker. |
 | `outbox_dropped` | A queued `ctx.notify` was dropped after 24 h without a successful delivery. |
