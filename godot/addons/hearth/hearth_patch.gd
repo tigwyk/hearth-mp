@@ -3,7 +3,7 @@ extends RefCounted
 ## Patch-op application for Hearth state trees.
 ##
 ## Semantics are identical to the Rust reference
-## (`hearth_protocol::patch::apply`); the conformance suite is
+## (`hearth_mp_protocol::patch::apply`); the conformance suite is
 ## `conformance/vectors/patch.json`.
 ##
 ## Keys of the state tree are always strings, and a path segment is a string

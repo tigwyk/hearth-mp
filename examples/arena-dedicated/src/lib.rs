@@ -16,8 +16,8 @@
 //!   `HEARTH_ALLOCATOR_*` vars below) to use `fleet/allocator.mjs` and a
 //!   dedicated server on `udp://`/`wss://`, as `e2e-fleet.mjs` does.
 
-use hearth::sync::SyncMap;
-use hearth::{
+use hearth_mp::sync::SyncMap;
+use hearth_mp::{
     Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, PlayerService, Result, Room, Schema,
     Service, ServiceCtx,
 };
@@ -27,11 +27,11 @@ use worker::{Context, Env, Request, Response};
 // The container Durable Object class: one instance per handoff session, each
 // owning one Cloudflare Container. `[[containers]]` in `wrangler.toml` must name
 // this class, and the `ARENA_SERVER` binding must point at it.
-hearth::container_object!(ArenaServer);
+hearth_mp::container_object!(ArenaServer);
 
 /// The synced lobby state: who is ready, the lifecycle log and the last result.
 #[derive(HearthState, Serialize, Deserialize, Default)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub struct LobbyState {
     #[sync]
     pub ready: SyncMap<PlayerId, bool>,
@@ -49,7 +49,7 @@ pub struct LobbyState {
 
 /// The only intents: mark yourself ready or not.
 #[derive(Schema, Deserialize)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub enum LobbyIntent {
     Ready,
     Unready,
@@ -83,14 +83,14 @@ impl ArenaLobby {
             return;
         }
         ctx.state().in_session = true;
-        ctx.handoff(hearth::server::handoff::HandoffRequest::new(
+        ctx.handoff(hearth_mp::server::handoff::HandoffRequest::new(
             players,
             serde_json::json!({"mode": "ffa", "map": "arena"}),
         ));
     }
 }
 
-#[hearth::room(
+#[hearth_mp::room(
     mode = "event",
     max_clients = 8,
     binding = "ARENA_LOBBY",
@@ -132,22 +132,22 @@ impl Room for ArenaLobby {
     async fn on_handoff(
         &mut self,
         ctx: &mut Ctx<Self>,
-        _sid: &hearth::server::handoff::SessionId,
-        event: hearth::server::handoff::HandoffEvent,
+        _sid: &hearth_mp::server::handoff::SessionId,
+        event: hearth_mp::server::handoff::HandoffEvent,
     ) -> Result<()> {
         let name = match &event {
-            hearth::server::handoff::HandoffEvent::Ready { .. } => "ready",
-            hearth::server::handoff::HandoffEvent::Started => "started",
-            hearth::server::handoff::HandoffEvent::PlayerJoined(_) => "player_joined",
-            hearth::server::handoff::HandoffEvent::PlayerLeft(_) => "player_left",
-            hearth::server::handoff::HandoffEvent::Result(_) => "result",
-            hearth::server::handoff::HandoffEvent::Ended { .. } => "ended",
-            hearth::server::handoff::HandoffEvent::Failed { .. } => "failed",
+            hearth_mp::server::handoff::HandoffEvent::Ready { .. } => "ready",
+            hearth_mp::server::handoff::HandoffEvent::Started => "started",
+            hearth_mp::server::handoff::HandoffEvent::PlayerJoined(_) => "player_joined",
+            hearth_mp::server::handoff::HandoffEvent::PlayerLeft(_) => "player_left",
+            hearth_mp::server::handoff::HandoffEvent::Result(_) => "result",
+            hearth_mp::server::handoff::HandoffEvent::Ended { .. } => "ended",
+            hearth_mp::server::handoff::HandoffEvent::Failed { .. } => "failed",
             _ => "other",
         };
         ctx.state().log.push(name.to_owned());
         match event {
-            hearth::server::handoff::HandoffEvent::Result(data) => {
+            hearth_mp::server::handoff::HandoffEvent::Result(data) => {
                 ctx.state().result = serde_json::to_string(&data)?;
                 // Forward the outcome to the winner's player object (v0.3a),
                 // durably: the outbox survives a handler failure after this.
@@ -155,8 +155,8 @@ impl Room for ArenaLobby {
                     ctx.notify::<ArenaPlayer>(winner, PlayerRpc::Result { won: true });
                 }
             }
-            hearth::server::handoff::HandoffEvent::Ended { .. }
-            | hearth::server::handoff::HandoffEvent::Failed { .. } => {
+            hearth_mp::server::handoff::HandoffEvent::Ended { .. }
+            | hearth_mp::server::handoff::HandoffEvent::Failed { .. } => {
                 let state = ctx.state();
                 state.in_session = false;
                 state.ready.clear();
@@ -182,7 +182,7 @@ pub enum PlayerRpc {
 #[derive(Default)]
 pub struct ArenaPlayer;
 
-#[hearth::service(binding = "ARENA_PLAYER", player)]
+#[hearth_mp::service(binding = "ARENA_PLAYER", player)]
 impl Service for ArenaPlayer {
     type State = PlayerStats;
     type Rpc = PlayerRpc;
@@ -191,7 +191,7 @@ impl Service for ArenaPlayer {
     async fn on_call(
         &mut self,
         ctx: &mut ServiceCtx<Self>,
-        _from: &hearth::Target,
+        _from: &hearth_mp::Target,
         rpc: PlayerRpc,
     ) -> Result<()> {
         let PlayerRpc::Result { won } = rpc;
@@ -210,21 +210,21 @@ impl PlayerService for ArenaPlayer {
 }
 
 /// Every room type this Worker serves.
-fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+fn room_routes() -> &'static [hearth_mp_gateway::RoomRoute] {
+    static ROUTES: [hearth_mp_gateway::RoomRoute; 1] = [hearth_mp_gateway::RoomRoute::new(
         "arena",
         "ARENA_LOBBY",
-        hearth::server::schema_hash_hex::<ArenaLobby>,
+        hearth_mp::server::schema_hash_hex::<ArenaLobby>,
         8,
     )
     .with_container("ARENA_SERVER")];
     &ROUTES
 }
 
-fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig::new(room_routes())
-        .player(hearth_gateway::PlayerRoute::new("ARENA_PLAYER"))
-        .auth(hearth_gateway::AuthConfig::from_env(env)?))
+fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayConfig, String> {
+    Ok(hearth_mp_gateway::GatewayConfig::new(room_routes())
+        .player(hearth_mp_gateway::PlayerRoute::new("ARENA_PLAYER"))
+        .auth(hearth_mp_gateway::AuthConfig::from_env(env)?))
 }
 
 /// The gateway Worker entry: auth, routing and the lobby room route.
@@ -234,5 +234,5 @@ async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response>
         Ok(config) => config,
         Err(message) => return Response::error(message, 500),
     };
-    hearth_gateway::serve(req, env, &config).await
+    hearth_mp_gateway::serve(req, env, &config).await
 }

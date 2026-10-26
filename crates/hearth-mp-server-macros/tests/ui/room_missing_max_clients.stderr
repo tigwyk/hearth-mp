@@ -1,0 +1,5 @@
+error: missing max_clients; write #[hearth_mp::room(mode = "event", max_clients = N)]
+ --> tests/ui/room_missing_max_clients.rs:7:8
+  |
+7 | #[room(mode = "event")]
+  |        ^^^^

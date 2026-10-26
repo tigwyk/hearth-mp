@@ -2,7 +2,7 @@
 //!
 //! It is a normal process, like a real game server would be:
 //! * reads its session env (`HEARTH_SID`, `HEARTH_SESSION_SECRET`,
-//!   `HEARTH_REPORT_URL`) with the `hearth-handoff-server` SDK,
+//!   `HEARTH_REPORT_URL`) with the `hearth-mp-handoff-server` SDK,
 //! * reports `started`,
 //! * accepts `TICKET <ticket>` lines over TCP, redeeming each one with the SDK
 //!   (the ticket is the credential; the secret is never sent to a client),
@@ -15,8 +15,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 
-use hearth_handoff_server::{ServerReport, Session};
-use hearth_server::PlayerId;
+use hearth_mp_handoff_server::{ServerReport, Session};
+use hearth_mp_server::PlayerId;
 
 fn env(name: &str) -> String {
     std::env::var(name).unwrap_or_default()

@@ -1,0 +1,1879 @@
+pub mod hearth_mp_server
+pub use hearth_mp_server::PlayerId
+pub mod hearth_mp_server::admin
+pub enum hearth_mp_server::admin::Cause
+pub hearth_mp_server::admin::Cause::Call
+pub hearth_mp_server::admin::Cause::Call::from: hearth_mp_server::call::Target
+pub hearth_mp_server::admin::Cause::Disconnect
+pub hearth_mp_server::admin::Cause::Disconnect::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::Cause::Dispose
+pub hearth_mp_server::admin::Cause::Intent
+pub hearth_mp_server::admin::Cause::Intent::intent_seq: u32
+pub hearth_mp_server::admin::Cause::Intent::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::Cause::Join
+pub hearth_mp_server::admin::Cause::Join::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::Cause::Leave
+pub hearth_mp_server::admin::Cause::Leave::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::Cause::Reconnect
+pub hearth_mp_server::admin::Cause::Reconnect::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::Cause::Timer
+pub hearth_mp_server::admin::Cause::Timer::key: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::admin::Cause
+impl core::cmp::PartialEq for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::admin::Cause
+impl serde_core::ser::Serialize for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::Cause
+impl core::marker::Send for hearth_mp_server::admin::Cause
+impl core::marker::Sync for hearth_mp_server::admin::Cause
+impl core::marker::Unpin for hearth_mp_server::admin::Cause
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::Cause
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::Cause
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::Cause
+pub struct hearth_mp_server::admin::InspectClient
+pub hearth_mp_server::admin::InspectClient::connected: bool
+pub hearth_mp_server::admin::InspectClient::held_until_ms: core::option::Option<u64>
+pub hearth_mp_server::admin::InspectClient::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::admin::InspectClient::seat: u8
+impl core::clone::Clone for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::admin::InspectClient
+impl core::cmp::PartialEq for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::admin::InspectClient
+impl serde_core::ser::Serialize for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::InspectClient
+impl core::marker::Send for hearth_mp_server::admin::InspectClient
+impl core::marker::Sync for hearth_mp_server::admin::InspectClient
+impl core::marker::Unpin for hearth_mp_server::admin::InspectClient
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::InspectClient
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::InspectClient
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::InspectClient
+pub struct hearth_mp_server::admin::InspectDoc
+pub hearth_mp_server::admin::InspectDoc::clients: alloc::vec::Vec<hearth_mp_server::admin::InspectClient>
+pub hearth_mp_server::admin::InspectDoc::created_ms: u64
+pub hearth_mp_server::admin::InspectDoc::incompatible: bool
+pub hearth_mp_server::admin::InspectDoc::locked: bool
+pub hearth_mp_server::admin::InspectDoc::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::admin::InspectDoc::seq: u64
+pub hearth_mp_server::admin::InspectDoc::state: core::option::Option<hearth_mp_protocol::Value>
+pub hearth_mp_server::admin::InspectDoc::state_bytes: usize
+pub hearth_mp_server::admin::InspectDoc::tick: u64
+pub hearth_mp_server::admin::InspectDoc::timers: alloc::vec::Vec<(alloc::string::String, u64)>
+impl core::clone::Clone for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::InspectDoc
+impl core::marker::Send for hearth_mp_server::admin::InspectDoc
+impl core::marker::Sync for hearth_mp_server::admin::InspectDoc
+impl core::marker::Unpin for hearth_mp_server::admin::InspectDoc
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::InspectDoc
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::InspectDoc
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::InspectDoc
+pub struct hearth_mp_server::admin::TailMsg
+pub hearth_mp_server::admin::TailMsg::cause: alloc::vec::Vec<hearth_mp_server::admin::Cause>
+pub hearth_mp_server::admin::TailMsg::ops: alloc::vec::Vec<hearth_mp_protocol::frame::PatchOp>
+pub hearth_mp_server::admin::TailMsg::rejected: alloc::vec::Vec<u32>
+pub hearth_mp_server::admin::TailMsg::seq: u64
+impl core::clone::Clone for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::TailMsg
+impl core::marker::Send for hearth_mp_server::admin::TailMsg
+impl core::marker::Sync for hearth_mp_server::admin::TailMsg
+impl core::marker::Unpin for hearth_mp_server::admin::TailMsg
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::TailMsg
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::TailMsg
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::TailMsg
+pub mod hearth_mp_server::allocator
+pub struct hearth_mp_server::allocator::ContainerAllocator<S: hearth_mp_server::allocator::ContainerStarter>
+pub hearth_mp_server::allocator::ContainerAllocator::env: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::allocator::ContainerAllocator::max_duration: core::time::Duration
+pub hearth_mp_server::allocator::ContainerAllocator::port: u16
+pub hearth_mp_server::allocator::ContainerAllocator::public_url: alloc::string::String
+pub hearth_mp_server::allocator::ContainerAllocator::starter: S
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::ContainerAllocator<S>
+pub fn hearth_mp_server::allocator::ContainerAllocator<S>::new(S, impl core::convert::Into<alloc::string::String>) -> Self
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::ContainerAllocator<S>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<S> core::marker::Freeze for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Freeze
+impl<S> core::marker::Send for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Send
+impl<S> core::marker::Sync for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Sync
+impl<S> core::marker::Unpin for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::UnsafeUnpin
+impl<S> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::panic::unwind_safe::RefUnwindSafe
+impl<S> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::panic::unwind_safe::UnwindSafe
+pub struct hearth_mp_server::allocator::StartRequest
+pub hearth_mp_server::allocator::StartRequest::env: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::allocator::StartRequest::max_duration_ms: u64
+pub hearth_mp_server::allocator::StartRequest::port: u16
+pub hearth_mp_server::allocator::StartRequest::report_url: alloc::string::String
+pub hearth_mp_server::allocator::StartRequest::secret: alloc::string::String
+pub hearth_mp_server::allocator::StartRequest::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::allocator::StartRequest
+impl core::cmp::PartialEq for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::allocator::StartRequest
+impl core::marker::Freeze for hearth_mp_server::allocator::StartRequest
+impl core::marker::Send for hearth_mp_server::allocator::StartRequest
+impl core::marker::Sync for hearth_mp_server::allocator::StartRequest
+impl core::marker::Unpin for hearth_mp_server::allocator::StartRequest
+impl core::marker::UnsafeUnpin for hearth_mp_server::allocator::StartRequest
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::StartRequest
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::StartRequest
+pub struct hearth_mp_server::allocator::WebhookAllocator<F: hearth_mp_server::fetcher::Fetcher>
+pub hearth_mp_server::allocator::WebhookAllocator::allow_insecure_endpoints: bool
+pub hearth_mp_server::allocator::WebhookAllocator::fetcher: F
+pub hearth_mp_server::allocator::WebhookAllocator::public_url: alloc::string::String
+pub hearth_mp_server::allocator::WebhookAllocator::secret: alloc::vec::Vec<u8>
+pub hearth_mp_server::allocator::WebhookAllocator::url: alloc::string::String
+impl<F: hearth_mp_server::fetcher::Fetcher> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::WebhookAllocator<F>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<F> core::marker::Freeze for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Freeze
+impl<F> core::marker::Send for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Send
+impl<F> core::marker::Sync for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Sync
+impl<F> core::marker::Unpin for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Unpin
+impl<F> core::marker::UnsafeUnpin for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::UnsafeUnpin
+impl<F> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::panic::unwind_safe::RefUnwindSafe
+impl<F> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::panic::unwind_safe::UnwindSafe
+pub const hearth_mp_server::allocator::DEFAULT_CONTAINER_PORT: u16
+pub const hearth_mp_server::allocator::SIGNATURE_HEADER: &str
+pub const hearth_mp_server::allocator::TIMESTAMP_HEADER: &str
+pub trait hearth_mp_server::allocator::Allocator
+pub async fn hearth_mp_server::allocator::Allocator::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::Allocator::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<F: hearth_mp_server::fetcher::Fetcher> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::WebhookAllocator<F>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::ContainerAllocator<S>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+pub trait hearth_mp_server::allocator::ContainerStarter
+pub async fn hearth_mp_server::allocator::ContainerStarter::start(&self, hearth_mp_server::allocator::StartRequest) -> core::result::Result<(), alloc::string::String>
+pub async fn hearth_mp_server::allocator::ContainerStarter::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+pub mod hearth_mp_server::call
+#[non_exhaustive] pub enum hearth_mp_server::call::CallError
+pub hearth_mp_server::call::CallError::BadRpc(alloc::string::String)
+pub hearth_mp_server::call::CallError::Handler(alloc::string::String)
+pub hearth_mp_server::call::CallError::ReentrantCall(hearth_mp_server::call::Target)
+pub hearth_mp_server::call::CallError::Unreachable(alloc::string::String)
+impl hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::retryable(&self) -> bool
+impl core::clone::Clone for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::call::CallError
+impl core::cmp::PartialEq for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::eq(&self, &Self) -> bool
+impl core::error::Error for hearth_mp_server::call::CallError
+impl core::fmt::Debug for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::CallError
+impl serde_core::ser::Serialize for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::CallError
+impl core::marker::Send for hearth_mp_server::call::CallError
+impl core::marker::Sync for hearth_mp_server::call::CallError
+impl core::marker::Unpin for hearth_mp_server::call::CallError
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::CallError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::CallError
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::CallError
+pub struct hearth_mp_server::call::Envelope
+pub hearth_mp_server::call::Envelope::chain: alloc::vec::Vec<hearth_mp_server::call::Target>
+pub hearth_mp_server::call::Envelope::from: hearth_mp_server::call::Target
+pub hearth_mp_server::call::Envelope::msg_id: core::option::Option<alloc::string::String>
+pub hearth_mp_server::call::Envelope::rpc: hearth_mp_protocol::Value
+impl core::clone::Clone for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::Envelope
+impl serde_core::ser::Serialize for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::Envelope
+impl core::marker::Send for hearth_mp_server::call::Envelope
+impl core::marker::Sync for hearth_mp_server::call::Envelope
+impl core::marker::Unpin for hearth_mp_server::call::Envelope
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::Envelope
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::Envelope
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::Envelope
+pub struct hearth_mp_server::call::Target
+pub hearth_mp_server::call::Target::binding: alloc::string::String
+pub hearth_mp_server::call::Target::name: alloc::string::String
+impl hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::call::Target
+impl core::cmp::PartialEq for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::Target
+impl serde_core::ser::Serialize for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::Target
+impl core::marker::Send for hearth_mp_server::call::Target
+impl core::marker::Sync for hearth_mp_server::call::Target
+impl core::marker::Unpin for hearth_mp_server::call::Target
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::Target
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::Target
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::Target
+pub trait hearth_mp_server::call::CallTransport
+pub fn hearth_mp_server::call::CallTransport::call(&self, hearth_mp_server::call::Target, hearth_mp_server::call::Envelope) -> hearth_mp_server::call::CallFuture<'_>
+pub trait hearth_mp_server::call::Callable
+pub type hearth_mp_server::call::Callable::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::call::Callable::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub const hearth_mp_server::call::Callable::BINDING: &'static str
+pub type hearth_mp_server::call::CallFuture<'a> = core::pin::Pin<alloc::boxed::Box<(dyn core::future::future::Future<Output = core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>> + 'a)>>
+pub mod hearth_mp_server::ctx
+pub struct hearth_mp_server::ctx::Ctx<R: hearth_mp_server::room::Room>
+impl<R: hearth_mp_server::room::Room> hearth_mp_server::ctx::Ctx<R>
+pub fn hearth_mp_server::ctx::Ctx<R>::broadcast(&mut self, &str, impl serde_core::ser::Serialize)
+pub async fn hearth_mp_server::ctx::Ctx<R>::call<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc) -> core::result::Result<<T as hearth_mp_server::call::Callable>::Reply, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::ctx::Ctx<R>::cancel_timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>)
+pub fn hearth_mp_server::ctx::Ctx<R>::clients(&self) -> &[hearth_mp_server::room::Client]
+pub fn hearth_mp_server::ctx::Ctx<R>::dispose(&mut self)
+pub fn hearth_mp_server::ctx::Ctx<R>::handoff(&mut self, hearth_mp_server::handoff::HandoffRequest) -> hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::ctx::Ctx<R>::kick(&mut self, &hearth_mp_protocol::frame::PlayerId)
+pub fn hearth_mp_server::ctx::Ctx<R>::lock(&mut self)
+pub fn hearth_mp_server::ctx::Ctx<R>::me(&self) -> &hearth_mp_server::call::Target
+pub fn hearth_mp_server::ctx::Ctx<R>::notify<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc)
+pub fn hearth_mp_server::ctx::Ctx<R>::now_ms(&self) -> u64
+pub fn hearth_mp_server::ctx::Ctx<R>::room_name(&self) -> &hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::ctx::Ctx<R>::send(&mut self, &hearth_mp_protocol::frame::PlayerId, &str, impl serde_core::ser::Serialize)
+pub fn hearth_mp_server::ctx::Ctx<R>::set_metadata(&mut self, impl serde_core::ser::Serialize)
+pub fn hearth_mp_server::ctx::Ctx<R>::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::ctx::Ctx<R>::state(&mut self) -> &mut <R as hearth_mp_server::room::Room>::State
+pub fn hearth_mp_server::ctx::Ctx<R>::tick(&self) -> u64
+pub fn hearth_mp_server::ctx::Ctx<R>::timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>, core::time::Duration)
+impl<R> core::marker::Freeze for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::Freeze
+impl<R> !core::marker::Send for hearth_mp_server::ctx::Ctx<R>
+impl<R> !core::marker::Sync for hearth_mp_server::ctx::Ctx<R>
+impl<R> core::marker::Unpin for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::Unpin
+impl<R> core::marker::UnsafeUnpin for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::UnsafeUnpin
+impl<R> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::ctx::Ctx<R>
+impl<R> !core::panic::unwind_safe::UnwindSafe for hearth_mp_server::ctx::Ctx<R>
+pub mod hearth_mp_server::fetcher
+pub struct hearth_mp_server::fetcher::CannedFetcher
+impl hearth_mp_server::fetcher::CannedFetcher
+pub fn hearth_mp_server::fetcher::CannedFetcher::failing(self, &str) -> Self
+pub fn hearth_mp_server::fetcher::CannedFetcher::new() -> Self
+pub fn hearth_mp_server::fetcher::CannedFetcher::requests(&self) -> alloc::vec::Vec<hearth_mp_server::fetcher::HttpReq>
+pub fn hearth_mp_server::fetcher::CannedFetcher::route(self, &str, u16, &str) -> Self
+impl core::default::Default for hearth_mp_server::fetcher::CannedFetcher
+pub fn hearth_mp_server::fetcher::CannedFetcher::default() -> Self
+impl hearth_mp_server::fetcher::Fetcher for hearth_mp_server::fetcher::CannedFetcher
+pub async fn hearth_mp_server::fetcher::CannedFetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+impl !core::marker::Freeze for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::Send for hearth_mp_server::fetcher::CannedFetcher
+impl !core::marker::Sync for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::Unpin for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::CannedFetcher
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::CannedFetcher
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::CannedFetcher
+pub struct hearth_mp_server::fetcher::HttpReq
+pub hearth_mp_server::fetcher::HttpReq::body: core::option::Option<alloc::string::String>
+pub hearth_mp_server::fetcher::HttpReq::headers: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::fetcher::HttpReq::method: &'static str
+pub hearth_mp_server::fetcher::HttpReq::url: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::fetcher::HttpReq
+impl core::cmp::PartialEq for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Freeze for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Send for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Sync for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Unpin for hearth_mp_server::fetcher::HttpReq
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::HttpReq
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::HttpReq
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::HttpReq
+pub struct hearth_mp_server::fetcher::HttpResp
+pub hearth_mp_server::fetcher::HttpResp::body: alloc::string::String
+pub hearth_mp_server::fetcher::HttpResp::status: u16
+impl core::clone::Clone for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::fetcher::HttpResp
+impl core::cmp::PartialEq for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Freeze for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Send for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Sync for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Unpin for hearth_mp_server::fetcher::HttpResp
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::HttpResp
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::HttpResp
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::HttpResp
+pub trait hearth_mp_server::fetcher::Fetcher
+pub async fn hearth_mp_server::fetcher::Fetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+impl hearth_mp_server::fetcher::Fetcher for hearth_mp_server::fetcher::CannedFetcher
+pub async fn hearth_mp_server::fetcher::CannedFetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+pub mod hearth_mp_server::handoff
+#[non_exhaustive] pub enum hearth_mp_server::handoff::HandoffError
+pub hearth_mp_server::handoff::HandoffError::Forbidden
+pub hearth_mp_server::handoff::HandoffError::Gone
+pub hearth_mp_server::handoff::HandoffError::NotFound
+impl hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::status(self) -> u16
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::HandoffError
+impl core::cmp::PartialEq for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::eq(&self, &Self) -> bool
+impl core::error::Error for hearth_mp_server::handoff::HandoffError
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::handoff::HandoffError
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::HandoffError
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffError
+impl core::marker::Send for hearth_mp_server::handoff::HandoffError
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffError
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffError
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffError
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffError
+#[non_exhaustive] pub enum hearth_mp_server::handoff::HandoffEvent
+pub hearth_mp_server::handoff::HandoffEvent::Ended
+pub hearth_mp_server::handoff::HandoffEvent::Ended::reason: alloc::string::String
+pub hearth_mp_server::handoff::HandoffEvent::Failed
+pub hearth_mp_server::handoff::HandoffEvent::Failed::reason: alloc::string::String
+pub hearth_mp_server::handoff::HandoffEvent::PlayerJoined(hearth_mp_protocol::frame::PlayerId)
+pub hearth_mp_server::handoff::HandoffEvent::PlayerLeft(hearth_mp_protocol::frame::PlayerId)
+pub hearth_mp_server::handoff::HandoffEvent::Ready
+pub hearth_mp_server::handoff::HandoffEvent::Ready::endpoint: alloc::string::String
+pub hearth_mp_server::handoff::HandoffEvent::Result(hearth_mp_protocol::Value)
+pub hearth_mp_server::handoff::HandoffEvent::Started
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Send for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffEvent
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffEvent
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffEvent
+#[non_exhaustive] pub enum hearth_mp_server::handoff::ServerReport
+pub hearth_mp_server::handoff::ServerReport::Ended
+pub hearth_mp_server::handoff::ServerReport::Ended::reason: alloc::string::String
+pub hearth_mp_server::handoff::ServerReport::Heartbeat
+pub hearth_mp_server::handoff::ServerReport::PlayerJoined
+pub hearth_mp_server::handoff::ServerReport::PlayerJoined::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::handoff::ServerReport::PlayerLeft
+pub hearth_mp_server::handoff::ServerReport::PlayerLeft::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::handoff::ServerReport::Result
+pub hearth_mp_server::handoff::ServerReport::Result::data: hearth_mp_protocol::Value
+pub hearth_mp_server::handoff::ServerReport::Started
+impl core::clone::Clone for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::ServerReport
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::ServerReport
+impl core::marker::Send for hearth_mp_server::handoff::ServerReport
+impl core::marker::Sync for hearth_mp_server::handoff::ServerReport
+impl core::marker::Unpin for hearth_mp_server::handoff::ServerReport
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::ServerReport
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::ServerReport
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::ServerReport
+pub enum hearth_mp_server::handoff::SessionStatus
+pub hearth_mp_server::handoff::SessionStatus::Allocating
+pub hearth_mp_server::handoff::SessionStatus::Ended
+pub hearth_mp_server::handoff::SessionStatus::Failed
+pub hearth_mp_server::handoff::SessionStatus::Ready
+pub hearth_mp_server::handoff::SessionStatus::Started
+impl hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::as_str(self) -> &'static str
+pub fn hearth_mp_server::handoff::SessionStatus::is_active(self) -> bool
+pub fn hearth_mp_server::handoff::SessionStatus::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::SessionStatus
+impl core::cmp::PartialEq for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::handoff::SessionStatus
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Freeze for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Send for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Sync for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Unpin for hearth_mp_server::handoff::SessionStatus
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::SessionStatus
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::SessionStatus
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::SessionStatus
+pub struct hearth_mp_server::handoff::AllocJob
+pub hearth_mp_server::handoff::AllocJob::attempt: u32
+pub hearth_mp_server::handoff::AllocJob::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::handoff::AllocJob::max_duration_ms: u64
+pub hearth_mp_server::handoff::AllocJob::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::handoff::AllocJob::region: core::option::Option<alloc::string::String>
+pub hearth_mp_server::handoff::AllocJob::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::handoff::AllocJob::secret: alloc::string::String
+pub hearth_mp_server::handoff::AllocJob::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::handoff::AllocJob
+pub fn hearth_mp_server::handoff::AllocJob::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::handoff::AllocJob
+pub fn hearth_mp_server::handoff::AllocJob::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for hearth_mp_server::handoff::AllocJob
+impl core::marker::Send for hearth_mp_server::handoff::AllocJob
+impl core::marker::Sync for hearth_mp_server::handoff::AllocJob
+impl core::marker::Unpin for hearth_mp_server::handoff::AllocJob
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::AllocJob
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::AllocJob
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::AllocJob
+#[non_exhaustive] pub struct hearth_mp_server::handoff::HandoffRequest
+pub hearth_mp_server::handoff::HandoffRequest::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::handoff::HandoffRequest::heartbeat_timeout: core::time::Duration
+pub hearth_mp_server::handoff::HandoffRequest::max_duration: core::time::Duration
+pub hearth_mp_server::handoff::HandoffRequest::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::handoff::HandoffRequest::region: core::option::Option<alloc::string::String>
+pub hearth_mp_server::handoff::HandoffRequest::start_timeout: core::time::Duration
+impl hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::heartbeat_timeout(self, core::time::Duration) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::max_duration(self, core::time::Duration) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::new(alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>, hearth_mp_protocol::Value) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::region(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::start_timeout(self, core::time::Duration) -> Self
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Send for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffRequest
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffRequest
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffRequest
+pub struct hearth_mp_server::handoff::Redeemed
+pub hearth_mp_server::handoff::Redeemed::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::handoff::Redeemed::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::handoff::Redeemed::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::handoff::Redeemed::provider: alloc::string::String
+pub hearth_mp_server::handoff::Redeemed::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::Redeemed
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::Redeemed
+impl core::marker::Send for hearth_mp_server::handoff::Redeemed
+impl core::marker::Sync for hearth_mp_server::handoff::Redeemed
+impl core::marker::Unpin for hearth_mp_server::handoff::Redeemed
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::Redeemed
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::Redeemed
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::Redeemed
+pub struct hearth_mp_server::handoff::SessionId(pub alloc::string::String)
+impl hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::as_str(&self) -> &str
+pub fn hearth_mp_server::handoff::SessionId::new(&hearth_mp_server::host::RoomName) -> Self
+pub fn hearth_mp_server::handoff::SessionId::room(&self) -> core::option::Option<hearth_mp_server::host::RoomName>
+impl core::clone::Clone for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::SessionId
+impl core::cmp::PartialEq for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::SessionId
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::SessionId
+impl core::marker::Send for hearth_mp_server::handoff::SessionId
+impl core::marker::Sync for hearth_mp_server::handoff::SessionId
+impl core::marker::Unpin for hearth_mp_server::handoff::SessionId
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::SessionId
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::SessionId
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::SessionId
+pub const hearth_mp_server::handoff::DEFAULT_HEARTBEAT_TIMEOUT: core::time::Duration
+pub const hearth_mp_server::handoff::DEFAULT_MAX_DURATION: core::time::Duration
+pub const hearth_mp_server::handoff::DEFAULT_START_TIMEOUT: core::time::Duration
+pub const hearth_mp_server::handoff::HANDOFF_ENDED_EVENT: &str
+pub const hearth_mp_server::handoff::HANDOFF_EVENT: &str
+pub const hearth_mp_server::handoff::RESERVED_EVENT_PREFIX: &str
+pub const hearth_mp_server::handoff::TICKET_TTL: core::time::Duration
+pub fn hearth_mp_server::handoff::is_reserved_event(&str) -> bool
+pub mod hearth_mp_server::host
+#[non_exhaustive] pub enum hearth_mp_server::host::RoomReport
+pub hearth_mp_server::host::RoomReport::Disposed
+pub hearth_mp_server::host::RoomReport::Disposed::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::host::RoomReport::Open
+pub hearth_mp_server::host::RoomReport::Open::capacity: u8
+pub hearth_mp_server::host::RoomReport::Open::created_ms: u64
+pub hearth_mp_server::host::RoomReport::Open::locked: bool
+pub hearth_mp_server::host::RoomReport::Open::metadata: hearth_mp_protocol::Value
+pub hearth_mp_server::host::RoomReport::Open::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::host::RoomReport::Open::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::host::RoomReport::Players
+pub hearth_mp_server::host::RoomReport::Players::capacity: u8
+pub hearth_mp_server::host::RoomReport::Players::locked: bool
+pub hearth_mp_server::host::RoomReport::Players::metadata: hearth_mp_protocol::Value
+pub hearth_mp_server::host::RoomReport::Players::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::host::RoomReport::Players::room: hearth_mp_server::host::RoomName
+impl core::clone::Clone for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::RoomReport
+impl serde_core::ser::Serialize for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::RoomReport
+impl core::marker::Send for hearth_mp_server::host::RoomReport
+impl core::marker::Sync for hearth_mp_server::host::RoomReport
+impl core::marker::Unpin for hearth_mp_server::host::RoomReport
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::RoomReport
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::RoomReport
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::RoomReport
+pub enum hearth_mp_server::host::SqlValue
+pub hearth_mp_server::host::SqlValue::Blob(alloc::vec::Vec<u8>)
+pub hearth_mp_server::host::SqlValue::Int(i64)
+pub hearth_mp_server::host::SqlValue::Null
+pub hearth_mp_server::host::SqlValue::Real(f64)
+pub hearth_mp_server::host::SqlValue::Text(alloc::string::String)
+impl core::clone::Clone for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::SqlValue
+impl core::marker::Freeze for hearth_mp_server::host::SqlValue
+impl core::marker::Send for hearth_mp_server::host::SqlValue
+impl core::marker::Sync for hearth_mp_server::host::SqlValue
+impl core::marker::Unpin for hearth_mp_server::host::SqlValue
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::SqlValue
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::SqlValue
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::SqlValue
+pub struct hearth_mp_server::host::Attachment
+pub hearth_mp_server::host::Attachment::admin: bool
+pub hearth_mp_server::host::Attachment::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::host::Attachment::encoding: core::option::Option<hearth_mp_protocol::frame::Encoding>
+pub hearth_mp_server::host::Attachment::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::host::Attachment::provider: alloc::string::String
+pub hearth_mp_server::host::Attachment::seat: core::option::Option<u8>
+impl core::clone::Clone for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::Attachment
+impl serde_core::ser::Serialize for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::Attachment
+impl core::marker::Send for hearth_mp_server::host::Attachment
+impl core::marker::Sync for hearth_mp_server::host::Attachment
+impl core::marker::Unpin for hearth_mp_server::host::Attachment
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::Attachment
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::Attachment
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::Attachment
+pub struct hearth_mp_server::host::RoomName
+pub hearth_mp_server::host::RoomName::name: alloc::string::String
+pub hearth_mp_server::host::RoomName::room_type: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::host::RoomName
+impl core::cmp::PartialEq for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::RoomName
+impl serde_core::ser::Serialize for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::RoomName
+impl core::marker::Send for hearth_mp_server::host::RoomName
+impl core::marker::Sync for hearth_mp_server::host::RoomName
+impl core::marker::Unpin for hearth_mp_server::host::RoomName
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::RoomName
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::RoomName
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::RoomName
+pub struct hearth_mp_server::host::Session
+pub hearth_mp_server::host::Session::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::host::Session::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::host::Session::provider: alloc::string::String
+impl hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::anon(hearth_mp_protocol::frame::PlayerId) -> Self
+impl core::clone::Clone for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::host::Session
+impl core::cmp::PartialEq for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::Session
+impl core::marker::Freeze for hearth_mp_server::host::Session
+impl core::marker::Send for hearth_mp_server::host::Session
+impl core::marker::Sync for hearth_mp_server::host::Session
+impl core::marker::Unpin for hearth_mp_server::host::Session
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::Session
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::Session
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::Session
+pub const hearth_mp_server::host::ANON_PROVIDER: &str
+pub trait hearth_mp_server::host::Host: crate::__private::Sealed
+pub type hearth_mp_server::host::Host::Socket: core::clone::Clone + core::cmp::PartialEq
+pub fn hearth_mp_server::host::Host::attachment(&self, &Self::Socket) -> core::option::Option<hearth_mp_server::host::Attachment>
+pub async fn hearth_mp_server::host::Host::call(&self, &hearth_mp_server::call::Target, hearth_mp_server::call::Envelope) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::host::Host::close(&self, &Self::Socket, u16, &str)
+pub fn hearth_mp_server::host::Host::count_full_state(&self)
+pub fn hearth_mp_server::host::Host::has_binding(&self, &str) -> bool
+pub fn hearth_mp_server::host::Host::log_line(&self, &str)
+pub fn hearth_mp_server::host::Host::loops_ticks(&self) -> bool
+pub fn hearth_mp_server::host::Host::now_ms(&self) -> u64
+pub fn hearth_mp_server::host::Host::send(&self, &Self::Socket, hearth_mp_protocol::frame::WireMsg)
+pub async fn hearth_mp_server::host::Host::set_alarm(&self, core::option::Option<u64>) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::host::Host::set_attachment(&self, &Self::Socket, &hearth_mp_server::host::Attachment)
+pub fn hearth_mp_server::host::Host::sockets(&self) -> alloc::vec::Vec<Self::Socket>
+pub fn hearth_mp_server::host::Host::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::host::Host::sql_handle(&self) -> alloc::rcs::rc::Rc<dyn hearth_mp_server::host::Sql>
+pub async fn hearth_mp_server::host::Host::wipe(&self) -> hearth_mp_server::Result<()>
+pub trait hearth_mp_server::host::Sql
+pub fn hearth_mp_server::host::Sql::exec(&self, &str, alloc::vec::Vec<hearth_mp_server::host::SqlValue>) -> hearth_mp_server::Result<alloc::vec::Vec<serde_json::map::Map<alloc::string::String, serde_json::value::Value>>>
+pub mod hearth_mp_server::room
+#[non_exhaustive] pub enum hearth_mp_server::room::Leave
+pub hearth_mp_server::room::Leave::Closed
+pub hearth_mp_server::room::Leave::Kicked
+pub hearth_mp_server::room::Leave::Left
+impl core::clone::Clone for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Leave
+impl core::cmp::PartialEq for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::room::Leave
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Leave
+impl core::marker::Freeze for hearth_mp_server::room::Leave
+impl core::marker::Send for hearth_mp_server::room::Leave
+impl core::marker::Sync for hearth_mp_server::room::Leave
+impl core::marker::Unpin for hearth_mp_server::room::Leave
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Leave
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Leave
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Leave
+#[non_exhaustive] pub enum hearth_mp_server::room::Mode
+pub hearth_mp_server::room::Mode::Event
+pub hearth_mp_server::room::Mode::Ticked
+impl core::clone::Clone for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Mode
+impl core::cmp::PartialEq for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::room::Mode
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Mode
+impl core::marker::Freeze for hearth_mp_server::room::Mode
+impl core::marker::Send for hearth_mp_server::room::Mode
+impl core::marker::Sync for hearth_mp_server::room::Mode
+impl core::marker::Unpin for hearth_mp_server::room::Mode
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Mode
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Mode
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Mode
+pub struct hearth_mp_server::room::Client
+pub hearth_mp_server::room::Client::connected: bool
+pub hearth_mp_server::room::Client::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::room::Client::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::room::Client::provider: alloc::string::String
+pub hearth_mp_server::room::Client::seat: u8
+impl core::clone::Clone for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Client
+impl core::cmp::PartialEq for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Client
+impl core::marker::Freeze for hearth_mp_server::room::Client
+impl core::marker::Send for hearth_mp_server::room::Client
+impl core::marker::Sync for hearth_mp_server::room::Client
+impl core::marker::Unpin for hearth_mp_server::room::Client
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Client
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Client
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Client
+pub struct hearth_mp_server::room::JoinOpts(pub hearth_mp_protocol::Value)
+impl core::clone::Clone for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::JoinOpts
+impl core::marker::Freeze for hearth_mp_server::room::JoinOpts
+impl core::marker::Send for hearth_mp_server::room::JoinOpts
+impl core::marker::Sync for hearth_mp_server::room::JoinOpts
+impl core::marker::Unpin for hearth_mp_server::room::JoinOpts
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::JoinOpts
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::JoinOpts
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::JoinOpts
+pub struct hearth_mp_server::room::TimerKey(pub alloc::string::String)
+impl core::clone::Clone for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::TimerKey
+impl core::cmp::PartialEq for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::eq(&self, &Self) -> bool
+impl core::convert::From<&str> for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::from(alloc::string::String) -> Self
+impl core::fmt::Debug for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::TimerKey
+impl core::marker::Freeze for hearth_mp_server::room::TimerKey
+impl core::marker::Send for hearth_mp_server::room::TimerKey
+impl core::marker::Sync for hearth_mp_server::room::TimerKey
+impl core::marker::Unpin for hearth_mp_server::room::TimerKey
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::TimerKey
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::TimerKey
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::TimerKey
+pub trait hearth_mp_server::room::Room: hearth_mp_server::room::RoomConfig + core::default::Default + 'static
+pub type hearth_mp_server::room::Room::Intent: hearth_mp_sync::schema::Schema + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::room::Room::State: hearth_mp_sync::schema::HearthState
+pub async fn hearth_mp_server::room::Room::on_disconnect(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_dispose(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_handoff(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::handoff::SessionId, hearth_mp_server::handoff::HandoffEvent) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_intent(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, Self::Intent) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_join(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, hearth_mp_server::room::JoinOpts) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_leave(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, hearth_mp_server::room::Leave) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_reconnect(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_tick(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, core::time::Duration) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::room::Room::on_timer(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, hearth_mp_server::room::TimerKey) -> hearth_mp_server::Result<()>
+pub trait hearth_mp_server::room::RoomConfig
+pub const hearth_mp_server::room::RoomConfig::ALLOCATOR: core::option::Option<&'static str>
+pub const hearth_mp_server::room::RoomConfig::CONTAINER: core::option::Option<&'static str>
+pub const hearth_mp_server::room::RoomConfig::EMPTY_GRACE: core::time::Duration
+pub const hearth_mp_server::room::RoomConfig::INTENT_BURST: u32
+pub const hearth_mp_server::room::RoomConfig::INTENT_RATE: u32
+pub const hearth_mp_server::room::RoomConfig::MAX_CLIENTS: u8
+pub const hearth_mp_server::room::RoomConfig::MODE: hearth_mp_server::room::Mode
+pub const hearth_mp_server::room::RoomConfig::PERSIST_EVERY: u32
+pub const hearth_mp_server::room::RoomConfig::RECONNECT_GRACE: core::time::Duration
+pub const hearth_mp_server::room::RoomConfig::TICK_HZ: u8
+pub trait hearth_mp_server::room::RoomRpc: hearth_mp_server::room::Room
+pub type hearth_mp_server::room::RoomRpc::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::room::RoomRpc::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub async fn hearth_mp_server::room::RoomRpc::on_call(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::call::Target, Self::Rpc) -> hearth_mp_server::Result<Self::Reply>
+pub mod hearth_mp_server::runtime
+pub struct hearth_mp_server::runtime::RoomRuntime<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host>
+impl<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::active_sessions(&self) -> hearth_mp_server::Result<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::alarm(&mut self)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::close(&mut self, <H as hearth_mp_server::host::Host>::Socket)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::connect(&mut self, <H as hearth_mp_server::host::Host>::Socket, hearth_mp_server::host::Session, hearth_mp_server::host::RoomName, core::option::Option<alloc::string::String>)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::connect_admin(&mut self, <H as hearth_mp_server::host::Host>::Socket)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::force_dispose(&mut self) -> hearth_mp_server::Result<bool>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::host(&self) -> &H
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::inspect(&mut self) -> hearth_mp_server::Result<core::option::Option<hearth_mp_server::admin::InspectDoc>>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::job_done(&mut self, &hearth_mp_server::handoff::SessionId, core::result::Result<alloc::string::String, alloc::string::String>)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::message(&mut self, <H as hearth_mp_server::host::Host>::Socket, hearth_mp_protocol::frame::WireMsg)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::new(H, &'static str) -> Self
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::next_wake(&self) -> core::option::Option<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::redeem(&mut self, &hearth_mp_server::handoff::SessionId, &str, &str) -> core::result::Result<hearth_mp_server::handoff::Redeemed, hearth_mp_server::handoff::HandoffError>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::redeem_trusted(&mut self, &hearth_mp_server::handoff::SessionId, &str) -> core::result::Result<hearth_mp_server::handoff::Redeemed, hearth_mp_server::handoff::HandoffError>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::reissue_ticket(&mut self, &hearth_mp_server::handoff::SessionId, &hearth_mp_protocol::frame::PlayerId)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::remember_identity(&mut self, &hearth_mp_server::host::RoomName) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::report(&mut self, &hearth_mp_server::handoff::SessionId, &str, hearth_mp_server::handoff::ServerReport) -> core::result::Result<(), hearth_mp_server::handoff::HandoffError>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::seq(&self) -> u64
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::set_matchmaker(&mut self, &str) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::state(&self) -> core::option::Option<&<R as hearth_mp_server::room::Room>::State>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::take_jobs(&mut self) -> alloc::vec::Vec<hearth_mp_server::handoff::AllocJob>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::take_stop_jobs(&mut self) -> alloc::vec::Vec<hearth_mp_server::runtime::StopJob>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::tick_deadline(&self) -> core::option::Option<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::tick_if_due(&mut self)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::ticks(&self) -> u64
+impl<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host + core::clone::Clone + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::hibernate(&mut self)
+impl<R: hearth_mp_server::room::RoomRpc, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::call(&mut self, hearth_mp_server::call::Envelope, &str) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+impl<R, H> core::marker::Freeze for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::Freeze, R: core::marker::Freeze, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::Freeze, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::Freeze
+impl<R, H> !core::marker::Send for hearth_mp_server::runtime::RoomRuntime<R, H>
+impl<R, H> !core::marker::Sync for hearth_mp_server::runtime::RoomRuntime<R, H>
+impl<R, H> core::marker::Unpin for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::Unpin, R: core::marker::Unpin, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::Unpin, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::Unpin
+impl<R, H> core::marker::UnsafeUnpin for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::UnsafeUnpin, R: core::marker::UnsafeUnpin, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::UnsafeUnpin, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::UnsafeUnpin
+impl<R, H> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::RefUnwindSafe, R: core::panic::unwind_safe::RefUnwindSafe, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::panic::unwind_safe::RefUnwindSafe, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::panic::unwind_safe::RefUnwindSafe
+impl<R, H> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::UnwindSafe, R: core::panic::unwind_safe::UnwindSafe, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::panic::unwind_safe::UnwindSafe, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::panic::unwind_safe::UnwindSafe
+pub struct hearth_mp_server::runtime::StopJob
+pub hearth_mp_server::runtime::StopJob::endpoint: alloc::string::String
+pub hearth_mp_server::runtime::StopJob::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::runtime::StopJob
+pub fn hearth_mp_server::runtime::StopJob::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::runtime::StopJob
+pub fn hearth_mp_server::runtime::StopJob::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for hearth_mp_server::runtime::StopJob
+impl core::marker::Send for hearth_mp_server::runtime::StopJob
+impl core::marker::Sync for hearth_mp_server::runtime::StopJob
+impl core::marker::Unpin for hearth_mp_server::runtime::StopJob
+impl core::marker::UnsafeUnpin for hearth_mp_server::runtime::StopJob
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::runtime::StopJob
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::runtime::StopJob
+pub mod hearth_mp_server::schema
+pub struct hearth_mp_server::schema::SchemaDoc
+pub hearth_mp_server::schema::SchemaDoc::hash: alloc::string::String
+pub hearth_mp_server::schema::SchemaDoc::hearth_schema: u32
+pub hearth_mp_server::schema::SchemaDoc::intent: alloc::string::String
+pub hearth_mp_server::schema::SchemaDoc::room: alloc::string::String
+pub hearth_mp_server::schema::SchemaDoc::state: alloc::string::String
+pub hearth_mp_server::schema::SchemaDoc::types: alloc::collections::btree::map::BTreeMap<alloc::string::String, hearth_mp_sync::schema::TypeDef>
+impl serde_core::ser::Serialize for hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema::SchemaDoc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema::SchemaDoc::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Send for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Sync for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Unpin for hearth_mp_server::schema::SchemaDoc
+impl core::marker::UnsafeUnpin for hearth_mp_server::schema::SchemaDoc
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::schema::SchemaDoc
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::schema::SchemaDoc
+pub const hearth_mp_server::schema::HEARTH_SCHEMA_VERSION: u32
+pub fn hearth_mp_server::schema::schema_doc<R: hearth_mp_server::room::Room>(&str) -> hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema::schema_hash<R: hearth_mp_server::room::Room>() -> u64
+pub fn hearth_mp_server::schema::schema_hash_hex<R: hearth_mp_server::room::Room>() -> alloc::string::String
+pub mod hearth_mp_server::service
+pub struct hearth_mp_server::service::ServiceCtx<S: hearth_mp_server::service::Service>
+impl<S: hearth_mp_server::service::Service> hearth_mp_server::service::ServiceCtx<S>
+pub async fn hearth_mp_server::service::ServiceCtx<S>::call<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc) -> core::result::Result<<T as hearth_mp_server::call::Callable>::Reply, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::service::ServiceCtx<S>::cancel_timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>)
+pub fn hearth_mp_server::service::ServiceCtx<S>::me(&self) -> &hearth_mp_server::call::Target
+pub fn hearth_mp_server::service::ServiceCtx<S>::notify<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc)
+pub fn hearth_mp_server::service::ServiceCtx<S>::now_ms(&self) -> u64
+pub fn hearth_mp_server::service::ServiceCtx<S>::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::service::ServiceCtx<S>::state(&mut self) -> &mut <S as hearth_mp_server::service::Service>::State
+pub fn hearth_mp_server::service::ServiceCtx<S>::timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>, core::time::Duration)
+impl<S> core::marker::Freeze for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::Freeze
+impl<S> !core::marker::Send for hearth_mp_server::service::ServiceCtx<S>
+impl<S> !core::marker::Sync for hearth_mp_server::service::ServiceCtx<S>
+impl<S> core::marker::Unpin for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::UnsafeUnpin
+impl<S> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::service::ServiceCtx<S>
+impl<S> !core::panic::unwind_safe::UnwindSafe for hearth_mp_server::service::ServiceCtx<S>
+pub struct hearth_mp_server::service::ServiceRuntime<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host>
+impl<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::service::ServiceRuntime<S, H>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::alarm(&mut self)
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::call(&mut self, hearth_mp_server::call::Envelope, &str) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::inspect(&mut self) -> hearth_mp_server::Result<core::option::Option<hearth_mp_protocol::Value>>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::load(&mut self) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::new(H, &'static str) -> Self
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::state(&self) -> core::option::Option<&<S as hearth_mp_server::service::Service>::State>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::target(&self, &str) -> hearth_mp_server::call::Target
+impl<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host + core::clone::Clone + 'static> hearth_mp_server::service::ServiceRuntime<S, H>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::hibernate(&mut self)
+impl<S, H> core::marker::Freeze for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::Freeze, S: core::marker::Freeze, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::Freeze
+impl<S, H> !core::marker::Send for hearth_mp_server::service::ServiceRuntime<S, H>
+impl<S, H> !core::marker::Sync for hearth_mp_server::service::ServiceRuntime<S, H>
+impl<S, H> core::marker::Unpin for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::Unpin, S: core::marker::Unpin, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::Unpin
+impl<S, H> core::marker::UnsafeUnpin for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::UnsafeUnpin, S: core::marker::UnsafeUnpin, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::UnsafeUnpin
+impl<S, H> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::RefUnwindSafe, S: core::panic::unwind_safe::RefUnwindSafe, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::panic::unwind_safe::RefUnwindSafe
+impl<S, H> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::UnwindSafe, S: core::panic::unwind_safe::UnwindSafe, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::panic::unwind_safe::UnwindSafe
+pub trait hearth_mp_server::service::PlayerService: hearth_mp_server::service::Service
+pub fn hearth_mp_server::service::PlayerService::client_view(&Self::State) -> hearth_mp_protocol::Value
+pub trait hearth_mp_server::service::Service: core::default::Default + 'static
+pub type hearth_mp_server::service::Service::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::service::Service::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::service::Service::State: serde_core::ser::Serialize + serde_core::de::DeserializeOwned + core::default::Default
+pub async fn hearth_mp_server::service::Service::on_call(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, &hearth_mp_server::call::Target, Self::Rpc) -> hearth_mp_server::Result<Self::Reply>
+pub async fn hearth_mp_server::service::Service::on_timer(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, hearth_mp_server::room::TimerKey) -> hearth_mp_server::Result<()>
+#[non_exhaustive] pub enum hearth_mp_server::CallError
+pub hearth_mp_server::CallError::BadRpc(alloc::string::String)
+pub hearth_mp_server::CallError::Handler(alloc::string::String)
+pub hearth_mp_server::CallError::ReentrantCall(hearth_mp_server::call::Target)
+pub hearth_mp_server::CallError::Unreachable(alloc::string::String)
+impl hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::retryable(&self) -> bool
+impl core::clone::Clone for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::call::CallError
+impl core::cmp::PartialEq for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::eq(&self, &Self) -> bool
+impl core::error::Error for hearth_mp_server::call::CallError
+impl core::fmt::Debug for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::CallError
+impl serde_core::ser::Serialize for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::CallError
+pub fn hearth_mp_server::call::CallError::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::CallError
+impl core::marker::Send for hearth_mp_server::call::CallError
+impl core::marker::Sync for hearth_mp_server::call::CallError
+impl core::marker::Unpin for hearth_mp_server::call::CallError
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::CallError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::CallError
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::CallError
+pub enum hearth_mp_server::Cause
+pub hearth_mp_server::Cause::Call
+pub hearth_mp_server::Cause::Call::from: hearth_mp_server::call::Target
+pub hearth_mp_server::Cause::Disconnect
+pub hearth_mp_server::Cause::Disconnect::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Cause::Dispose
+pub hearth_mp_server::Cause::Intent
+pub hearth_mp_server::Cause::Intent::intent_seq: u32
+pub hearth_mp_server::Cause::Intent::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Cause::Join
+pub hearth_mp_server::Cause::Join::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Cause::Leave
+pub hearth_mp_server::Cause::Leave::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Cause::Reconnect
+pub hearth_mp_server::Cause::Reconnect::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Cause::Timer
+pub hearth_mp_server::Cause::Timer::key: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::admin::Cause
+impl core::cmp::PartialEq for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::admin::Cause
+impl serde_core::ser::Serialize for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::Cause
+pub fn hearth_mp_server::admin::Cause::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::Cause
+impl core::marker::Send for hearth_mp_server::admin::Cause
+impl core::marker::Sync for hearth_mp_server::admin::Cause
+impl core::marker::Unpin for hearth_mp_server::admin::Cause
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::Cause
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::Cause
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::Cause
+#[non_exhaustive] pub enum hearth_mp_server::HandoffError
+pub hearth_mp_server::HandoffError::Forbidden
+pub hearth_mp_server::HandoffError::Gone
+pub hearth_mp_server::HandoffError::NotFound
+impl hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::status(self) -> u16
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::HandoffError
+impl core::cmp::PartialEq for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::eq(&self, &Self) -> bool
+impl core::error::Error for hearth_mp_server::handoff::HandoffError
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::handoff::HandoffError
+pub fn hearth_mp_server::handoff::HandoffError::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::handoff::HandoffError
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::HandoffError
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffError
+impl core::marker::Send for hearth_mp_server::handoff::HandoffError
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffError
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffError
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffError
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffError
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffError
+#[non_exhaustive] pub enum hearth_mp_server::HandoffEvent
+pub hearth_mp_server::HandoffEvent::Ended
+pub hearth_mp_server::HandoffEvent::Ended::reason: alloc::string::String
+pub hearth_mp_server::HandoffEvent::Failed
+pub hearth_mp_server::HandoffEvent::Failed::reason: alloc::string::String
+pub hearth_mp_server::HandoffEvent::PlayerJoined(hearth_mp_protocol::frame::PlayerId)
+pub hearth_mp_server::HandoffEvent::PlayerLeft(hearth_mp_protocol::frame::PlayerId)
+pub hearth_mp_server::HandoffEvent::Ready
+pub hearth_mp_server::HandoffEvent::Ready::endpoint: alloc::string::String
+pub hearth_mp_server::HandoffEvent::Result(hearth_mp_protocol::Value)
+pub hearth_mp_server::HandoffEvent::Started
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffEvent
+pub fn hearth_mp_server::handoff::HandoffEvent::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Send for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffEvent
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffEvent
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffEvent
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffEvent
+#[non_exhaustive] pub enum hearth_mp_server::Leave
+pub hearth_mp_server::Leave::Closed
+pub hearth_mp_server::Leave::Kicked
+pub hearth_mp_server::Leave::Left
+impl core::clone::Clone for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Leave
+impl core::cmp::PartialEq for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Leave
+pub fn hearth_mp_server::room::Leave::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::room::Leave
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Leave
+impl core::marker::Freeze for hearth_mp_server::room::Leave
+impl core::marker::Send for hearth_mp_server::room::Leave
+impl core::marker::Sync for hearth_mp_server::room::Leave
+impl core::marker::Unpin for hearth_mp_server::room::Leave
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Leave
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Leave
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Leave
+#[non_exhaustive] pub enum hearth_mp_server::Mode
+pub hearth_mp_server::Mode::Event
+pub hearth_mp_server::Mode::Ticked
+impl core::clone::Clone for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Mode
+impl core::cmp::PartialEq for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Mode
+pub fn hearth_mp_server::room::Mode::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::room::Mode
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Mode
+impl core::marker::Freeze for hearth_mp_server::room::Mode
+impl core::marker::Send for hearth_mp_server::room::Mode
+impl core::marker::Sync for hearth_mp_server::room::Mode
+impl core::marker::Unpin for hearth_mp_server::room::Mode
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Mode
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Mode
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Mode
+#[non_exhaustive] pub enum hearth_mp_server::RoomReport
+pub hearth_mp_server::RoomReport::Disposed
+pub hearth_mp_server::RoomReport::Disposed::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::RoomReport::Open
+pub hearth_mp_server::RoomReport::Open::capacity: u8
+pub hearth_mp_server::RoomReport::Open::created_ms: u64
+pub hearth_mp_server::RoomReport::Open::locked: bool
+pub hearth_mp_server::RoomReport::Open::metadata: hearth_mp_protocol::Value
+pub hearth_mp_server::RoomReport::Open::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::RoomReport::Open::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::RoomReport::Players
+pub hearth_mp_server::RoomReport::Players::capacity: u8
+pub hearth_mp_server::RoomReport::Players::locked: bool
+pub hearth_mp_server::RoomReport::Players::metadata: hearth_mp_protocol::Value
+pub hearth_mp_server::RoomReport::Players::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::RoomReport::Players::room: hearth_mp_server::host::RoomName
+impl core::clone::Clone for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::RoomReport
+impl serde_core::ser::Serialize for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::RoomReport
+pub fn hearth_mp_server::host::RoomReport::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::RoomReport
+impl core::marker::Send for hearth_mp_server::host::RoomReport
+impl core::marker::Sync for hearth_mp_server::host::RoomReport
+impl core::marker::Unpin for hearth_mp_server::host::RoomReport
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::RoomReport
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::RoomReport
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::RoomReport
+#[non_exhaustive] pub enum hearth_mp_server::ServerReport
+pub hearth_mp_server::ServerReport::Ended
+pub hearth_mp_server::ServerReport::Ended::reason: alloc::string::String
+pub hearth_mp_server::ServerReport::Heartbeat
+pub hearth_mp_server::ServerReport::PlayerJoined
+pub hearth_mp_server::ServerReport::PlayerJoined::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::ServerReport::PlayerLeft
+pub hearth_mp_server::ServerReport::PlayerLeft::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::ServerReport::Result
+pub hearth_mp_server::ServerReport::Result::data: hearth_mp_protocol::Value
+pub hearth_mp_server::ServerReport::Started
+impl core::clone::Clone for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::ServerReport
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::ServerReport
+pub fn hearth_mp_server::handoff::ServerReport::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::ServerReport
+impl core::marker::Send for hearth_mp_server::handoff::ServerReport
+impl core::marker::Sync for hearth_mp_server::handoff::ServerReport
+impl core::marker::Unpin for hearth_mp_server::handoff::ServerReport
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::ServerReport
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::ServerReport
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::ServerReport
+pub enum hearth_mp_server::SessionStatus
+pub hearth_mp_server::SessionStatus::Allocating
+pub hearth_mp_server::SessionStatus::Ended
+pub hearth_mp_server::SessionStatus::Failed
+pub hearth_mp_server::SessionStatus::Ready
+pub hearth_mp_server::SessionStatus::Started
+impl hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::as_str(self) -> &'static str
+pub fn hearth_mp_server::handoff::SessionStatus::is_active(self) -> bool
+pub fn hearth_mp_server::handoff::SessionStatus::parse(&str) -> core::option::Option<Self>
+impl core::clone::Clone for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::SessionStatus
+impl core::cmp::PartialEq for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::SessionStatus
+pub fn hearth_mp_server::handoff::SessionStatus::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_server::handoff::SessionStatus
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Freeze for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Send for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Sync for hearth_mp_server::handoff::SessionStatus
+impl core::marker::Unpin for hearth_mp_server::handoff::SessionStatus
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::SessionStatus
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::SessionStatus
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::SessionStatus
+pub enum hearth_mp_server::SqlValue
+pub hearth_mp_server::SqlValue::Blob(alloc::vec::Vec<u8>)
+pub hearth_mp_server::SqlValue::Int(i64)
+pub hearth_mp_server::SqlValue::Null
+pub hearth_mp_server::SqlValue::Real(f64)
+pub hearth_mp_server::SqlValue::Text(alloc::string::String)
+impl core::clone::Clone for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::SqlValue
+pub fn hearth_mp_server::host::SqlValue::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::SqlValue
+impl core::marker::Freeze for hearth_mp_server::host::SqlValue
+impl core::marker::Send for hearth_mp_server::host::SqlValue
+impl core::marker::Sync for hearth_mp_server::host::SqlValue
+impl core::marker::Unpin for hearth_mp_server::host::SqlValue
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::SqlValue
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::SqlValue
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::SqlValue
+pub struct hearth_mp_server::AllocJob
+pub hearth_mp_server::AllocJob::attempt: u32
+pub hearth_mp_server::AllocJob::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::AllocJob::max_duration_ms: u64
+pub hearth_mp_server::AllocJob::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::AllocJob::region: core::option::Option<alloc::string::String>
+pub hearth_mp_server::AllocJob::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::AllocJob::secret: alloc::string::String
+pub hearth_mp_server::AllocJob::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::handoff::AllocJob
+pub fn hearth_mp_server::handoff::AllocJob::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::handoff::AllocJob
+pub fn hearth_mp_server::handoff::AllocJob::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for hearth_mp_server::handoff::AllocJob
+impl core::marker::Send for hearth_mp_server::handoff::AllocJob
+impl core::marker::Sync for hearth_mp_server::handoff::AllocJob
+impl core::marker::Unpin for hearth_mp_server::handoff::AllocJob
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::AllocJob
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::AllocJob
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::AllocJob
+pub struct hearth_mp_server::Attachment
+pub hearth_mp_server::Attachment::admin: bool
+pub hearth_mp_server::Attachment::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::Attachment::encoding: core::option::Option<hearth_mp_protocol::frame::Encoding>
+pub hearth_mp_server::Attachment::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Attachment::provider: alloc::string::String
+pub hearth_mp_server::Attachment::seat: core::option::Option<u8>
+impl core::clone::Clone for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::Attachment
+impl serde_core::ser::Serialize for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::Attachment
+pub fn hearth_mp_server::host::Attachment::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::Attachment
+impl core::marker::Send for hearth_mp_server::host::Attachment
+impl core::marker::Sync for hearth_mp_server::host::Attachment
+impl core::marker::Unpin for hearth_mp_server::host::Attachment
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::Attachment
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::Attachment
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::Attachment
+pub struct hearth_mp_server::CannedFetcher
+impl hearth_mp_server::fetcher::CannedFetcher
+pub fn hearth_mp_server::fetcher::CannedFetcher::failing(self, &str) -> Self
+pub fn hearth_mp_server::fetcher::CannedFetcher::new() -> Self
+pub fn hearth_mp_server::fetcher::CannedFetcher::requests(&self) -> alloc::vec::Vec<hearth_mp_server::fetcher::HttpReq>
+pub fn hearth_mp_server::fetcher::CannedFetcher::route(self, &str, u16, &str) -> Self
+impl core::default::Default for hearth_mp_server::fetcher::CannedFetcher
+pub fn hearth_mp_server::fetcher::CannedFetcher::default() -> Self
+impl hearth_mp_server::fetcher::Fetcher for hearth_mp_server::fetcher::CannedFetcher
+pub async fn hearth_mp_server::fetcher::CannedFetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+impl !core::marker::Freeze for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::Send for hearth_mp_server::fetcher::CannedFetcher
+impl !core::marker::Sync for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::Unpin for hearth_mp_server::fetcher::CannedFetcher
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::CannedFetcher
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::CannedFetcher
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::CannedFetcher
+pub struct hearth_mp_server::Client
+pub hearth_mp_server::Client::connected: bool
+pub hearth_mp_server::Client::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::Client::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Client::provider: alloc::string::String
+pub hearth_mp_server::Client::seat: u8
+impl core::clone::Clone for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::Client
+impl core::cmp::PartialEq for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::room::Client
+pub fn hearth_mp_server::room::Client::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::Client
+impl core::marker::Freeze for hearth_mp_server::room::Client
+impl core::marker::Send for hearth_mp_server::room::Client
+impl core::marker::Sync for hearth_mp_server::room::Client
+impl core::marker::Unpin for hearth_mp_server::room::Client
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::Client
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::Client
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::Client
+pub struct hearth_mp_server::ContainerAllocator<S: hearth_mp_server::allocator::ContainerStarter>
+pub hearth_mp_server::ContainerAllocator::env: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::ContainerAllocator::max_duration: core::time::Duration
+pub hearth_mp_server::ContainerAllocator::port: u16
+pub hearth_mp_server::ContainerAllocator::public_url: alloc::string::String
+pub hearth_mp_server::ContainerAllocator::starter: S
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::ContainerAllocator<S>
+pub fn hearth_mp_server::allocator::ContainerAllocator<S>::new(S, impl core::convert::Into<alloc::string::String>) -> Self
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::ContainerAllocator<S>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<S> core::marker::Freeze for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Freeze
+impl<S> core::marker::Send for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Send
+impl<S> core::marker::Sync for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Sync
+impl<S> core::marker::Unpin for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::marker::UnsafeUnpin
+impl<S> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::panic::unwind_safe::RefUnwindSafe
+impl<S> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::ContainerAllocator<S> where S: core::panic::unwind_safe::UnwindSafe
+pub struct hearth_mp_server::Ctx<R: hearth_mp_server::room::Room>
+impl<R: hearth_mp_server::room::Room> hearth_mp_server::ctx::Ctx<R>
+pub fn hearth_mp_server::ctx::Ctx<R>::broadcast(&mut self, &str, impl serde_core::ser::Serialize)
+pub async fn hearth_mp_server::ctx::Ctx<R>::call<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc) -> core::result::Result<<T as hearth_mp_server::call::Callable>::Reply, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::ctx::Ctx<R>::cancel_timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>)
+pub fn hearth_mp_server::ctx::Ctx<R>::clients(&self) -> &[hearth_mp_server::room::Client]
+pub fn hearth_mp_server::ctx::Ctx<R>::dispose(&mut self)
+pub fn hearth_mp_server::ctx::Ctx<R>::handoff(&mut self, hearth_mp_server::handoff::HandoffRequest) -> hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::ctx::Ctx<R>::kick(&mut self, &hearth_mp_protocol::frame::PlayerId)
+pub fn hearth_mp_server::ctx::Ctx<R>::lock(&mut self)
+pub fn hearth_mp_server::ctx::Ctx<R>::me(&self) -> &hearth_mp_server::call::Target
+pub fn hearth_mp_server::ctx::Ctx<R>::notify<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc)
+pub fn hearth_mp_server::ctx::Ctx<R>::now_ms(&self) -> u64
+pub fn hearth_mp_server::ctx::Ctx<R>::room_name(&self) -> &hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::ctx::Ctx<R>::send(&mut self, &hearth_mp_protocol::frame::PlayerId, &str, impl serde_core::ser::Serialize)
+pub fn hearth_mp_server::ctx::Ctx<R>::set_metadata(&mut self, impl serde_core::ser::Serialize)
+pub fn hearth_mp_server::ctx::Ctx<R>::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::ctx::Ctx<R>::state(&mut self) -> &mut <R as hearth_mp_server::room::Room>::State
+pub fn hearth_mp_server::ctx::Ctx<R>::tick(&self) -> u64
+pub fn hearth_mp_server::ctx::Ctx<R>::timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>, core::time::Duration)
+impl<R> core::marker::Freeze for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::Freeze
+impl<R> !core::marker::Send for hearth_mp_server::ctx::Ctx<R>
+impl<R> !core::marker::Sync for hearth_mp_server::ctx::Ctx<R>
+impl<R> core::marker::Unpin for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::Unpin
+impl<R> core::marker::UnsafeUnpin for hearth_mp_server::ctx::Ctx<R> where <R as hearth_mp_server::room::Room>::State: core::marker::UnsafeUnpin
+impl<R> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::ctx::Ctx<R>
+impl<R> !core::panic::unwind_safe::UnwindSafe for hearth_mp_server::ctx::Ctx<R>
+pub struct hearth_mp_server::Envelope
+pub hearth_mp_server::Envelope::chain: alloc::vec::Vec<hearth_mp_server::call::Target>
+pub hearth_mp_server::Envelope::from: hearth_mp_server::call::Target
+pub hearth_mp_server::Envelope::msg_id: core::option::Option<alloc::string::String>
+pub hearth_mp_server::Envelope::rpc: hearth_mp_protocol::Value
+impl core::clone::Clone for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::Envelope
+impl serde_core::ser::Serialize for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::Envelope
+pub fn hearth_mp_server::call::Envelope::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::Envelope
+impl core::marker::Send for hearth_mp_server::call::Envelope
+impl core::marker::Sync for hearth_mp_server::call::Envelope
+impl core::marker::Unpin for hearth_mp_server::call::Envelope
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::Envelope
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::Envelope
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::Envelope
+#[non_exhaustive] pub struct hearth_mp_server::HandoffRequest
+pub hearth_mp_server::HandoffRequest::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::HandoffRequest::heartbeat_timeout: core::time::Duration
+pub hearth_mp_server::HandoffRequest::max_duration: core::time::Duration
+pub hearth_mp_server::HandoffRequest::players: alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>
+pub hearth_mp_server::HandoffRequest::region: core::option::Option<alloc::string::String>
+pub hearth_mp_server::HandoffRequest::start_timeout: core::time::Duration
+impl hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::heartbeat_timeout(self, core::time::Duration) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::max_duration(self, core::time::Duration) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::new(alloc::vec::Vec<hearth_mp_protocol::frame::PlayerId>, hearth_mp_protocol::Value) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::region(self, impl core::convert::Into<alloc::string::String>) -> Self
+pub fn hearth_mp_server::handoff::HandoffRequest::start_timeout(self, core::time::Duration) -> Self
+impl core::clone::Clone for hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::handoff::HandoffRequest
+pub fn hearth_mp_server::handoff::HandoffRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Freeze for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Send for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Sync for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::Unpin for hearth_mp_server::handoff::HandoffRequest
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::HandoffRequest
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::HandoffRequest
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::HandoffRequest
+pub struct hearth_mp_server::HttpReq
+pub hearth_mp_server::HttpReq::body: core::option::Option<alloc::string::String>
+pub hearth_mp_server::HttpReq::headers: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::HttpReq::method: &'static str
+pub hearth_mp_server::HttpReq::url: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::fetcher::HttpReq
+impl core::cmp::PartialEq for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::fetcher::HttpReq
+pub fn hearth_mp_server::fetcher::HttpReq::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Freeze for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Send for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Sync for hearth_mp_server::fetcher::HttpReq
+impl core::marker::Unpin for hearth_mp_server::fetcher::HttpReq
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::HttpReq
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::HttpReq
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::HttpReq
+pub struct hearth_mp_server::HttpResp
+pub hearth_mp_server::HttpResp::body: alloc::string::String
+pub hearth_mp_server::HttpResp::status: u16
+impl core::clone::Clone for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::fetcher::HttpResp
+impl core::cmp::PartialEq for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::fetcher::HttpResp
+pub fn hearth_mp_server::fetcher::HttpResp::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Freeze for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Send for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Sync for hearth_mp_server::fetcher::HttpResp
+impl core::marker::Unpin for hearth_mp_server::fetcher::HttpResp
+impl core::marker::UnsafeUnpin for hearth_mp_server::fetcher::HttpResp
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::fetcher::HttpResp
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::fetcher::HttpResp
+pub struct hearth_mp_server::InspectClient
+pub hearth_mp_server::InspectClient::connected: bool
+pub hearth_mp_server::InspectClient::held_until_ms: core::option::Option<u64>
+pub hearth_mp_server::InspectClient::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::InspectClient::seat: u8
+impl core::clone::Clone for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::admin::InspectClient
+impl core::cmp::PartialEq for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::admin::InspectClient
+impl serde_core::ser::Serialize for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::InspectClient
+pub fn hearth_mp_server::admin::InspectClient::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::InspectClient
+impl core::marker::Send for hearth_mp_server::admin::InspectClient
+impl core::marker::Sync for hearth_mp_server::admin::InspectClient
+impl core::marker::Unpin for hearth_mp_server::admin::InspectClient
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::InspectClient
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::InspectClient
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::InspectClient
+pub struct hearth_mp_server::InspectDoc
+pub hearth_mp_server::InspectDoc::clients: alloc::vec::Vec<hearth_mp_server::admin::InspectClient>
+pub hearth_mp_server::InspectDoc::created_ms: u64
+pub hearth_mp_server::InspectDoc::incompatible: bool
+pub hearth_mp_server::InspectDoc::locked: bool
+pub hearth_mp_server::InspectDoc::room: hearth_mp_server::host::RoomName
+pub hearth_mp_server::InspectDoc::seq: u64
+pub hearth_mp_server::InspectDoc::state: core::option::Option<hearth_mp_protocol::Value>
+pub hearth_mp_server::InspectDoc::state_bytes: usize
+pub hearth_mp_server::InspectDoc::tick: u64
+pub hearth_mp_server::InspectDoc::timers: alloc::vec::Vec<(alloc::string::String, u64)>
+impl core::clone::Clone for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::InspectDoc
+pub fn hearth_mp_server::admin::InspectDoc::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::InspectDoc
+impl core::marker::Send for hearth_mp_server::admin::InspectDoc
+impl core::marker::Sync for hearth_mp_server::admin::InspectDoc
+impl core::marker::Unpin for hearth_mp_server::admin::InspectDoc
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::InspectDoc
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::InspectDoc
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::InspectDoc
+pub struct hearth_mp_server::JoinOpts(pub hearth_mp_protocol::Value)
+impl core::clone::Clone for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::eq(&self, &Self) -> bool
+impl core::default::Default for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::default() -> Self
+impl core::fmt::Debug for hearth_mp_server::room::JoinOpts
+pub fn hearth_mp_server::room::JoinOpts::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::JoinOpts
+impl core::marker::Freeze for hearth_mp_server::room::JoinOpts
+impl core::marker::Send for hearth_mp_server::room::JoinOpts
+impl core::marker::Sync for hearth_mp_server::room::JoinOpts
+impl core::marker::Unpin for hearth_mp_server::room::JoinOpts
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::JoinOpts
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::JoinOpts
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::JoinOpts
+pub struct hearth_mp_server::Redeemed
+pub hearth_mp_server::Redeemed::claims: hearth_mp_protocol::Value
+pub hearth_mp_server::Redeemed::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::Redeemed::player_id: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Redeemed::provider: alloc::string::String
+pub hearth_mp_server::Redeemed::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::Redeemed
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::Redeemed
+pub fn hearth_mp_server::handoff::Redeemed::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::Redeemed
+impl core::marker::Send for hearth_mp_server::handoff::Redeemed
+impl core::marker::Sync for hearth_mp_server::handoff::Redeemed
+impl core::marker::Unpin for hearth_mp_server::handoff::Redeemed
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::Redeemed
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::Redeemed
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::Redeemed
+pub struct hearth_mp_server::RoomName
+pub hearth_mp_server::RoomName::name: alloc::string::String
+pub hearth_mp_server::RoomName::room_type: alloc::string::String
+impl core::clone::Clone for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::host::RoomName
+impl core::cmp::PartialEq for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::RoomName
+impl serde_core::ser::Serialize for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::host::RoomName
+pub fn hearth_mp_server::host::RoomName::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::host::RoomName
+impl core::marker::Send for hearth_mp_server::host::RoomName
+impl core::marker::Sync for hearth_mp_server::host::RoomName
+impl core::marker::Unpin for hearth_mp_server::host::RoomName
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::RoomName
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::RoomName
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::RoomName
+pub struct hearth_mp_server::RoomRuntime<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host>
+impl<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::active_sessions(&self) -> hearth_mp_server::Result<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::alarm(&mut self)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::close(&mut self, <H as hearth_mp_server::host::Host>::Socket)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::connect(&mut self, <H as hearth_mp_server::host::Host>::Socket, hearth_mp_server::host::Session, hearth_mp_server::host::RoomName, core::option::Option<alloc::string::String>)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::connect_admin(&mut self, <H as hearth_mp_server::host::Host>::Socket)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::force_dispose(&mut self) -> hearth_mp_server::Result<bool>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::host(&self) -> &H
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::inspect(&mut self) -> hearth_mp_server::Result<core::option::Option<hearth_mp_server::admin::InspectDoc>>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::job_done(&mut self, &hearth_mp_server::handoff::SessionId, core::result::Result<alloc::string::String, alloc::string::String>)
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::message(&mut self, <H as hearth_mp_server::host::Host>::Socket, hearth_mp_protocol::frame::WireMsg)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::new(H, &'static str) -> Self
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::next_wake(&self) -> core::option::Option<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::redeem(&mut self, &hearth_mp_server::handoff::SessionId, &str, &str) -> core::result::Result<hearth_mp_server::handoff::Redeemed, hearth_mp_server::handoff::HandoffError>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::redeem_trusted(&mut self, &hearth_mp_server::handoff::SessionId, &str) -> core::result::Result<hearth_mp_server::handoff::Redeemed, hearth_mp_server::handoff::HandoffError>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::reissue_ticket(&mut self, &hearth_mp_server::handoff::SessionId, &hearth_mp_protocol::frame::PlayerId)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::remember_identity(&mut self, &hearth_mp_server::host::RoomName) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::report(&mut self, &hearth_mp_server::handoff::SessionId, &str, hearth_mp_server::handoff::ServerReport) -> core::result::Result<(), hearth_mp_server::handoff::HandoffError>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::seq(&self) -> u64
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::set_matchmaker(&mut self, &str) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::state(&self) -> core::option::Option<&<R as hearth_mp_server::room::Room>::State>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::take_jobs(&mut self) -> alloc::vec::Vec<hearth_mp_server::handoff::AllocJob>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::take_stop_jobs(&mut self) -> alloc::vec::Vec<hearth_mp_server::runtime::StopJob>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::tick_deadline(&self) -> core::option::Option<u64>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::tick_if_due(&mut self)
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::ticks(&self) -> u64
+impl<R: hearth_mp_server::room::Room, H: hearth_mp_server::host::Host + core::clone::Clone + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub fn hearth_mp_server::runtime::RoomRuntime<R, H>::hibernate(&mut self)
+impl<R: hearth_mp_server::room::RoomRpc, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::runtime::RoomRuntime<R, H>
+pub async fn hearth_mp_server::runtime::RoomRuntime<R, H>::call(&mut self, hearth_mp_server::call::Envelope, &str) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+impl<R, H> core::marker::Freeze for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::Freeze, R: core::marker::Freeze, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::Freeze, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::Freeze
+impl<R, H> !core::marker::Send for hearth_mp_server::runtime::RoomRuntime<R, H>
+impl<R, H> !core::marker::Sync for hearth_mp_server::runtime::RoomRuntime<R, H>
+impl<R, H> core::marker::Unpin for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::Unpin, R: core::marker::Unpin, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::Unpin, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::Unpin
+impl<R, H> core::marker::UnsafeUnpin for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::marker::UnsafeUnpin, R: core::marker::UnsafeUnpin, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::marker::UnsafeUnpin, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::marker::UnsafeUnpin
+impl<R, H> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::RefUnwindSafe, R: core::panic::unwind_safe::RefUnwindSafe, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::panic::unwind_safe::RefUnwindSafe, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::panic::unwind_safe::RefUnwindSafe
+impl<R, H> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::runtime::RoomRuntime<R, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::UnwindSafe, R: core::panic::unwind_safe::UnwindSafe, core::option::Option<<R as hearth_mp_server::room::Room>::State>: core::panic::unwind_safe::UnwindSafe, alloc::vec::Vec<(hearth_mp_protocol::frame::PlayerId, u32, <R as hearth_mp_server::room::Room>::Intent)>: core::panic::unwind_safe::UnwindSafe
+pub struct hearth_mp_server::SchemaDoc
+pub hearth_mp_server::SchemaDoc::hash: alloc::string::String
+pub hearth_mp_server::SchemaDoc::hearth_schema: u32
+pub hearth_mp_server::SchemaDoc::intent: alloc::string::String
+pub hearth_mp_server::SchemaDoc::room: alloc::string::String
+pub hearth_mp_server::SchemaDoc::state: alloc::string::String
+pub hearth_mp_server::SchemaDoc::types: alloc::collections::btree::map::BTreeMap<alloc::string::String, hearth_mp_sync::schema::TypeDef>
+impl serde_core::ser::Serialize for hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema::SchemaDoc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema::SchemaDoc::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Send for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Sync for hearth_mp_server::schema::SchemaDoc
+impl core::marker::Unpin for hearth_mp_server::schema::SchemaDoc
+impl core::marker::UnsafeUnpin for hearth_mp_server::schema::SchemaDoc
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::schema::SchemaDoc
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::schema::SchemaDoc
+pub struct hearth_mp_server::ServiceCtx<S: hearth_mp_server::service::Service>
+impl<S: hearth_mp_server::service::Service> hearth_mp_server::service::ServiceCtx<S>
+pub async fn hearth_mp_server::service::ServiceCtx<S>::call<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc) -> core::result::Result<<T as hearth_mp_server::call::Callable>::Reply, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::service::ServiceCtx<S>::cancel_timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>)
+pub fn hearth_mp_server::service::ServiceCtx<S>::me(&self) -> &hearth_mp_server::call::Target
+pub fn hearth_mp_server::service::ServiceCtx<S>::notify<T: hearth_mp_server::call::Callable>(&mut self, &str, <T as hearth_mp_server::call::Callable>::Rpc)
+pub fn hearth_mp_server::service::ServiceCtx<S>::now_ms(&self) -> u64
+pub fn hearth_mp_server::service::ServiceCtx<S>::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::service::ServiceCtx<S>::state(&mut self) -> &mut <S as hearth_mp_server::service::Service>::State
+pub fn hearth_mp_server::service::ServiceCtx<S>::timer(&mut self, impl core::convert::Into<hearth_mp_server::room::TimerKey>, core::time::Duration)
+impl<S> core::marker::Freeze for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::Freeze
+impl<S> !core::marker::Send for hearth_mp_server::service::ServiceCtx<S>
+impl<S> !core::marker::Sync for hearth_mp_server::service::ServiceCtx<S>
+impl<S> core::marker::Unpin for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::Unpin
+impl<S> core::marker::UnsafeUnpin for hearth_mp_server::service::ServiceCtx<S> where <S as hearth_mp_server::service::Service>::State: core::marker::UnsafeUnpin
+impl<S> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::service::ServiceCtx<S>
+impl<S> !core::panic::unwind_safe::UnwindSafe for hearth_mp_server::service::ServiceCtx<S>
+pub struct hearth_mp_server::ServiceRuntime<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host>
+impl<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host + 'static> hearth_mp_server::service::ServiceRuntime<S, H>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::alarm(&mut self)
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::call(&mut self, hearth_mp_server::call::Envelope, &str) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::inspect(&mut self) -> hearth_mp_server::Result<core::option::Option<hearth_mp_protocol::Value>>
+pub async fn hearth_mp_server::service::ServiceRuntime<S, H>::load(&mut self) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::new(H, &'static str) -> Self
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::state(&self) -> core::option::Option<&<S as hearth_mp_server::service::Service>::State>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::target(&self, &str) -> hearth_mp_server::call::Target
+impl<S: hearth_mp_server::service::Service, H: hearth_mp_server::host::Host + core::clone::Clone + 'static> hearth_mp_server::service::ServiceRuntime<S, H>
+pub fn hearth_mp_server::service::ServiceRuntime<S, H>::hibernate(&mut self)
+impl<S, H> core::marker::Freeze for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::Freeze, S: core::marker::Freeze, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::Freeze
+impl<S, H> !core::marker::Send for hearth_mp_server::service::ServiceRuntime<S, H>
+impl<S, H> !core::marker::Sync for hearth_mp_server::service::ServiceRuntime<S, H>
+impl<S, H> core::marker::Unpin for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::Unpin, S: core::marker::Unpin, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::Unpin
+impl<S, H> core::marker::UnsafeUnpin for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::marker::UnsafeUnpin, S: core::marker::UnsafeUnpin, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::marker::UnsafeUnpin
+impl<S, H> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::RefUnwindSafe, S: core::panic::unwind_safe::RefUnwindSafe, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::panic::unwind_safe::RefUnwindSafe
+impl<S, H> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::service::ServiceRuntime<S, H> where alloc::rcs::rc::Rc<H>: core::panic::unwind_safe::UnwindSafe, S: core::panic::unwind_safe::UnwindSafe, core::option::Option<<S as hearth_mp_server::service::Service>::State>: core::panic::unwind_safe::UnwindSafe
+pub struct hearth_mp_server::Session
+pub hearth_mp_server::Session::display_name: core::option::Option<alloc::string::String>
+pub hearth_mp_server::Session::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_server::Session::provider: alloc::string::String
+impl hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::anon(hearth_mp_protocol::frame::PlayerId) -> Self
+impl core::clone::Clone for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::host::Session
+impl core::cmp::PartialEq for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::host::Session
+pub fn hearth_mp_server::host::Session::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::host::Session
+impl core::marker::Freeze for hearth_mp_server::host::Session
+impl core::marker::Send for hearth_mp_server::host::Session
+impl core::marker::Sync for hearth_mp_server::host::Session
+impl core::marker::Unpin for hearth_mp_server::host::Session
+impl core::marker::UnsafeUnpin for hearth_mp_server::host::Session
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::host::Session
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::host::Session
+pub struct hearth_mp_server::SessionId(pub alloc::string::String)
+impl hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::as_str(&self) -> &str
+pub fn hearth_mp_server::handoff::SessionId::new(&hearth_mp_server::host::RoomName) -> Self
+pub fn hearth_mp_server::handoff::SessionId::room(&self) -> core::option::Option<hearth_mp_server::host::RoomName>
+impl core::clone::Clone for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::handoff::SessionId
+impl core::cmp::PartialEq for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::handoff::SessionId
+impl serde_core::ser::Serialize for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::handoff::SessionId
+pub fn hearth_mp_server::handoff::SessionId::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::handoff::SessionId
+impl core::marker::Send for hearth_mp_server::handoff::SessionId
+impl core::marker::Sync for hearth_mp_server::handoff::SessionId
+impl core::marker::Unpin for hearth_mp_server::handoff::SessionId
+impl core::marker::UnsafeUnpin for hearth_mp_server::handoff::SessionId
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::handoff::SessionId
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::handoff::SessionId
+pub struct hearth_mp_server::StartRequest
+pub hearth_mp_server::StartRequest::env: alloc::vec::Vec<(alloc::string::String, alloc::string::String)>
+pub hearth_mp_server::StartRequest::max_duration_ms: u64
+pub hearth_mp_server::StartRequest::port: u16
+pub hearth_mp_server::StartRequest::report_url: alloc::string::String
+pub hearth_mp_server::StartRequest::secret: alloc::string::String
+pub hearth_mp_server::StartRequest::sid: hearth_mp_server::handoff::SessionId
+impl core::clone::Clone for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::allocator::StartRequest
+impl core::cmp::PartialEq for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::allocator::StartRequest
+pub fn hearth_mp_server::allocator::StartRequest::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_server::allocator::StartRequest
+impl core::marker::Freeze for hearth_mp_server::allocator::StartRequest
+impl core::marker::Send for hearth_mp_server::allocator::StartRequest
+impl core::marker::Sync for hearth_mp_server::allocator::StartRequest
+impl core::marker::Unpin for hearth_mp_server::allocator::StartRequest
+impl core::marker::UnsafeUnpin for hearth_mp_server::allocator::StartRequest
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::StartRequest
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::StartRequest
+pub struct hearth_mp_server::TailMsg
+pub hearth_mp_server::TailMsg::cause: alloc::vec::Vec<hearth_mp_server::admin::Cause>
+pub hearth_mp_server::TailMsg::ops: alloc::vec::Vec<hearth_mp_protocol::frame::PatchOp>
+pub hearth_mp_server::TailMsg::rejected: alloc::vec::Vec<u32>
+pub hearth_mp_server::TailMsg::seq: u64
+impl core::clone::Clone for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::admin::TailMsg
+pub fn hearth_mp_server::admin::TailMsg::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::admin::TailMsg
+impl core::marker::Send for hearth_mp_server::admin::TailMsg
+impl core::marker::Sync for hearth_mp_server::admin::TailMsg
+impl core::marker::Unpin for hearth_mp_server::admin::TailMsg
+impl core::marker::UnsafeUnpin for hearth_mp_server::admin::TailMsg
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::admin::TailMsg
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::admin::TailMsg
+pub struct hearth_mp_server::Target
+pub hearth_mp_server::Target::binding: alloc::string::String
+pub hearth_mp_server::Target::name: alloc::string::String
+impl hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::new(impl core::convert::Into<alloc::string::String>, impl core::convert::Into<alloc::string::String>) -> Self
+impl core::clone::Clone for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::call::Target
+impl core::cmp::PartialEq for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::call::Target
+impl serde_core::ser::Serialize for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_server::call::Target
+pub fn hearth_mp_server::call::Target::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_server::call::Target
+impl core::marker::Send for hearth_mp_server::call::Target
+impl core::marker::Sync for hearth_mp_server::call::Target
+impl core::marker::Unpin for hearth_mp_server::call::Target
+impl core::marker::UnsafeUnpin for hearth_mp_server::call::Target
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::call::Target
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::call::Target
+pub struct hearth_mp_server::TimerKey(pub alloc::string::String)
+impl core::clone::Clone for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_server::room::TimerKey
+impl core::cmp::PartialEq for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::eq(&self, &Self) -> bool
+impl core::convert::From<&str> for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::from(&str) -> Self
+impl core::convert::From<alloc::string::String> for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::from(alloc::string::String) -> Self
+impl core::fmt::Debug for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for hearth_mp_server::room::TimerKey
+pub fn hearth_mp_server::room::TimerKey::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for hearth_mp_server::room::TimerKey
+impl core::marker::Freeze for hearth_mp_server::room::TimerKey
+impl core::marker::Send for hearth_mp_server::room::TimerKey
+impl core::marker::Sync for hearth_mp_server::room::TimerKey
+impl core::marker::Unpin for hearth_mp_server::room::TimerKey
+impl core::marker::UnsafeUnpin for hearth_mp_server::room::TimerKey
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::room::TimerKey
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_server::room::TimerKey
+pub struct hearth_mp_server::WebhookAllocator<F: hearth_mp_server::fetcher::Fetcher>
+pub hearth_mp_server::WebhookAllocator::allow_insecure_endpoints: bool
+pub hearth_mp_server::WebhookAllocator::fetcher: F
+pub hearth_mp_server::WebhookAllocator::public_url: alloc::string::String
+pub hearth_mp_server::WebhookAllocator::secret: alloc::vec::Vec<u8>
+pub hearth_mp_server::WebhookAllocator::url: alloc::string::String
+impl<F: hearth_mp_server::fetcher::Fetcher> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::WebhookAllocator<F>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<F> core::marker::Freeze for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Freeze
+impl<F> core::marker::Send for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Send
+impl<F> core::marker::Sync for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Sync
+impl<F> core::marker::Unpin for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::Unpin
+impl<F> core::marker::UnsafeUnpin for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::marker::UnsafeUnpin
+impl<F> core::panic::unwind_safe::RefUnwindSafe for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::panic::unwind_safe::RefUnwindSafe
+impl<F> core::panic::unwind_safe::UnwindSafe for hearth_mp_server::allocator::WebhookAllocator<F> where F: core::panic::unwind_safe::UnwindSafe
+pub const hearth_mp_server::ANON_PROVIDER: &str
+pub const hearth_mp_server::DEFAULT_CONTAINER_PORT: u16
+pub const hearth_mp_server::HEARTH_SCHEMA_VERSION: u32
+pub trait hearth_mp_server::Allocator
+pub async fn hearth_mp_server::Allocator::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::Allocator::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<F: hearth_mp_server::fetcher::Fetcher> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::WebhookAllocator<F>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::WebhookAllocator<F>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+impl<S: hearth_mp_server::allocator::ContainerStarter> hearth_mp_server::allocator::Allocator for hearth_mp_server::allocator::ContainerAllocator<S>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::allocate(&self, &hearth_mp_server::handoff::AllocJob) -> core::result::Result<alloc::string::String, alloc::string::String>
+pub async fn hearth_mp_server::allocator::ContainerAllocator<S>::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+pub trait hearth_mp_server::Callable
+pub type hearth_mp_server::Callable::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::Callable::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub const hearth_mp_server::Callable::BINDING: &'static str
+pub trait hearth_mp_server::ContainerStarter
+pub async fn hearth_mp_server::ContainerStarter::start(&self, hearth_mp_server::allocator::StartRequest) -> core::result::Result<(), alloc::string::String>
+pub async fn hearth_mp_server::ContainerStarter::stop(&self, &hearth_mp_server::handoff::SessionId) -> core::result::Result<(), alloc::string::String>
+pub trait hearth_mp_server::Fetcher
+pub async fn hearth_mp_server::Fetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+impl hearth_mp_server::fetcher::Fetcher for hearth_mp_server::fetcher::CannedFetcher
+pub async fn hearth_mp_server::fetcher::CannedFetcher::send(&self, hearth_mp_server::fetcher::HttpReq) -> core::result::Result<hearth_mp_server::fetcher::HttpResp, alloc::string::String>
+pub trait hearth_mp_server::Host: crate::__private::Sealed
+pub type hearth_mp_server::Host::Socket: core::clone::Clone + core::cmp::PartialEq
+pub fn hearth_mp_server::Host::attachment(&self, &Self::Socket) -> core::option::Option<hearth_mp_server::host::Attachment>
+pub async fn hearth_mp_server::Host::call(&self, &hearth_mp_server::call::Target, hearth_mp_server::call::Envelope) -> core::result::Result<hearth_mp_protocol::Value, hearth_mp_server::call::CallError>
+pub fn hearth_mp_server::Host::close(&self, &Self::Socket, u16, &str)
+pub fn hearth_mp_server::Host::count_full_state(&self)
+pub fn hearth_mp_server::Host::has_binding(&self, &str) -> bool
+pub fn hearth_mp_server::Host::log_line(&self, &str)
+pub fn hearth_mp_server::Host::loops_ticks(&self) -> bool
+pub fn hearth_mp_server::Host::now_ms(&self) -> u64
+pub fn hearth_mp_server::Host::send(&self, &Self::Socket, hearth_mp_protocol::frame::WireMsg)
+pub async fn hearth_mp_server::Host::set_alarm(&self, core::option::Option<u64>) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_server::Host::set_attachment(&self, &Self::Socket, &hearth_mp_server::host::Attachment)
+pub fn hearth_mp_server::Host::sockets(&self) -> alloc::vec::Vec<Self::Socket>
+pub fn hearth_mp_server::Host::sql(&self) -> &dyn hearth_mp_server::host::Sql
+pub fn hearth_mp_server::Host::sql_handle(&self) -> alloc::rcs::rc::Rc<dyn hearth_mp_server::host::Sql>
+pub async fn hearth_mp_server::Host::wipe(&self) -> hearth_mp_server::Result<()>
+pub trait hearth_mp_server::PlayerService: hearth_mp_server::service::Service
+pub fn hearth_mp_server::PlayerService::client_view(&Self::State) -> hearth_mp_protocol::Value
+pub trait hearth_mp_server::Room: hearth_mp_server::room::RoomConfig + core::default::Default + 'static
+pub type hearth_mp_server::Room::Intent: hearth_mp_sync::schema::Schema + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::Room::State: hearth_mp_sync::schema::HearthState
+pub async fn hearth_mp_server::Room::on_disconnect(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_dispose(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_handoff(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::handoff::SessionId, hearth_mp_server::handoff::HandoffEvent) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_intent(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, Self::Intent) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_join(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, hearth_mp_server::room::JoinOpts) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_leave(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client, hearth_mp_server::room::Leave) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_reconnect(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::room::Client) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_tick(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, core::time::Duration) -> hearth_mp_server::Result<()>
+pub async fn hearth_mp_server::Room::on_timer(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, hearth_mp_server::room::TimerKey) -> hearth_mp_server::Result<()>
+pub trait hearth_mp_server::RoomConfig
+pub const hearth_mp_server::RoomConfig::ALLOCATOR: core::option::Option<&'static str>
+pub const hearth_mp_server::RoomConfig::CONTAINER: core::option::Option<&'static str>
+pub const hearth_mp_server::RoomConfig::EMPTY_GRACE: core::time::Duration
+pub const hearth_mp_server::RoomConfig::INTENT_BURST: u32
+pub const hearth_mp_server::RoomConfig::INTENT_RATE: u32
+pub const hearth_mp_server::RoomConfig::MAX_CLIENTS: u8
+pub const hearth_mp_server::RoomConfig::MODE: hearth_mp_server::room::Mode
+pub const hearth_mp_server::RoomConfig::PERSIST_EVERY: u32
+pub const hearth_mp_server::RoomConfig::RECONNECT_GRACE: core::time::Duration
+pub const hearth_mp_server::RoomConfig::TICK_HZ: u8
+pub trait hearth_mp_server::RoomRpc: hearth_mp_server::room::Room
+pub type hearth_mp_server::RoomRpc::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::RoomRpc::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub async fn hearth_mp_server::RoomRpc::on_call(&mut self, &mut hearth_mp_server::ctx::Ctx<Self>, &hearth_mp_server::call::Target, Self::Rpc) -> hearth_mp_server::Result<Self::Reply>
+pub trait hearth_mp_server::Service: core::default::Default + 'static
+pub type hearth_mp_server::Service::Reply: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::Service::Rpc: serde_core::ser::Serialize + serde_core::de::DeserializeOwned
+pub type hearth_mp_server::Service::State: serde_core::ser::Serialize + serde_core::de::DeserializeOwned + core::default::Default
+pub async fn hearth_mp_server::Service::on_call(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, &hearth_mp_server::call::Target, Self::Rpc) -> hearth_mp_server::Result<Self::Reply>
+pub async fn hearth_mp_server::Service::on_timer(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, hearth_mp_server::room::TimerKey) -> hearth_mp_server::Result<()>
+pub trait hearth_mp_server::Sql
+pub fn hearth_mp_server::Sql::exec(&self, &str, alloc::vec::Vec<hearth_mp_server::host::SqlValue>) -> hearth_mp_server::Result<alloc::vec::Vec<serde_json::map::Map<alloc::string::String, serde_json::value::Value>>>
+pub fn hearth_mp_server::schema_doc<R: hearth_mp_server::room::Room>(&str) -> hearth_mp_server::schema::SchemaDoc
+pub fn hearth_mp_server::schema_hash<R: hearth_mp_server::room::Room>() -> u64
+pub fn hearth_mp_server::schema_hash_hex<R: hearth_mp_server::room::Room>() -> alloc::string::String
+pub type hearth_mp_server::Result<T> = anyhow::Result<T>

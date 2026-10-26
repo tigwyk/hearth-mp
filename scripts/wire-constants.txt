@@ -1,0 +1,34 @@
+# Frozen protocol v1 strings (spec/protocol-v1.md, docs/release/naming.md).
+# A rename must never change them. One per line: the string, a tab, and a
+# source file that must still contain it.
+# crates/hearth-mp-protocol/tests/wire_constants.rs checks every line.
+hearth:ping	crates/hearth-mp-protocol/src/frame.rs
+hearth:pong	crates/hearth-mp-protocol/src/frame.rs
+"hearth.handoff"	crates/hearth-mp-server/src/handoff.rs
+"hearth.handoff_ended"	crates/hearth-mp-server/src/handoff.rs
+X-Hearth-Player-Id	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Room	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Matchmaker	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Provider	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Display-Name	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Session-Secret	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Claims	crates/hearth-mp-gateway/src/routes.rs
+X-Hearth-Timestamp	crates/hearth-mp-server/src/allocator.rs
+X-Hearth-Signature	crates/hearth-mp-server/src/allocator.rs
+X-Hearth-Name	crates/hearth-mp-server/src/worker.rs
+/__hearth/connect	crates/hearth-mp-server/src/worker.rs
+/__hearth/call	crates/hearth-mp-server/src/worker.rs
+/__hearth/inspect	crates/hearth-mp-server/src/worker.rs
+/__hearth/redeem	crates/hearth-mp-gateway/src/routes.rs
+/__hearth/report	crates/hearth-mp-gateway/src/routes.rs
+hearth_held	crates/hearth-mp-server/src/store.rs
+hearth_meta	crates/hearth-mp-server/src/store.rs
+hearth_state	crates/hearth-mp-server/src/store.rs
+hearth_timers	crates/hearth-mp-server/src/store.rs
+hearth_sessions	crates/hearth-mp-server/src/handoff.rs
+hearth_tickets	crates/hearth-mp-server/src/handoff.rs
+hearth_outbox	crates/hearth-mp-server/src/outbox.rs
+hearth_inbox	crates/hearth-mp-server/src/outbox.rs
+hearth_stops	crates/hearth-mp-server/src/runtime.rs
+hearth_rooms	crates/hearth-mp-admin/src/registry.rs
+hearth_schema	crates/hearth-mp-server/src/schema.rs

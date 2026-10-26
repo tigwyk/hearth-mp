@@ -5,7 +5,7 @@ extends SceneTree
 ## through the `Hearth` client's public API (`login_anonymous`, `join`,
 ## `send_intent`, `leave`). Start the server first:
 ##
-##   cargo run -p hearth-conformance-server            # ws on 127.0.0.1:8790
+##   cargo run -p hearth-mp-conformance-server            # ws on 127.0.0.1:8790
 ##   $env:HEARTH_CONFORMANCE_URL="http://127.0.0.1:8790"
 ##   $env:HEARTH_FORCE_WEB="1"   # the pure-GDScript client; unset for the GDExtension
 ##   godot --headless --path examples/tictactoe-godot -s tests/scenario_runner.gd
@@ -14,7 +14,7 @@ extends SceneTree
 ## HEARTH_REQUIRE_CONFORMANCE=1, which makes it a failure.
 ##
 ## Observed frames, compared with each `expect` pattern exactly as the Rust
-## runner does (crates/hearth-conformance-server/tests/scenarios.rs): every given
+## runner does (crates/hearth-mp-conformance-server/tests/scenarios.rs): every given
 ## field equal, "*" matches anything, "$absent" means the key must be missing,
 ## arrays match element-wise, numbers compare as numbers.
 

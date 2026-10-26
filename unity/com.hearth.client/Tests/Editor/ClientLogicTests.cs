@@ -18,7 +18,7 @@ namespace Hearth.Tests
         public void SetUp()
         {
             sockets.Clear();
-            go = new GameObject("hearth-test");
+            go = new GameObject("hearth-mp-test");
             client = go.AddComponent<HearthClient>();
             client.ServerUrl = "http://127.0.0.1:8787";
             client.Token = "tok";

@@ -20,8 +20,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
-use hearth_handoff_server::{ServerReport, Session, DEFAULT_HEARTBEAT};
-use hearth_server::PlayerId;
+use hearth_mp_handoff_server::{ServerReport, Session, DEFAULT_HEARTBEAT};
+use hearth_mp_server::PlayerId;
 use serde_json::json;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
@@ -106,7 +106,7 @@ struct Shared {
 
 impl Shared {
     /// Report a lifecycle event, if this process was started with a session.
-    /// `hearth-handoff-server` is blocking, so the call moves off the reactor.
+    /// `hearth-mp-handoff-server` is blocking, so the call moves off the reactor.
     fn report(&self, report: ServerReport) {
         let Some(session) = self.session.clone() else {
             return;

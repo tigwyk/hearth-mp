@@ -12,14 +12,14 @@ the sample server crate, so the client's schema hash can never drift.
 ./scripts/sync-addon.ps1
 
 # 2. Build and install the GDExtension (native backend only).
-cargo build -p hearth-godot --release
-Copy-Item ../../target/release/hearth_godot.dll ../../godot/addons/hearth/bin/windows/
+cargo build -p hearth-mp-godot --release
+Copy-Item ../../target/release/hearth_mp_godot.dll ../../godot/addons/hearth/bin/windows/
 ./scripts/sync-addon.ps1
 
 # 3. Regenerate the typed state classes after every change to
 #    examples/tictactoe/src/lib.rs (from the repo root). The committed `hearth/`
 #    output is what the project and its tests use.
-cargo run -p hearth-cli -- codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+cargo run -p hearth-mp-cli -- codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
 
 # 4. Start the sample server (examples/tictactoe/wrangler.toml) in another shell.
 cd ../tictactoe; npx wrangler dev

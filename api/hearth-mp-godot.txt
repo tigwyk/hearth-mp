@@ -1,0 +1,107 @@
+pub mod hearth_mp_godot
+pub mod hearth_mp_godot::convert
+pub enum hearth_mp_godot::convert::NumberRepr
+pub hearth_mp_godot::convert::NumberRepr::Float(f64)
+pub hearth_mp_godot::convert::NumberRepr::Int(i64)
+impl core::clone::Clone for hearth_mp_godot::convert::NumberRepr
+pub fn hearth_mp_godot::convert::NumberRepr::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_godot::convert::NumberRepr
+pub fn hearth_mp_godot::convert::NumberRepr::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_godot::convert::NumberRepr
+pub fn hearth_mp_godot::convert::NumberRepr::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for hearth_mp_godot::convert::NumberRepr
+impl core::marker::StructuralPartialEq for hearth_mp_godot::convert::NumberRepr
+impl core::marker::Freeze for hearth_mp_godot::convert::NumberRepr
+impl core::marker::Send for hearth_mp_godot::convert::NumberRepr
+impl core::marker::Sync for hearth_mp_godot::convert::NumberRepr
+impl core::marker::Unpin for hearth_mp_godot::convert::NumberRepr
+impl core::marker::UnsafeUnpin for hearth_mp_godot::convert::NumberRepr
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_godot::convert::NumberRepr
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_godot::convert::NumberRepr
+pub trait hearth_mp_godot::convert::BuildVariant: core::marker::Sized
+pub fn hearth_mp_godot::convert::BuildVariant::array(alloc::vec::Vec<Self>) -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::bool(bool) -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::float(f64) -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::int(i64) -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::nil() -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::object(alloc::vec::Vec<(alloc::string::String, Self)>) -> Self
+pub fn hearth_mp_godot::convert::BuildVariant::string(alloc::string::String) -> Self
+impl hearth_mp_godot::convert::BuildVariant for godot_core::builtin::variant::Variant
+pub fn godot_core::builtin::variant::Variant::array(alloc::vec::Vec<Self>) -> Self
+pub fn godot_core::builtin::variant::Variant::bool(bool) -> Self
+pub fn godot_core::builtin::variant::Variant::float(f64) -> Self
+pub fn godot_core::builtin::variant::Variant::int(i64) -> Self
+pub fn godot_core::builtin::variant::Variant::nil() -> Self
+pub fn godot_core::builtin::variant::Variant::object(alloc::vec::Vec<(alloc::string::String, Self)>) -> Self
+pub fn godot_core::builtin::variant::Variant::string(alloc::string::String) -> Self
+pub fn hearth_mp_godot::convert::build<B: hearth_mp_godot::convert::BuildVariant>(&serde_json::value::Value) -> B
+pub fn hearth_mp_godot::convert::float_to_json(f64) -> serde_json::value::Value
+pub fn hearth_mp_godot::convert::json_to_variant(&serde_json::value::Value) -> godot_core::builtin::variant::Variant
+pub fn hearth_mp_godot::convert::key_is_string(godot_ffi::gen::central::VariantType) -> bool
+pub fn hearth_mp_godot::convert::number_repr(&serde_json::number::Number) -> hearth_mp_godot::convert::NumberRepr
+pub fn hearth_mp_godot::convert::variant_to_json(&godot_core::builtin::variant::Variant) -> core::result::Result<serde_json::value::Value, alloc::string::String>
+pub macro hearth_mp_godot::predictor!
+pub struct hearth_mp_godot::HearthInterp
+impl godot_core::gen::classes::ref_counted::re_export::IRefCounted for hearth_mp_godot::HearthInterp
+pub fn hearth_mp_godot::HearthInterp::init(godot_core::obj::base::Base<godot_core::gen::classes::ref_counted::re_export::RefCounted>) -> Self
+impl godot_core::obj::bounds::private::Bounds for hearth_mp_godot::HearthInterp
+pub type hearth_mp_godot::HearthInterp::Declarer = godot_core::obj::bounds::DeclUser
+pub type hearth_mp_godot::HearthInterp::Memory = <<hearth_mp_godot::HearthInterp as godot_core::obj::traits::GodotClass>::Base as godot_core::obj::bounds::private::Bounds>::Memory
+impl godot_core::obj::traits::GodotClass for hearth_mp_godot::HearthInterp
+pub type hearth_mp_godot::HearthInterp::Base = godot_core::gen::classes::ref_counted::re_export::RefCounted
+pub fn hearth_mp_godot::HearthInterp::class_id() -> godot_core::meta::class_id::ClassId
+impl godot_core::obj::traits::Inherits<godot_core::gen::classes::object::re_export::Object> for hearth_mp_godot::HearthInterp
+impl godot_core::obj::traits::Inherits<godot_core::gen::classes::ref_counted::re_export::RefCounted> for hearth_mp_godot::HearthInterp
+impl godot_core::obj::traits::WithBaseField for hearth_mp_godot::HearthInterp
+pub fn hearth_mp_godot::HearthInterp::to_gd(&self) -> godot_core::obj::gd::Gd<hearth_mp_godot::HearthInterp>
+impl godot_core::obj::traits::WithSignals for hearth_mp_godot::HearthInterp
+pub type hearth_mp_godot::HearthInterp::SignalCollection<'c, C: godot_core::obj::traits::WithSignals> = __godot_Signals_HearthInterp<'c, C>
+impl godot_core::obj::traits::WithUserSignals for hearth_mp_godot::HearthInterp
+pub fn hearth_mp_godot::HearthInterp::signals(&mut self) -> Self::SignalCollection
+impl godot_core::obj::traits::cap::GodotDefault for hearth_mp_godot::HearthInterp
+impl godot_core::obj::traits::cap::ImplementsGodotApi for hearth_mp_godot::HearthInterp
+impl godot_core::obj::traits::cap::ImplementsGodotExports for hearth_mp_godot::HearthInterp
+impl godot_core::obj::traits::cap::ImplementsGodotVirtual for hearth_mp_godot::HearthInterp
+impl godot_core::private::You_forgot_the_attribute__godot_api for hearth_mp_godot::HearthInterp
+impl core::marker::Freeze for hearth_mp_godot::HearthInterp
+impl !core::marker::Send for hearth_mp_godot::HearthInterp
+impl !core::marker::Sync for hearth_mp_godot::HearthInterp
+impl core::marker::Unpin for hearth_mp_godot::HearthInterp
+impl core::marker::UnsafeUnpin for hearth_mp_godot::HearthInterp
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_godot::HearthInterp
+impl !core::panic::unwind_safe::UnwindSafe for hearth_mp_godot::HearthInterp
+pub struct hearth_mp_godot::HearthNative
+impl hearth_mp_godot::HearthNative
+pub fn hearth_mp_godot::HearthNative::get_debug_latency_ms(&self) -> <i64 as godot_core::meta::godot_convert::GodotConvert>::Via
+pub fn hearth_mp_godot::HearthNative::set_debug_latency_ms(&mut self, <i64 as godot_core::meta::godot_convert::GodotConvert>::Via)
+impl godot_core::gen::classes::node::re_export::INode for hearth_mp_godot::HearthNative
+pub fn hearth_mp_godot::HearthNative::init(godot_core::obj::base::Base<godot_core::gen::classes::node::re_export::Node>) -> Self
+pub fn hearth_mp_godot::HearthNative::process(&mut self, f64)
+pub fn hearth_mp_godot::HearthNative::ready(&mut self)
+impl godot_core::obj::bounds::private::Bounds for hearth_mp_godot::HearthNative
+pub type hearth_mp_godot::HearthNative::Declarer = godot_core::obj::bounds::DeclUser
+pub type hearth_mp_godot::HearthNative::Memory = <<hearth_mp_godot::HearthNative as godot_core::obj::traits::GodotClass>::Base as godot_core::obj::bounds::private::Bounds>::Memory
+impl godot_core::obj::traits::GodotClass for hearth_mp_godot::HearthNative
+pub type hearth_mp_godot::HearthNative::Base = godot_core::gen::classes::node::re_export::Node
+pub fn hearth_mp_godot::HearthNative::class_id() -> godot_core::meta::class_id::ClassId
+impl godot_core::obj::traits::Inherits<godot_core::gen::classes::node::re_export::Node> for hearth_mp_godot::HearthNative
+impl godot_core::obj::traits::Inherits<godot_core::gen::classes::object::re_export::Object> for hearth_mp_godot::HearthNative
+impl godot_core::obj::traits::WithBaseField for hearth_mp_godot::HearthNative
+pub fn hearth_mp_godot::HearthNative::to_gd(&self) -> godot_core::obj::gd::Gd<hearth_mp_godot::HearthNative>
+impl godot_core::obj::traits::WithSignals for hearth_mp_godot::HearthNative
+pub type hearth_mp_godot::HearthNative::SignalCollection<'c, C: godot_core::obj::traits::WithSignals> = __godot_Signals_HearthNative<'c, C>
+impl godot_core::obj::traits::WithUserSignals for hearth_mp_godot::HearthNative
+pub fn hearth_mp_godot::HearthNative::signals(&mut self) -> Self::SignalCollection
+impl godot_core::obj::traits::cap::GodotDefault for hearth_mp_godot::HearthNative
+impl godot_core::obj::traits::cap::ImplementsGodotApi for hearth_mp_godot::HearthNative
+impl godot_core::obj::traits::cap::ImplementsGodotExports for hearth_mp_godot::HearthNative
+impl godot_core::obj::traits::cap::ImplementsGodotVirtual for hearth_mp_godot::HearthNative
+impl godot_core::private::You_forgot_the_attribute__godot_api for hearth_mp_godot::HearthNative
+impl core::marker::Freeze for hearth_mp_godot::HearthNative
+impl !core::marker::Send for hearth_mp_godot::HearthNative
+impl !core::marker::Sync for hearth_mp_godot::HearthNative
+impl core::marker::Unpin for hearth_mp_godot::HearthNative
+impl core::marker::UnsafeUnpin for hearth_mp_godot::HearthNative
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_godot::HearthNative
+impl !core::panic::unwind_safe::UnwindSafe for hearth_mp_godot::HearthNative
+pub const hearth_mp_godot::PREDICT_TICK_HZ: u8

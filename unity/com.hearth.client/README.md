@@ -11,7 +11,7 @@ mobile and WebGL.
    host can build; `--only webgl` for the WebGL core).
 2. Add the package by git URL (`?path=unity/com.hearth.client`) or from disk.
 3. Generate typed state from your room crate:
-   `hearth codegen --unity Assets/Hearth --manifest-path my-game/Cargo.toml`.
+   `hearth-mp codegen --unity Assets/Hearth --manifest-path my-game/Cargo.toml`.
 
 ## Use
 
@@ -24,12 +24,12 @@ room.Send(TicTacToeIntents.Place(4));
 ```
 
 Every callback runs on the main thread. `Window/Hearth` shows each client's live
-state and patches, and can start `hearth dev` when you press Play.
+state and patches, and can start `hearth-mp dev` when you press Play.
 
 Ticked rooms: `room.Interpolator(new object[] { "avatars", "*", "pos" })` samples
 other players smoothly; `new HearthPredictor<TState>(room, "arena", 20)` predicts
 your own with the game's logic compiled into a custom plugin
-(`hearth_unity_core::plugin! { logic: { "arena" => arena_logic::Arena } }`, built
+(`hearth_mp_unity_core::plugin! { logic: { "arena" => arena_logic::Arena } }`, built
 with `build-unity-native.sh --crate .. --out Assets/Plugins/Hearth` and the
 `HEARTH_CUSTOM_PLUGIN` scripting define). See
 [docs/ticked.md](../../docs/ticked.md#8-prediction-in-unity).

@@ -6,7 +6,7 @@
 #   scripts/build-unity-native.sh --crate examples/arena-unity-plugin \
 #       --out examples/arena-unity/Assets/Plugins/Hearth          # a game's own plugin
 #
-# Without --crate this builds the stock plugin (crates/hearth-unity-plugin) into
+# Without --crate this builds the stock plugin (crates/hearth-mp-unity-plugin) into
 # the package's Plugins/ (WebGL core: Runtime/StreamingAssets~). With --out,
 # binaries go to <out>/<Platform>/ and the WebGL core to <out>/WebGL~, which the
 # package's WebGL build hook prefers over its own.
@@ -16,7 +16,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="$ROOT/unity/com.hearth.client"
-CRATE_DIR="$ROOT/crates/hearth-unity-plugin"
+CRATE_DIR="$ROOT/crates/hearth-mp-unity-plugin"
 OUT=""
 ONLY=""
 

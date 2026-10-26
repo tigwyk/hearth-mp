@@ -1,7 +1,7 @@
 extends RefCounted
 ## Pure-GDScript snapshot interpolation for ticked rooms (v0.4 Task 6).
 ##
-## The port of `hearth_client::Interpolator` + `ClockSync` used by the web
+## The port of `hearth_mp_client::Interpolator` + `ClockSync` used by the web
 ## backend (`hearth_web_client.gd`); `Hearth.interpolator(paths)` returns one of
 ## these on web builds and a native `HearthInterp` otherwise. Both expose the
 ## same `sample`/`sample_v2` API.

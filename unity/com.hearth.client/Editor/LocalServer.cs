@@ -11,7 +11,7 @@ namespace Hearth.Editor
 {
     /// <summary>
     /// The "local server" play-mode toggle: when play mode starts, start
-    /// <c>hearth dev</c> (or <c>wrangler dev</c>) in the room crate unless the
+    /// <c>hearth-mp dev</c> (or <c>wrangler dev</c>) in the room crate unless the
     /// port already answers, and point every <see cref="HearthClient"/> at it.
     /// The server keeps running between play sessions; only a process this
     /// class started is ever killed.
@@ -62,7 +62,7 @@ namespace Hearth.Editor
 
         /// <summary>The shell command that runs the dev server.</summary>
         internal static string BuildCommand(string cratePath, int port, bool hearthOnPath) =>
-            hearthOnPath ? $"hearth dev --port {port}" : $"wrangler dev --port {port}";
+            hearthOnPath ? $"hearth-mp dev --port {port}" : $"wrangler dev --port {port}";
 
         /// <summary>Whether a <c>GET /schema/..</c> body came from a Hearth gateway (JSON, not an HTML error page).</summary>
         internal static bool IsReady(string schemaResponseBody)
@@ -97,7 +97,7 @@ namespace Hearth.Editor
         {
             if (!await Answers())
             {
-                var hearthOnPath = OnPath("hearth");
+                var hearthOnPath = OnPath("hearth-mp");
                 var command = BuildCommand(CratePath, Port, hearthOnPath);
                 if (Started == null || Started.HasExited)
                     Started = Launch(command, Path.GetFullPath(CratePath));

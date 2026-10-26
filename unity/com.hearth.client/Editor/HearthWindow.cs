@@ -50,7 +50,7 @@ namespace Hearth.Editor
                 LocalServer.Port = EditorGUILayout.IntField("Port", LocalServer.Port);
             }
             EditorGUILayout.HelpBox(
-                "On Play, runs `hearth dev` (or `wrangler dev`) in the room crate unless the port already answers, "
+                "On Play, runs `hearth-mp dev` (or `wrangler dev`) in the room crate unless the port already answers, "
                 + "and points every HearthClient at it. The server keeps running between play sessions.",
                 MessageType.Info);
             if (LocalServer.Started != null && !LocalServer.Started.HasExited && GUILayout.Button("Stop local server"))

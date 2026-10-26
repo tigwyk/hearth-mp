@@ -276,11 +276,11 @@ player, and `/lobby` ignores the player entirely.
 1. Declare the matchmaker class in the game Worker crate:
 
    ```rust
-   hearth::matchmaker::matchmaker_object!();
+   hearth_mp::matchmaker::matchmaker_object!();
    ```
 
    That expands to the `HearthMatchmaker` Durable Object class wrapping
-   `hearth::matchmaker::MatchmakerService`.
+   `hearth_mp::matchmaker::MatchmakerService`.
 
 2. Bind it in `wrangler.toml`, with a migration for the new class:
 
@@ -302,21 +302,21 @@ player, and `/lobby` ignores the player entirely.
    count:
 
    ```rust
-   let config = hearth_gateway::GatewayConfig {
-       rooms: &[hearth_gateway::RoomRoute {
+   let config = hearth_mp_gateway::GatewayConfig {
+       rooms: &[hearth_mp_gateway::RoomRoute {
            room_type: "tictactoe",
            binding: "TICTACTOE",
-           schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
+           schema_hash: hearth_mp::server::schema_hash_hex::<TicTacToe>,
            max_clients: 2,
        }],
        player: None,
        matchmaker: true,
    };
-   hearth_gateway::serve(req, env, &config).await
+   hearth_mp_gateway::serve(req, env, &config).await
    ```
 
    `RoomRoute.max_clients` is the capacity passed to quick-join; it must match
-   the room's `#[hearth::room(max_clients = ...)]`. `matchmaker: false` makes
+   the room's `#[hearth_mp::room(max_clients = ...)]`. `matchmaker: false` makes
    both routes 501 while leaving the binding (and existing rooms) alone.
 
 4. Deploy. The matchmaker Durable Object is created on the first `/match` or
@@ -324,8 +324,8 @@ player, and `/lobby` ignores the player entirely.
 
 ## 13. Under the hood
 
-The matchmaker is `crates/hearth-matchmaker` (re-exported as
-`hearth::matchmaker`) and is a normal `Service`, so an advanced deployment can
+The matchmaker is `crates/hearth-mp-matchmaker` (re-exported as
+`hearth_mp::matchmaker`) and is a normal `Service`, so an advanced deployment can
 also call it with `ctx.call` / `ctx.notify`:
 
 - `MatchmakerService` — binding `HEARTH_MATCHMAKER`, `type Rpc = MmRpc`,

@@ -2,7 +2,7 @@
 #
 # Build context: this Dockerfile lives in examples/arena-dedicated/server/ but
 # must be built from the REPOSITORY ROOT, because the sample path-depends on the
-# hearth-* crates and their manifests inherit the root workspace:
+# hearth-mp-* crates and their manifests inherit the root workspace:
 #
 #   docker build -f examples/arena-dedicated/server/Dockerfile .
 #

@@ -14,11 +14,11 @@ namespace Hearth.Tests
     /// <summary>
     /// The conformance scenarios (<c>conformance/scenarios/*.json</c>) through
     /// <see cref="HearthClient"/>, against the reference server:
-    /// <c>cargo run -p hearth-conformance-server</c>, then set
+    /// <c>cargo run -p hearth-mp-conformance-server</c>, then set
     /// <c>HEARTH_CONFORMANCE_URL=http://127.0.0.1:8790</c>. Ignored when it is unset,
     /// unless <c>HEARTH_REQUIRE_CONFORMANCE=1</c>, which makes that a failure.
     /// Observed frames and pattern matching are exactly those of the Rust runner
-    /// (<c>crates/hearth-conformance-server/tests/scenarios.rs</c>).
+    /// (<c>crates/hearth-mp-conformance-server/tests/scenarios.rs</c>).
     /// </summary>
     public class ScenarioTests
     {

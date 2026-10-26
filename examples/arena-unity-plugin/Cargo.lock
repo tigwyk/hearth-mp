@@ -6,8 +6,8 @@ version = 4
 name = "arena-logic"
 version = "0.1.0"
 dependencies = [
- "hearth-client",
- "hearth-protocol",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
  "serde",
 ]
 
@@ -16,7 +16,7 @@ name = "arena-unity-plugin"
 version = "0.1.0"
 dependencies = [
  "arena-logic",
- "hearth-unity-core",
+ "hearth-mp-unity-core",
  "wasm-bindgen",
 ]
 
@@ -39,16 +39,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "hearth-client"
+name = "hearth-mp-client"
 version = "0.1.0"
 dependencies = [
- "hearth-protocol",
+ "hearth-mp-protocol",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-protocol"
+name = "hearth-mp-protocol"
 version = "0.1.0"
 dependencies = [
  "rmp-serde",
@@ -58,11 +58,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-unity-core"
+name = "hearth-mp-unity-core"
 version = "0.1.0"
 dependencies = [
- "hearth-client",
- "hearth-protocol",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
  "serde_json",
 ]
 

@@ -26,7 +26,7 @@ pub struct Target {
 ```
 
 The callable side is described at compile time by `Callable`, which both
-`#[hearth::service]` and `#[hearth::room(..., rpc)]` generate:
+`#[hearth_mp::service]` and `#[hearth_mp::room(..., rpc)]` generate:
 
 ```rust
 pub trait Callable {
@@ -161,7 +161,7 @@ pub trait Service: Default + 'static {
 calling. Write the impl block, then annotate it:
 
 ```rust
-#[hearth::service(binding = "LEADERBOARD")]
+#[hearth_mp::service(binding = "LEADERBOARD")]
 impl Service for Leaderboard { /* ... */ }
 ```
 
@@ -171,7 +171,7 @@ class `LeaderboardObject` that wraps the runtime. Bind that class name in
 `wrangler.toml` and declare it in a migration — the worked example in section
 9 shows both.
 
-Add the `player` flag — `#[hearth::service(binding = "TTT_PLAYER", player)]` —
+Add the `player` flag — `#[hearth_mp::service(binding = "TTT_PLAYER", player)]` —
 to make the service a per-player object: it must also implement `PlayerService`,
 whose one method `client_view(state) -> serde_json::Value` is the JSON the
 gateway returns from `GET /me` for the token's own player id. Players can never
@@ -207,7 +207,7 @@ A room accepts calls only if it opts in with the `rpc` flag and implements
 `RoomRpc`:
 
 ```rust
-#[hearth::room(mode = "event", max_clients = 2, binding = "TICTACTOE", rpc)]
+#[hearth_mp::room(mode = "event", max_clients = 2, binding = "TICTACTOE", rpc)]
 impl Room for TicTacToe { /* ... */ }
 
 impl RoomRpc for TicTacToe {
@@ -217,7 +217,7 @@ impl RoomRpc for TicTacToe {
     async fn on_call(
         &mut self,
         ctx: &mut Ctx<Self>,
-        from: &hearth::Target,
+        from: &hearth_mp::Target,
         rpc: TttRpc,
     ) -> Result<Self::Reply> {
         // ...
@@ -307,7 +307,7 @@ A service in the game Worker crate. `GameState`, `Move` and the score helpers
 are the game's own code and are abridged here.
 
 ```rust
-use hearth::{PlayerId, Result, Service, ServiceCtx, Target};
+use hearth_mp::{PlayerId, Result, Service, ServiceCtx, Target};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -332,7 +332,7 @@ pub enum LeaderboardRpc {
 #[derive(Default)]
 pub struct Leaderboard;
 
-#[hearth::service(binding = "LEADERBOARD")]
+#[hearth_mp::service(binding = "LEADERBOARD")]
 impl Service for Leaderboard {
     type State = LeaderboardState;
     type Rpc = LeaderboardRpc;
@@ -368,9 +368,9 @@ rolled back if the handler later fails. The final score is sent with
 `notify`, so it survives a failure after that point.
 
 ```rust
-use hearth::{Client, Ctx, Leave, Result, Room};
+use hearth_mp::{Client, Ctx, Leave, Result, Room};
 
-#[hearth::room(mode = "event", max_clients = 2, binding = "GAME")]
+#[hearth_mp::room(mode = "event", max_clients = 2, binding = "GAME")]
 impl Room for Game {
     type State = GameState;
     type Intent = Move;
@@ -440,8 +440,8 @@ new_sqlite_classes = ["LeaderboardObject"]
 ```
 
 The class must be SQLite-backed (`new_sqlite_classes`): service state, timers
-and the outbox live in SQLite storage. `#[hearth::service]` generates the
-`LeaderboardObject` class name from the type name; `#[hearth::room]` does the
+and the outbox live in SQLite storage. `#[hearth_mp::service]` generates the
+`LeaderboardObject` class name from the type name; `#[hearth_mp::room]` does the
 same for rooms (`TicTacToe` gives `TicTacToeObject`).
 
 ## Further reading

@@ -173,8 +173,8 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 name = "fake-server"
 version = "0.1.0"
 dependencies = [
- "hearth-handoff-server",
- "hearth-server",
+ "hearth-mp-handoff-server",
+ "hearth-mp-server",
  "serde_json",
 ]
 
@@ -258,17 +258,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
-name = "hearth-handoff-server"
+name = "hearth-mp-handoff-server"
 version = "0.1.0"
 dependencies = [
- "hearth-server",
+ "hearth-mp-server",
  "serde",
  "serde_json",
  "ureq",
 ]
 
 [[package]]
-name = "hearth-protocol"
+name = "hearth-mp-protocol"
 version = "0.1.0"
 dependencies = [
  "rmp-serde",
@@ -278,14 +278,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-server"
+name = "hearth-mp-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "getrandom",
- "hearth-protocol",
- "hearth-sync",
+ "hearth-mp-protocol",
+ "hearth-mp-sync",
  "hmac",
  "rmp-serde",
  "serde",
@@ -295,17 +295,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-sync"
+name = "hearth-mp-sync"
 version = "0.1.0"
 dependencies = [
- "hearth-protocol",
- "hearth-sync-derive",
+ "hearth-mp-protocol",
+ "hearth-mp-sync-derive",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-sync-derive"
+name = "hearth-mp-sync-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",

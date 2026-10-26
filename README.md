@@ -1,8 +1,11 @@
-# Hearth
+# Hearth MP
 
-Authoritative multiplayer rooms in Rust on Cloudflare Durable Objects. Implement
-one `Room` trait; the framework owns sockets, state sync, persistence,
-hibernation and auth. Godot and Unity SDKs are included.
+Add multiplayer to your game: authoritative rooms in Rust on Cloudflare Durable
+Objects. Implement one `Room` trait; the framework owns sockets, state sync,
+persistence, hibernation and auth. Godot and Unity SDKs are included.
+
+The crates are `hearth-mp` and `hearth-mp-*` (Rust path `hearth_mp`), and the CLI
+is `hearth-mp`. Why the name: [docs/release/naming.md](docs/release/naming.md).
 
 **Hard line:** Hearth v0.1 rooms are event-driven. Anything needing more than
 ~20 Hz authoritative simulation, UDP, or more than ~100 MB of live state per
@@ -13,14 +16,14 @@ The cost profile per mode and every hard limit are in
 ## Quickstart
 
 ```sh
-cargo install hearth-cli        # or: cargo install --path crates/hearth-cli
-hearth new my-game && cd my-game
+cargo install hearth-mp-cli        # or: cargo install --path crates/hearth-mp-cli
+hearth-mp new my-game && cd my-game
 ```
 
 1. Implement your room in `src/lib.rs` (example below). The generated file also
    has the `#[event(fetch)]` gateway entry that authenticates and routes sockets
    to your room, so a fresh project deploys as-is.
-2. Store the auth secret once: the gateway (`hearth-gateway`) refuses to serve
+2. Store the auth secret once: the gateway (`hearth-mp-gateway`) refuses to serve
    without it. Local dev reads it from `.dev.vars` (copy `.dev.vars.example`, min
    32 bytes); deployed Workers use a Worker secret:
    ```sh
@@ -28,19 +31,19 @@ hearth new my-game && cd my-game
    ```
 3. Run it against workerd, then deploy:
    ```sh
-   hearth dev
-   hearth deploy
+   hearth-mp dev
+   hearth-mp deploy
    ```
 
-The room type is the name you passed to `hearth new` in kebab case (`my-game`
+The room type is the name you passed to `hearth-mp new` in kebab case (`my-game`
 above). Clients log in anonymously (`POST /auth/anonymous`), mint a room
 (`POST /rooms/<room-type>`), then upgrade
 `GET /rooms/<room-type>/<room-name>` to a WebSocket. The schema hash guards
 against stale clients: `GET /schema/<room-type>` exposes it for hand-written
 clients, and the Godot codegen below embeds it in a typed class.
 
-`hearth dev` and `hearth deploy` shell out to wrangler; install it with
-`npm i -g wrangler`. `hearth new` takes `--hearth-path <repo>` to generate path
+`hearth-mp dev` and `hearth-mp deploy` shell out to wrangler; install it with
+`npm i -g wrangler`. `hearth-mp new` takes `--hearth-path <repo>` to generate path
 dependencies against a local checkout instead of the published crates.
 
 ## Godot
@@ -50,7 +53,7 @@ typed state classes from the server crate so the client's schema hash can never
 drift:
 
 ```sh
-hearth codegen --godot my-godot-project/hearth --manifest-path my-game/Cargo.toml
+hearth-mp codegen --godot my-godot-project/hearth --manifest-path my-game/Cargo.toml
 ```
 
 The generated classes are emitted from the server crate's exported `SchemaDoc`
@@ -92,7 +95,7 @@ https://github.com/<owner>/hearth-rs.git?path=unity/com.hearth.client
 Add a `HearthClient` component and generate typed state from the server crate:
 
 ```sh
-hearth codegen --unity MyUnityProject/Assets/Hearth --manifest-path my-game/Cargo.toml
+hearth-mp codegen --unity MyUnityProject/Assets/Hearth --manifest-path my-game/Cargo.toml
 ```
 
 ```csharp
@@ -108,7 +111,7 @@ room.Send(TicTacToeIntents.Place(4));
 Every callback runs on the main thread. Drops are retried (`OnReconnecting`,
 `OnReconnected`); `OnDisconnected` fires only when the client gives up. WebGL
 uses the wasm core (`--only webgl`) and the browser's WebSocket. `Window/Hearth`
-shows each client's live state and patches, and can start `hearth dev` when you
+shows each client's live state and patches, and can start `hearth-mp dev` when you
 press Play. The sample is `examples/tictactoe-unity`. Prediction with your
 shared Rust logic in a custom native plugin: [docs/ticked.md](docs/ticked.md#8-prediction-in-unity)
 and `examples/arena-unity`.
@@ -116,12 +119,12 @@ and `examples/arena-unity`.
 ## A room
 
 ```rust
-use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, Room, SyncMap};
+use hearth_mp::{Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, Room, SyncMap};
 use serde::{Deserialize, Serialize};
 use worker::{event, Context, Env, Request, Response};
 
 #[derive(HearthState, Serialize, Deserialize, Default)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub struct Match {
     #[sync] pub count: i64,                             // synced to everyone
     #[sync] pub seats: SyncMap<PlayerId, u8>,           // synced map
@@ -136,24 +139,24 @@ pub enum Intent {
 #[derive(Default)]
 pub struct Counter;
 
-#[hearth::room(mode = "event", max_clients = 4, binding = "ROOM")]
+#[hearth_mp::room(mode = "event", max_clients = 4, binding = "ROOM")]
 impl Room for Counter {
     type State = Match;
     type Intent = crate::Intent;
 
-    async fn on_join(&mut self, ctx: &mut Ctx<Self>, who: &Client, _opts: JoinOpts) -> hearth::Result<()> {
+    async fn on_join(&mut self, ctx: &mut Ctx<Self>, who: &Client, _opts: JoinOpts) -> hearth_mp::Result<()> {
         ctx.state().seats.insert(who.player_id.clone(), who.seat);
         Ok(())
     }
 
-    async fn on_intent(&mut self, ctx: &mut Ctx<Self>, _who: &Client, intent: Self::Intent) -> hearth::Result<()> {
+    async fn on_intent(&mut self, ctx: &mut Ctx<Self>, _who: &Client, intent: Self::Intent) -> hearth_mp::Result<()> {
         match intent {
             Intent::Add(n) => ctx.state().count += n,
         }
         Ok(())
     }
 
-    async fn on_leave(&mut self, ctx: &mut Ctx<Self>, who: &Client, _reason: Leave) -> hearth::Result<()> {
+    async fn on_leave(&mut self, ctx: &mut Ctx<Self>, who: &Client, _reason: Leave) -> hearth_mp::Result<()> {
         ctx.state().seats.remove(&who.player_id);
         Ok(())
     }
@@ -163,26 +166,26 @@ impl Room for Counter {
 /// the way. `binding` matches wrangler.toml.
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-    static ROOMS: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
+    static ROOMS: [hearth_mp_gateway::RoomRoute; 1] = [hearth_mp_gateway::RoomRoute {
         room_type: "my-game",
         binding: "ROOM",
         schema_hash: <Match as HearthState>::schema_hash_hex,
         max_clients: 4,
     }];
-    hearth_gateway::serve(
+    hearth_mp_gateway::serve(
         req,
         env,
-        &hearth_gateway::GatewayConfig {
+        &hearth_mp_gateway::GatewayConfig {
             rooms: &ROOMS,
             // `GET /me` and `POST /match` + `GET /lobby` are opt-in.
             player: None,
             matchmaker: false,
             // Login providers come from the worker env; the default is anonymous
             // only. See docs/auth.md for JWT, Steam, itch.io and Discord.
-            auth: hearth_gateway::AuthConfig::default(),
+            auth: hearth_mp_gateway::AuthConfig::default(),
             // Per-IP and per-player rate limits; add the [[ratelimits]] bindings
             // in wrangler.toml to turn them on.
-            limits: hearth_gateway::ratelimit::Limits::default(),
+            limits: hearth_mp_gateway::ratelimit::Limits::default(),
         },
     )
     .await
@@ -201,10 +204,10 @@ changes, events and timers are rolled back.
 - [Limits and when not to use Hearth](docs/limits.md): the hard line, per-mode
   cost profile, memory/CPU budgets, JSON number precision.
 - [Cost estimate](docs/cost.md): model the monthly Cloudflare bill with
-  `hearth cost`, and the versioned pricing table behind it.
+  `hearth-mp cost`, and the versioned pricing table behind it.
 - [Auth providers](docs/auth.md): JWT, Steam, itch.io and Discord logins, the
   player id namespaces, and the 24-hour session token.
-- [Admin and observability](docs/admin.md): `hearth inspect` (list rooms, inspect
+- [Admin and observability](docs/admin.md): `hearth-mp inspect` (list rooms, inspect
   full state, force-dispose, tail patches), the `/admin/*` JSON API, and Workers
   Logs events.
 - [Typed RPC](docs/rpc.md): `ctx.call` and durable `ctx.notify` between rooms

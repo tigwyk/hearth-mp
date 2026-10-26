@@ -1,5 +1,5 @@
 class_name HearthReconnect
-## Sans-IO reconnect policy, mirroring `ReconnectPolicy` in `hearth-client`.
+## Sans-IO reconnect policy, mirroring `ReconnectPolicy` in `hearth-mp-client`.
 ##
 ## After a socket drops, `decide()` says whether to retry and when. This script
 ## and the Rust core are both checked against

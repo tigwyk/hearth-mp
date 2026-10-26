@@ -9,7 +9,7 @@ rematch logic stay where they already are.
 
 The Godot SDK ships a client half (signals plus `connect_handoff`) and a
 headless-server helper (`HearthServer`). The Rust server SDK is
-`hearth-handoff-server`; Rust clients read the reserved events and use their own
+`hearth-mp-handoff-server`; Rust clients read the reserved events and use their own
 transport. The Unity SDK is **not shipped yet** (v0.5 Task 5 is deferred).
 
 ## 1. When to use a handoff
@@ -95,10 +95,10 @@ players ◀── EVENT hearth.handoff_ended {sid, reason}   (when the session e
 ```rust
 use std::time::Duration;
 
-use hearth::server::{HandoffEvent, HandoffRequest, SessionId};
-use hearth::{Client, Ctx, Result, Room};
+use hearth_mp::server::{HandoffEvent, HandoffRequest, SessionId};
+use hearth_mp::{Client, Ctx, Result, Room};
 
-#[hearth::room(
+#[hearth_mp::room(
     mode = "event",
     max_clients = 8,
     binding = "ARENA_LOBBY",
@@ -137,7 +137,7 @@ impl Room for ArenaLobby {
 ```rust
 use std::time::Duration;
 
-use hearth::server::HandoffRequest;
+use hearth_mp::server::HandoffRequest;
 
 let request = HandoffRequest::new(players, claims)   // Vec<PlayerId>, serde_json::Value
     .region("eu")
@@ -347,7 +347,7 @@ function verify(headers, rawBody, secret) {
 Rust allocators can call the same check instead of reimplementing it:
 
 ```rust
-use hearth::server::verify_webhook;
+use hearth_mp::server::verify_webhook;
 
 let ok = verify_webhook(secret, timestamp, raw_body, signature_hex, now_s);
 ```
@@ -408,13 +408,13 @@ HEARTH_PUBLIC_URL = "https://example.workers.dev"
 The Rust side defines the class once at the Worker crate root:
 
 ```rust
-hearth::container_object!(ArenaServer);
+hearth_mp::container_object!(ArenaServer);
 ```
 
 and the gateway route for the room type names the same binding:
 
 ```rust
-hearth_gateway::RoomRoute {
+hearth_mp_gateway::RoomRoute {
     room_type: "arena",
     binding: "ARENA_LOBBY",
     container: Some("ARENA_SERVER"),
@@ -540,7 +540,7 @@ a player request never reaches them.
 
 ## 8. Server SDKs
 
-### Rust — `hearth-handoff-server`
+### Rust — `hearth-mp-handoff-server`
 
 The SDK is blocking (`ureq`), because a dedicated server is a normal process, not
 a Worker. Run it from a thread or a blocking task if your server has an async
@@ -549,7 +549,7 @@ runtime.
 ```rust
 use std::time::Duration;
 
-use hearth_handoff_server::{ServerReport, Session};
+use hearth_mp_handoff_server::{ServerReport, Session};
 
 let session = Session::from_env()?;          // HEARTH_SID, HEARTH_SESSION_SECRET, HEARTH_REPORT_URL
 session.report(&ServerReport::Started)?;
@@ -689,7 +689,7 @@ itself is not Hearth's bill:
 - **Your own fleet** bills whatever your infrastructure bills. Hearth only sends
   the signed allocation requests (up to one per attempt, at most three) and one
   best-effort stop request per session.
-- `hearth cost` models Workers, Durable Objects and ticked-mode rooms; it does
+- `hearth-mp cost` models Workers, Durable Objects and ticked-mode rooms; it does
   **not** model container time or your fleet (see [cost.md](cost.md)).
 
 ## 12. The sample and validation status
@@ -747,7 +747,7 @@ Containers.
 - [protocol.md](protocol.md): the reserved `hearth.handoff` and
   `hearth.handoff_ended` events and the `EVENT` frame.
 - [limits.md](limits.md): the hard line and the per-mode cost profile.
-- [cost.md](cost.md): the `hearth cost` estimate and what it leaves out.
+- [cost.md](cost.md): the `hearth-mp cost` estimate and what it leaves out.
 - [ticked.md](ticked.md): the 5–20 Hz rooms that stay on Hearth.
 - [The spec](../Hearth%20a%20Rust%20framework%20for%20Durable%20Object%20game%20servers.md),
   Target games and Roadmap v0.5.

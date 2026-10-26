@@ -31,9 +31,9 @@ implements `on_tick`:
 
 ```rust
 use std::time::Duration;
-use hearth::{Ctx, Result, Room};
+use hearth_mp::{Ctx, Result, Room};
 
-#[hearth::room(mode = "ticked", tick_hz = 20, persist_every = 20,
+#[hearth_mp::room(mode = "ticked", tick_hz = 20, persist_every = 20,
                max_clients = 16, binding = "ARENA")]
 impl Room for ArenaRoom {
     type State = Arena;
@@ -263,7 +263,7 @@ The recipe:
    mirrors the room's synced view (player ids as strings, so it deserialises
    straight from the client view). The room's `on_tick` and the client
    predictor call the same function.
-2. **`Logic` and `Predictor`** live in `hearth-client`:
+2. **`Logic` and `Predictor`** live in `hearth-mp-client`:
    - `Logic` has `type State`, `type Input`, and
      `step(state, inputs, dt)` — the deterministic simulation.
    - `Predictor::new(me, tick_hz)`; `input(seq, input)` records the input and
@@ -284,14 +284,14 @@ The recipe:
    latest `ACK` says which inputs the server applied. Replaying only the
    unacknowledged inputs keeps the prediction close, and the server always wins
    when the two disagree.
-5. **Ship a custom GDExtension.** The stock `hearth-godot` addon does not
+5. **Ship a custom GDExtension.** The stock `hearth-mp-godot` addon does not
    contain the game's logic, so `examples/arena-godot-ext` builds a cdylib that
-   depends on `hearth-godot` and `arena-logic` and calls
-   `hearth_godot::predictor!(ArenaPredictor, arena_logic::Arena)`. The macro
+   depends on `hearth-mp-godot` and `arena-logic` and calls
+   `hearth_mp_godot::predictor!(ArenaPredictor, arena_logic::Arena)`. The macro
    generates the Godot class (`input(seq, input)`, `predicted_state()` and
    `attach(hearth_node)`, which connects the `joined`, `state_reset`, `patched`,
    `acked` and `intents_unconfirmed` signals). The extension crate registers its
-   own `#[gdextension]` init and declares `extern crate hearth_godot;`, so the
+   own `#[gdextension]` init and declares `extern crate hearth_mp_godot;`, so the
    stock classes are linked in too. The project's `.gdextension` replaces the
    stock addon's library with this one, same entry symbol, so `HearthNative` is
    still registered.
@@ -338,13 +338,13 @@ predicts builds its own plugin.
    webgl = ["dep:wasm-bindgen"]
 
    [dependencies]
-   hearth-unity-core = { path = "../../crates/hearth-unity-core" }
+   hearth-mp-unity-core = { path = "../../crates/hearth-mp-unity-core" }
    arena-logic = { path = "../arena-logic" }
    wasm-bindgen = { version = "0.2.129", optional = true }
    ```
 
    ```rust
-   hearth_unity_core::plugin! { logic: { "arena" => arena_logic::Arena } }
+   hearth_mp_unity_core::plugin! { logic: { "arena" => arena_logic::Arena } }
    ```
 
    `plugin!` emits every Hearth export into this crate (the `#[no_mangle]`
@@ -415,10 +415,10 @@ test (`examples/arena-unity/Assets/Tests`) runs the Godot smoke checks against
 Ticked mode is billed differently from event mode: the in-object loop keeps the
 room awake for the whole session, so duration is billed while it ticks. A tick is
 **not** a Durable Object request — the alarm only fires the five-minute watchdog
-and the timers. `hearth cost` models it:
+and the timers. `hearth-mp cost` models it:
 
 ```sh
-hearth cost --ccu 1000 --room-size 16 --intents 10 --ticked 20 --persist-every 20
+hearth-mp cost --ccu 1000 --room-size 16 --intents 10 --ticked 20 --persist-every 20
 ```
 
 `--ticked <hz>` models `active_fraction = 1` (never hibernating while ticking),
@@ -457,6 +457,6 @@ checks always run.
 
 - [Wire protocol v1](protocol.md): frames, patch ops, the optional `tick`/`t`.
 - [Limits](limits.md): the event/ticked/handoff cost profile and hard limits.
-- [Cost estimate](cost.md): the model behind `hearth cost --ticked`.
+- [Cost estimate](cost.md): the model behind `hearth-mp cost --ticked`.
 - [ADR 0001](adr/0001-tick-driver.md): the accepted in-object loop driver decision
   and its measurements.

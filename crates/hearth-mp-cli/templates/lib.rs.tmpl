@@ -1,0 +1,99 @@
+//! The {{name}} room: a minimal Hearth event-mode counter.
+//!
+//! Durable data lives in [`GameState`]. The room struct is rebuilt from
+//! `Default` every time the Durable Object wakes from hibernation.
+
+use hearth_mp::{Client, Ctx, HearthState, JoinOpts, Leave, Room, Schema};
+use serde::{Deserialize, Serialize};
+use worker::{event, Context, Env, Request, Response};
+
+/// Synced room state: only `#[sync]` fields are sent to clients.
+#[derive(HearthState, Serialize, Deserialize, Default)]
+#[hearth(crate = "hearth_mp")]
+pub struct GameState {
+    #[sync]
+    pub count: i64,
+}
+
+/// What clients send up to the room.
+#[derive(Schema, Deserialize)]
+#[hearth(crate = "hearth_mp")]
+pub enum Intent {
+    Add(i64),
+}
+
+/// One room instance. The runtime owns it and rebuilds it after hibernation, so
+/// keep durable data in `State`, not in `self`.
+#[derive(Default)]
+pub struct {{Room}};
+
+#[hearth_mp::room(mode = "event", max_clients = 4, binding = "ROOM")]
+impl Room for {{Room}} {
+    type State = GameState;
+    type Intent = crate::Intent;
+
+    async fn on_join(
+        &mut self,
+        _ctx: &mut Ctx<Self>,
+        _who: &Client,
+        _opts: JoinOpts,
+    ) -> hearth_mp::Result<()> {
+        Ok(())
+    }
+
+    async fn on_intent(
+        &mut self,
+        ctx: &mut Ctx<Self>,
+        _who: &Client,
+        intent: Self::Intent,
+    ) -> hearth_mp::Result<()> {
+        match intent {
+            Intent::Add(n) => ctx.state().count += n,
+        }
+        Ok(())
+    }
+
+    async fn on_leave(
+        &mut self,
+        _ctx: &mut Ctx<Self>,
+        _who: &Client,
+        _reason: Leave,
+    ) -> hearth_mp::Result<()> {
+        Ok(())
+    }
+}
+
+// The room registry (`hearth-mp inspect rooms`). Rooms report themselves here; a
+// registry failure never affects gameplay.
+hearth_mp::admin::registry_object!();
+
+/// Every room type this Worker serves. The `ROOM` binding and the class name are
+/// declared in `wrangler.toml`.
+fn room_routes() -> &'static [hearth_mp_gateway::RoomRoute] {
+    static ROUTES: [hearth_mp_gateway::RoomRoute; 1] = [hearth_mp_gateway::RoomRoute::new(
+        "{{room_type}}",
+        "ROOM",
+        hearth_mp::server::schema_hash_hex::<{{Room}}>,
+        4,
+    )];
+    &ROUTES
+}
+
+/// Worker entry: the gateway authenticates each socket, sets
+/// `X-Hearth-Player-Id`, and forwards it to this room's Durable Object.
+#[event(fetch)]
+async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
+    // The admin API exists only when HEARTH_ADMIN_TOKEN is set. Without it these
+    // paths are ordinary 404s, as if the feature were not deployed.
+    if req.path().starts_with("/admin/") && hearth_mp::admin::admin_token(&env).is_some() {
+        return hearth_mp::admin::serve_admin(req, env, room_routes()).await;
+    }
+    // Anonymous login, no `GET /me` and no matchmaker. Add
+    // `.player(PlayerRoute::new("BINDING"))` to serve `GET /me`, `.matchmaker(true)`
+    // for `/match` and `/lobby` (needs the HEARTH_MATCHMAKER binding), and
+    // `.auth(AuthConfig::from_env(&env)?)` for the other login providers. The
+    // default rate limits turn on once the [[ratelimits]] bindings exist in
+    // wrangler.toml; without them, requests are unlimited.
+    let config = hearth_mp_gateway::GatewayConfig::new(room_routes());
+    hearth_mp_gateway::serve(req, env, &config).await
+}

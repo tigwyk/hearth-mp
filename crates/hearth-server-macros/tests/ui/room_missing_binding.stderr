@@ -1,5 +1,0 @@
-error: #[hearth::room] needs binding = "..." (the wrangler DO binding name)
- --> tests/ui/room_missing_binding.rs:7:8
-  |
-7 | #[room(mode = "event", max_clients = 2)]
-  |        ^^^^

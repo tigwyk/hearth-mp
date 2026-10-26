@@ -1,0 +1,14 @@
+[package]
+name = "hearth-mp-handoff-server"
+description = "Hearth Rust SDK for dedicated handoff servers: redeem tickets, report lifecycle, heartbeat."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-mp-server.workspace = true
+ureq.workspace = true
+serde.workspace = true
+serde_json.workspace = true

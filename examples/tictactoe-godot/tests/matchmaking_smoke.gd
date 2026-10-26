@@ -4,7 +4,7 @@ extends SceneTree
 ## Needs the sample server (`cd examples/tictactoe; npx wrangler dev`) and the
 ## typed classes generated from the server crate:
 ##
-##   hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+##   hearth-mp codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
 ##
 ## Two clients quick-join one matchmade room, play to an X win, and their
 ## `GET /me` records must show the result. A third client quick-joins, then its

@@ -19,6 +19,6 @@ crate-type = ["cdylib", "staticlib"]
 webgl = ["dep:wasm-bindgen"]
 
 [dependencies]
-hearth-unity-core = { path = "../../crates/hearth-unity-core" }
+hearth-mp-unity-core = { path = "../../crates/hearth-mp-unity-core" }
 arena-logic = { path = "../arena-logic" }
 wasm-bindgen = { version = "0.2.129", optional = true }

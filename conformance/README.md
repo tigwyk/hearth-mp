@@ -24,13 +24,13 @@ cover recommended client behaviour.
 
 ## Scenarios (`scenarios/`) and the reference server
 
-`hearth-conformance-server` runs the real room runtime over local WebSockets and
-hosts the conformance room `Conf` (`crates/hearth-conformance-server/src/room.rs`):
+`hearth-mp-conformance-server` runs the real room runtime over local WebSockets and
+hosts the conformance room `Conf` (`crates/hearth-mp-conformance-server/src/room.rs`):
 two seats, state `{n, seats, secret (owner-only)}`, intents
 `Add(i64) | SetSecret(String) | Echo(String) | Fail | Future`.
 
 ```sh
-cargo run -p hearth-conformance-server            # 127.0.0.1:8790; --port to change
+cargo run -p hearth-mp-conformance-server            # 127.0.0.1:8790; --port to change
 ```
 
 - `POST /auth/anonymous {"device_id": "a"}` answers `{"token": "a", "player_id": "a"}`:
@@ -68,7 +68,7 @@ length, and numbers compare as numbers (`2` equals `2.0`).
 
 Runners in this repository:
 
-- Rust: `cargo test -p hearth-conformance-server` (starts the server in-process).
+- Rust: `cargo test -p hearth-mp-conformance-server` (starts the server in-process).
 - Godot: `examples/tictactoe-godot/tests/scenario_runner.gd`, once with
   `HEARTH_FORCE_WEB=1` (the GDScript client) and once without (the GDExtension).
 - Unity: `ScenarioTests` in the package's PlayMode tests.
@@ -79,5 +79,5 @@ The engine runners read `HEARTH_CONFORMANCE_URL` (for example
 
 To run the scenarios against your own SDK, write a runner with the same observed
 frames and pattern rules (the Rust runner,
-`crates/hearth-conformance-server/tests/scenarios.rs`, is about 200 lines), start
+`crates/hearth-mp-conformance-server/tests/scenarios.rs`, is about 200 lines), start
 the server, and run every file in `scenarios/`.

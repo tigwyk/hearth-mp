@@ -39,29 +39,29 @@ trybuild = "1.0.122"
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-# `hearth inspect` (v0.2c): blocking HTTP and a WebSocket client for the CLI.
+# `hearth-mp inspect` (v0.2c): blocking HTTP and a WebSocket client for the CLI.
 ureq = { version = "3.5.0", features = ["json"] }
 tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 # The conformance reference server (v1.0a): a local tokio WebSocket host.
 tokio = { version = "1.48.0", features = ["rt", "macros", "net", "time", "sync", "io-util"] }
 tokio-tungstenite = "0.30.0"
-# `hearth cost` (v0.3b): the versioned pricing table is TOML, not code.
+# `hearth-mp cost` (v0.3b): the versioned pricing table is TOML, not code.
 toml = "1.1.8"
 
 # Workspace crates.
-hearth-protocol = { path = "crates/hearth-protocol", version = "0.1.0" }
-hearth-sync = { path = "crates/hearth-sync", version = "0.1.0" }
-hearth-sync-derive = { path = "crates/hearth-sync-derive", version = "0.1.0" }
-hearth-client = { path = "crates/hearth-client", version = "0.1.0" }
-hearth-server = { path = "crates/hearth-server", version = "0.1.0" }
-hearth-server-macros = { path = "crates/hearth-server-macros", version = "0.1.0" }
-hearth = { path = "crates/hearth", version = "0.1.0" }
-hearth-gateway = { path = "crates/hearth-gateway", version = "0.1.0" }
-hearth-test = { path = "crates/hearth-test", version = "0.1.0" }
-hearth-cli = { path = "crates/hearth-cli", version = "0.1.0" }
-hearth-godot = { path = "crates/hearth-godot", version = "0.1.0" }
-hearth-admin = { path = "crates/hearth-admin", version = "0.1.0" }
-hearth-matchmaker = { path = "crates/hearth-matchmaker", version = "0.1.0" }
+hearth-mp-protocol = { path = "crates/hearth-mp-protocol", version = "0.1.0" }
+hearth-mp-sync = { path = "crates/hearth-mp-sync", version = "0.1.0" }
+hearth-mp-sync-derive = { path = "crates/hearth-mp-sync-derive", version = "0.1.0" }
+hearth-mp-client = { path = "crates/hearth-mp-client", version = "0.1.0" }
+hearth-mp-server = { path = "crates/hearth-mp-server", version = "0.1.0" }
+hearth-mp-server-macros = { path = "crates/hearth-mp-server-macros", version = "0.1.0" }
+hearth-mp = { path = "crates/hearth-mp", version = "0.1.0" }
+hearth-mp-gateway = { path = "crates/hearth-mp-gateway", version = "0.1.0" }
+hearth-mp-test = { path = "crates/hearth-mp-test", version = "0.1.0" }
+hearth-mp-cli = { path = "crates/hearth-mp-cli", version = "0.1.0" }
+hearth-mp-godot = { path = "crates/hearth-mp-godot", version = "0.1.0" }
+hearth-mp-admin = { path = "crates/hearth-mp-admin", version = "0.1.0" }
+hearth-mp-matchmaker = { path = "crates/hearth-mp-matchmaker", version = "0.1.0" }
 tictactoe = { path = "examples/tictactoe", version = "0.1.0" }
 
 # Wasm bundle size (v1.0a, docs/limits.md "Bundle size"). No `panic = "abort"`:

@@ -1,0 +1,22 @@
+[package]
+name = "hearth-mp"
+description = "Hearth: a Rust framework for Durable Object game servers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[features]
+default = ["worker"]
+# Enables the workers-rs Durable Object adapter behind `hearth_mp::server::worker`.
+worker = ["hearth-mp-server/worker"]
+
+[dependencies]
+anyhow.workspace = true
+hearth-mp-admin.workspace = true
+hearth-mp-matchmaker.workspace = true
+hearth-mp-protocol.workspace = true
+hearth-mp-sync.workspace = true
+hearth-mp-server.workspace = true
+hearth-mp-server-macros.workspace = true

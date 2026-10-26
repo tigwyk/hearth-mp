@@ -6,9 +6,9 @@ reloadable = false
 
 [libraries]
 
-windows.debug.x86_64 = "res://addons/hearth/bin/windows/hearth_godot.dll"
-windows.release.x86_64 = "res://addons/hearth/bin/windows/hearth_godot.dll"
-linux.debug.x86_64 = "res://addons/hearth/bin/linux/libhearth_godot.so"
-linux.release.x86_64 = "res://addons/hearth/bin/linux/libhearth_godot.so"
-macos.debug = "res://addons/hearth/bin/macos/libhearth_godot.dylib"
-macos.release = "res://addons/hearth/bin/macos/libhearth_godot.dylib"
+windows.debug.x86_64 = "res://addons/hearth/bin/windows/hearth_mp_godot.dll"
+windows.release.x86_64 = "res://addons/hearth/bin/windows/hearth_mp_godot.dll"
+linux.debug.x86_64 = "res://addons/hearth/bin/linux/libhearth_mp_godot.so"
+linux.release.x86_64 = "res://addons/hearth/bin/linux/libhearth_mp_godot.so"
+macos.debug = "res://addons/hearth/bin/macos/libhearth_mp_godot.dylib"
+macos.release = "res://addons/hearth/bin/macos/libhearth_mp_godot.dylib"

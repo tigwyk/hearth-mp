@@ -7,8 +7,8 @@ the vector file wins and this text is the bug.
 
 It is written so an SDK can be implemented in any language (Defold, Bevy, the
 web, an engine plugin) without reading the Rust code. The reference
-implementation is the `hearth-protocol` and `hearth-client` crates, and
-`hearth-conformance-server` is a local server to test against (see
+implementation is the `hearth-mp-protocol` and `hearth-mp-client` crates, and
+`hearth-mp-conformance-server` is a local server to test against (see
 `conformance/README.md`).
 
 ## 1. Transport
@@ -211,7 +211,7 @@ entry. The shape is described by the room's `SchemaDoc`.
 The schema hash covers the room's state type **and** its intent type, so a stale
 client fails at the handshake instead of desyncing. It is opaque: SDKs MUST
 compare it only for equality and MUST NOT derive it themselves. Get it from the
-generated code (`hearth codegen`) or from `GET /schema/<type>`.
+generated code (`hearth-mp codegen`) or from `GET /schema/<type>`.
 
 A second socket for the same player replaces the first: the old socket is closed
 with 4009, the seat is kept, `on_join`/`on_leave` do not run again, and the new

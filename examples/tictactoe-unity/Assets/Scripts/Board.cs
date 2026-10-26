@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// The tic-tac-toe sample: a 3×3 grid drawn with IMGUI over the typed state that
-/// <c>hearth codegen --unity</c> generated into <c>Assets/Hearth</c>.
+/// <c>hearth-mp codegen --unity</c> generated into <c>Assets/Hearth</c>.
 /// Leave the room field empty to create a room; paste a room name (or pass
 /// <c>-room &lt;name&gt;</c>) to join the other player.
 /// </summary>

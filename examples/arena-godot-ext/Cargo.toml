@@ -15,5 +15,5 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot = { workspace = true, features = ["api-4-3"] }
-hearth-godot = { path = "../../crates/hearth-godot" }
+hearth-mp-godot = { path = "../../crates/hearth-mp-godot" }
 arena-logic = { path = "../arena-logic" }

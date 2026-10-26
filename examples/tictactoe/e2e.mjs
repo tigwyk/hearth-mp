@@ -7,7 +7,7 @@
 //   server started without HEARTH_ADMIN_TOKEN. E2E_RATELIMIT=1 runs only the
 //   rate-limit phase against a server started from `wrangler.e2e-ratelimit.toml`,
 //   whose tiny limits are what make a 429 reachable in a few requests.
-//   E2E_KEEP_ROOM=1 skips the force-dispose step (for `hearth inspect` by hand).
+//   E2E_KEEP_ROOM=1 skips the force-dispose step (for `hearth-mp inspect` by hand).
 // Exits 0 on success; prints the failed check and exits 1 otherwise.
 import http from 'node:http';
 import { generateKeyPairSync, randomBytes } from 'node:crypto';

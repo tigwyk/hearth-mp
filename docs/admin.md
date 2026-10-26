@@ -2,10 +2,10 @@
 
 A Hearth deployment can expose a reserved, token-gated admin API at `/admin/*`:
 list live rooms, read any room's full server state, force-dispose a room, and
-tail its patches live. `hearth inspect` is the CLI client; the JSON API below is
+tail its patches live. `hearth-mp inspect` is the CLI client; the JSON API below is
 stable enough to script against directly.
 
-The admin API is a library (`hearth-admin`) that the game Worker mounts itself.
+The admin API is a library (`hearth-mp-admin`) that the game Worker mounts itself.
 It is **off unless `HEARTH_ADMIN_TOKEN` is set**; the token must be at least 32
 bytes, and there is no admin HTML UI.
 
@@ -33,10 +33,10 @@ never from a query string.
 ## 2. Use the CLI
 
 ```sh
-hearth inspect rooms [--type T] [--all]
-hearth inspect room <type>/<name>
-hearth inspect dispose <type>/<name> [--yes]
-hearth inspect tail <type>/<name> [--ops]
+hearth-mp inspect rooms [--type T] [--all]
+hearth-mp inspect room <type>/<name>
+hearth-mp inspect dispose <type>/<name> [--yes]
+hearth-mp inspect tail <type>/<name> [--ops]
 ```
 
 | Command | What it does |
@@ -54,7 +54,7 @@ Flags and environment:
 - Exit codes: `0` success, `1` request or API error, `2` usage error or missing
   token. With no token it says `set HEARTH_ADMIN_TOKEN (see docs/admin.md)`.
 
-`hearth inspect room` shows **all** state, not the filtered client view:
+`hearth-mp inspect room` shows **all** state, not the filtered client view:
 `#[sync(owner)]` fields (other players' hands), fields with no `#[sync]` at all,
 and server-only bookkeeping are all included. Treat its output as sensitive.
 
@@ -174,7 +174,7 @@ token alone is not enough to read or wipe rooms, and Access gives you an audit
 trail of who tried. Keep `HEARTH_ADMIN_TOKEN` enabled as well.
 
 Access evaluates the WebSocket upgrade like any other request; policy it so the
-machines that run `hearth inspect` are allowed. If an interactive Access challenge
+machines that run `hearth-mp inspect` are allowed. If an interactive Access challenge
 blocks the CLI, call the Worker's direct `workers.dev` URL from a trusted network
 path, or give those machines an Access service token.
 
@@ -182,7 +182,7 @@ path, or give those machines an Access service token.
 
 By default the game Worker mounts `/admin/*` itself. For tighter isolation —
 separate secrets, separate Access policy, no admin routes on the public game
-hostname — deploy `hearth-admin` as its own Worker. Its Durable Object bindings
+hostname — deploy `hearth-mp-admin` as its own Worker. Its Durable Object bindings
 use `script_name` to reach the game Worker's classes.
 
 A second `wrangler.admin.toml` in the project:
@@ -211,7 +211,7 @@ enabled = true
 Notes:
 
 - Repeat one binding per room class the game Worker owns. `HearthRegistry` comes
-  from the `hearth::admin::registry_object!()` macro you added to the game
+  from the `hearth_mp::admin::registry_object!()` macro you added to the game
   Worker; the room class names are the ones in the game Worker's
   `wrangler.toml`.
 - Do **not** copy the game Worker's `[[migrations]]` block: the game Worker owns
@@ -223,12 +223,12 @@ Notes:
 
   #[event(fetch)]
   async fn fetch(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-      hearth::admin::serve_admin(req, env, &routes()).await
+      hearth_mp::admin::serve_admin(req, env, &routes()).await
   }
   ```
 
-  where `routes()` is the same `&[hearth_gateway::RoomRoute]` list the game
-  Worker puts in its `hearth_gateway::GatewayConfig`. Everything that is not
+  where `routes()` is the same `&[hearth_mp_gateway::RoomRoute]` list the game
+  Worker puts in its `hearth_mp_gateway::GatewayConfig`. Everything that is not
   `/admin/*` must 404 (or be left unrouted).
 - The admin Worker's only secret is `HEARTH_ADMIN_TOKEN`
   (`wrangler secret put HEARTH_ADMIN_TOKEN -c wrangler.admin.toml`). The game

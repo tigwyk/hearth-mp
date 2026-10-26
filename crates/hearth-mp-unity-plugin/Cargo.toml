@@ -1,0 +1,30 @@
+[package]
+name = "hearth-mp-unity-plugin"
+description = "The stock Hearth Unity native plugin (hearth_unity): every export, with only the built-in hearth.echo1d prediction logic."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+# The library name Unity's P/Invoke loads; a game's own plugin crate uses it too.
+name = "hearth_unity"
+# cdylib for desktop and Android, staticlib for iOS, rlib for the tests.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+# The WebGL build: `cargo build --target wasm32-unknown-unknown --features webgl`.
+webgl = ["dep:wasm-bindgen"]
+
+[dependencies]
+hearth-mp-unity-core = { path = "../hearth-mp-unity-core" }
+wasm-bindgen = { version = "0.2.129", optional = true }
+
+[dev-dependencies]
+hearth-mp-client.workspace = true
+hearth-mp-protocol = { workspace = true, features = ["vectors"] }
+serde_json.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

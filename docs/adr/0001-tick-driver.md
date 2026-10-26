@@ -181,7 +181,7 @@ Why holding the object open is the cheaper option, not just the accurate one:
   adapter returns `true`; the test harness keeps the alarm driver).
 - Tick rates below 5 Hz and above 20 Hz stay compile errors, with the >20 message
   naming Handoff.
-- `hearth cost --ticked` models the loop driver: duration for the ticking
+- `hearth-mp cost --ticked` models the loop driver: duration for the ticking
   session, one watchdog alarm per room per five minutes, and no per-tick request
   charge.
 - A deployment still has one alarm per room; the loop is per-room in-memory work

@@ -2,7 +2,7 @@
 
 Status: **frozen** (Hearth 1.0). Normative, with RFC 2119 key words. A
 `SchemaDoc` describes one room's synced state and its intents, so a code
-generator in any language can build typed client code. `hearth codegen` writes
+generator in any language can build typed client code. `hearth-mp codegen` writes
 one per room; the Godot and Unity generators consume exactly this format.
 
 ## 1. Document

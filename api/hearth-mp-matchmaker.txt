@@ -1,0 +1,107 @@
+pub mod hearth_mp_matchmaker
+pub macro hearth_mp_matchmaker::matchmaker_object!
+pub enum hearth_mp_matchmaker::MmReply
+pub hearth_mp_matchmaker::MmReply::Ok
+pub hearth_mp_matchmaker::MmReply::Room
+pub hearth_mp_matchmaker::MmReply::Room::name: alloc::string::String
+pub hearth_mp_matchmaker::MmReply::Rooms(alloc::vec::Vec<hearth_mp_matchmaker::OpenRoom>)
+impl core::clone::Clone for hearth_mp_matchmaker::MmReply
+pub fn hearth_mp_matchmaker::MmReply::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_matchmaker::MmReply
+pub fn hearth_mp_matchmaker::MmReply::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_matchmaker::MmReply
+pub fn hearth_mp_matchmaker::MmReply::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_matchmaker::MmReply
+impl serde_core::ser::Serialize for hearth_mp_matchmaker::MmReply
+pub fn hearth_mp_matchmaker::MmReply::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_matchmaker::MmReply
+pub fn hearth_mp_matchmaker::MmReply::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_matchmaker::MmReply
+impl core::marker::Send for hearth_mp_matchmaker::MmReply
+impl core::marker::Sync for hearth_mp_matchmaker::MmReply
+impl core::marker::Unpin for hearth_mp_matchmaker::MmReply
+impl core::marker::UnsafeUnpin for hearth_mp_matchmaker::MmReply
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_matchmaker::MmReply
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_matchmaker::MmReply
+pub enum hearth_mp_matchmaker::MmRpc
+pub hearth_mp_matchmaker::MmRpc::List
+pub hearth_mp_matchmaker::MmRpc::List::limit: u32
+pub hearth_mp_matchmaker::MmRpc::List::pool: alloc::string::String
+pub hearth_mp_matchmaker::MmRpc::QuickJoin
+pub hearth_mp_matchmaker::MmRpc::QuickJoin::capacity: u8
+pub hearth_mp_matchmaker::MmRpc::QuickJoin::player: hearth_mp_protocol::frame::PlayerId
+pub hearth_mp_matchmaker::MmRpc::QuickJoin::pool: alloc::string::String
+pub hearth_mp_matchmaker::MmRpc::Report(hearth_mp_server::host::RoomReport)
+impl core::clone::Clone for hearth_mp_matchmaker::MmRpc
+pub fn hearth_mp_matchmaker::MmRpc::clone(&self) -> Self
+impl core::fmt::Debug for hearth_mp_matchmaker::MmRpc
+pub fn hearth_mp_matchmaker::MmRpc::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for hearth_mp_matchmaker::MmRpc
+pub fn hearth_mp_matchmaker::MmRpc::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_matchmaker::MmRpc
+pub fn hearth_mp_matchmaker::MmRpc::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_matchmaker::MmRpc
+impl core::marker::Send for hearth_mp_matchmaker::MmRpc
+impl core::marker::Sync for hearth_mp_matchmaker::MmRpc
+impl core::marker::Unpin for hearth_mp_matchmaker::MmRpc
+impl core::marker::UnsafeUnpin for hearth_mp_matchmaker::MmRpc
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_matchmaker::MmRpc
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_matchmaker::MmRpc
+pub struct hearth_mp_matchmaker::MatchmakerService
+impl core::default::Default for hearth_mp_matchmaker::MatchmakerService
+pub fn hearth_mp_matchmaker::MatchmakerService::default() -> Self
+impl hearth_mp_server::call::Callable for hearth_mp_matchmaker::MatchmakerService
+pub type hearth_mp_matchmaker::MatchmakerService::Reply = hearth_mp_matchmaker::MmReply
+pub type hearth_mp_matchmaker::MatchmakerService::Rpc = hearth_mp_matchmaker::MmRpc
+pub const hearth_mp_matchmaker::MatchmakerService::BINDING: &'static str
+impl hearth_mp_server::service::Service for hearth_mp_matchmaker::MatchmakerService
+pub type hearth_mp_matchmaker::MatchmakerService::Reply = hearth_mp_matchmaker::MmReply
+pub type hearth_mp_matchmaker::MatchmakerService::Rpc = hearth_mp_matchmaker::MmRpc
+pub type hearth_mp_matchmaker::MatchmakerService::State = hearth_mp_matchmaker::MatchmakerState
+pub async fn hearth_mp_matchmaker::MatchmakerService::on_call(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, &hearth_mp_server::call::Target, hearth_mp_matchmaker::MmRpc) -> hearth_mp_server::Result<hearth_mp_matchmaker::MmReply>
+impl core::marker::Freeze for hearth_mp_matchmaker::MatchmakerService
+impl core::marker::Send for hearth_mp_matchmaker::MatchmakerService
+impl core::marker::Sync for hearth_mp_matchmaker::MatchmakerService
+impl core::marker::Unpin for hearth_mp_matchmaker::MatchmakerService
+impl core::marker::UnsafeUnpin for hearth_mp_matchmaker::MatchmakerService
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_matchmaker::MatchmakerService
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_matchmaker::MatchmakerService
+pub struct hearth_mp_matchmaker::MatchmakerState
+impl core::default::Default for hearth_mp_matchmaker::MatchmakerState
+pub fn hearth_mp_matchmaker::MatchmakerState::default() -> Self
+impl serde_core::ser::Serialize for hearth_mp_matchmaker::MatchmakerState
+pub fn hearth_mp_matchmaker::MatchmakerState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_matchmaker::MatchmakerState
+pub fn hearth_mp_matchmaker::MatchmakerState::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_matchmaker::MatchmakerState
+impl core::marker::Send for hearth_mp_matchmaker::MatchmakerState
+impl core::marker::Sync for hearth_mp_matchmaker::MatchmakerState
+impl core::marker::Unpin for hearth_mp_matchmaker::MatchmakerState
+impl core::marker::UnsafeUnpin for hearth_mp_matchmaker::MatchmakerState
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_matchmaker::MatchmakerState
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_matchmaker::MatchmakerState
+pub struct hearth_mp_matchmaker::OpenRoom
+pub hearth_mp_matchmaker::OpenRoom::capacity: u8
+pub hearth_mp_matchmaker::OpenRoom::metadata: hearth_mp_protocol::Value
+pub hearth_mp_matchmaker::OpenRoom::name: alloc::string::String
+pub hearth_mp_matchmaker::OpenRoom::players: u8
+impl core::clone::Clone for hearth_mp_matchmaker::OpenRoom
+pub fn hearth_mp_matchmaker::OpenRoom::clone(&self) -> Self
+impl core::cmp::PartialEq for hearth_mp_matchmaker::OpenRoom
+pub fn hearth_mp_matchmaker::OpenRoom::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_matchmaker::OpenRoom
+pub fn hearth_mp_matchmaker::OpenRoom::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_matchmaker::OpenRoom
+impl serde_core::ser::Serialize for hearth_mp_matchmaker::OpenRoom
+pub fn hearth_mp_matchmaker::OpenRoom::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_matchmaker::OpenRoom
+pub fn hearth_mp_matchmaker::OpenRoom::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_matchmaker::OpenRoom
+impl core::marker::Send for hearth_mp_matchmaker::OpenRoom
+impl core::marker::Sync for hearth_mp_matchmaker::OpenRoom
+impl core::marker::Unpin for hearth_mp_matchmaker::OpenRoom
+impl core::marker::UnsafeUnpin for hearth_mp_matchmaker::OpenRoom
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_matchmaker::OpenRoom
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_matchmaker::OpenRoom
+pub const hearth_mp_matchmaker::BINDING: &str
+pub const hearth_mp_matchmaker::RESERVATION_MS: u64

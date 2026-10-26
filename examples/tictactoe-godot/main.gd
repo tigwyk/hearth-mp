@@ -7,7 +7,7 @@ extends Control
 ## The typed classes under `res://hearth/` are generated from the server crate
 ## (see the README):
 ##
-##   hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+##   hearth-mp codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
 ##
 ## Run `scripts/sync-addon.ps1` first so `res://addons/hearth` exists.
 

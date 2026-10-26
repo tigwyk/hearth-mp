@@ -4,9 +4,9 @@
 //! the framework pushes a delta patch after every move; the room only has to
 //! enforce the rules.
 
-use hearth::anyhow;
-use hearth::sync::SyncMap;
-use hearth::{
+use hearth_mp::anyhow;
+use hearth_mp::sync::SyncMap;
+use hearth_mp::{
     Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, PlayerService, Result, Room, Schema,
     Service, ServiceCtx,
 };
@@ -15,7 +15,7 @@ use worker::{Context, Env, Request, Response};
 
 /// Server-side game status. Included in the schema, so clients see it.
 #[derive(Schema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub enum Status {
     #[default]
     Waiting,
@@ -26,7 +26,7 @@ pub enum Status {
 
 /// The synced room state: only `#[sync]` fields reach clients.
 #[derive(HearthState, Serialize, Deserialize, Default)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub struct Board {
     /// Nine cells: 0 empty, 1 X, 2 O.
     #[sync]
@@ -45,7 +45,7 @@ pub struct Board {
 
 /// Intents are the only way a client can change the room.
 #[derive(Schema, Deserialize)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub enum Move {
     Place { cell: u8 },
     Rematch,
@@ -77,7 +77,7 @@ pub enum PlayerRpc {
 #[derive(Default)]
 pub struct TttPlayer;
 
-#[hearth::service(binding = "TTT_PLAYER", player)]
+#[hearth_mp::service(binding = "TTT_PLAYER", player)]
 impl Service for TttPlayer {
     type State = PlayerStats;
     type Rpc = PlayerRpc;
@@ -86,7 +86,7 @@ impl Service for TttPlayer {
     async fn on_call(
         &mut self,
         ctx: &mut ServiceCtx<Self>,
-        _from: &hearth::Target,
+        _from: &hearth_mp::Target,
         rpc: PlayerRpc,
     ) -> Result<()> {
         let PlayerRpc::Result(outcome) = rpc;
@@ -121,7 +121,7 @@ const LINES: [[usize; 3]; 8] = [
 #[derive(Default)]
 pub struct TicTacToe;
 
-#[hearth::room(mode = "event", max_clients = 2, binding = "TICTACTOE")]
+#[hearth_mp::room(mode = "event", max_clients = 2, binding = "TICTACTOE")]
 impl Room for TicTacToe {
     type State = Board;
     type Intent = Move;
@@ -257,18 +257,18 @@ fn winning_mark(cells: &[u8]) -> Option<u8> {
     })
 }
 
-// The room registry (`hearth inspect rooms`) and the matchmaker
+// The room registry (`hearth-mp inspect rooms`) and the matchmaker
 // (`/match`, `/lobby`). Both are optional bindings; a missing one only disables
 // its feature.
-hearth::admin::registry_object!();
-hearth::matchmaker::matchmaker_object!();
+hearth_mp::admin::registry_object!();
+hearth_mp::matchmaker::matchmaker_object!();
 
 /// Every room type this Worker serves.
-fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+fn room_routes() -> &'static [hearth_mp_gateway::RoomRoute] {
+    static ROUTES: [hearth_mp_gateway::RoomRoute; 1] = [hearth_mp_gateway::RoomRoute::new(
         "tictactoe",
         "TICTACTOE",
-        hearth::server::schema_hash_hex::<TicTacToe>,
+        hearth_mp::server::schema_hash_hex::<TicTacToe>,
         2,
     )];
     &ROUTES
@@ -279,11 +279,11 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
 /// The auth providers come from the environment (`.dev.vars` locally, Worker
 /// variables and secrets in production), so this deployment enables anonymous
 /// logins unless `HEARTH_AUTH_ANONYMOUS=0`, plus whatever else is configured.
-fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig::new(room_routes())
-        .player(hearth_gateway::PlayerRoute::new("TTT_PLAYER"))
+fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayConfig, String> {
+    Ok(hearth_mp_gateway::GatewayConfig::new(room_routes())
+        .player(hearth_mp_gateway::PlayerRoute::new("TTT_PLAYER"))
         .matchmaker(true)
-        .auth(hearth_gateway::AuthConfig::from_env(env)?))
+        .auth(hearth_mp_gateway::AuthConfig::from_env(env)?))
 }
 
 /// The gateway Worker entry: auth, routing, and the tictactoe room route.
@@ -291,13 +291,13 @@ fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfi
 async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
     // The admin API exists only when HEARTH_ADMIN_TOKEN is set. Without it these
     // paths are ordinary 404s, as if the feature were not deployed.
-    if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
-        return hearth::admin::serve_admin(req, env, room_routes()).await;
+    if req.path().starts_with("/admin/") && hearth_mp::admin::admin_token(&env).is_some() {
+        return hearth_mp::admin::serve_admin(req, env, room_routes()).await;
     }
     // A provider configured wrongly fails loudly instead of silently disabling.
     let config = match gateway_config(&env) {
         Ok(config) => config,
         Err(message) => return Response::error(message, 500),
     };
-    hearth_gateway::serve(req, env, &config).await
+    hearth_mp_gateway::serve(req, env, &config).await
 }

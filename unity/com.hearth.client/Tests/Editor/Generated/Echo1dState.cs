@@ -1,4 +1,4 @@
-// Hand-written in the `hearth codegen --unity` format: the state of the stock
+// Hand-written in the `hearth-mp codegen --unity` format: the state of the stock
 // plugin's built-in "hearth.echo1d" logic, used only by the predictor tests.
 #nullable disable
 using Newtonsoft.Json.Linq;

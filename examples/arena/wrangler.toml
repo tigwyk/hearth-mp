@@ -11,7 +11,7 @@ command = "cargo install -q worker-build && worker-build --release"
 name = "ARENA"
 class_name = "ArenaRoomObject"
 
-# Optional room registry: powers `hearth inspect rooms`, which the soak test uses
+# Optional room registry: powers `hearth-mp inspect rooms`, which the soak test uses
 # to check that a room stops ticking once every player has left.
 [[durable_objects.bindings]]
 name = "HEARTH_REGISTRY"

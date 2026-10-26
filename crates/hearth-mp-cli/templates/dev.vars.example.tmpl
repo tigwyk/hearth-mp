@@ -1,0 +1,7 @@
+# Copy to .dev.vars for `wrangler dev` (never commit .dev.vars).
+# Generate a real secret with: openssl rand -hex 32
+HEARTH_SECRET=0000000000000000000000000000000000000000000000000000000000000000
+
+# Optional admin API (`/admin/*`, `hearth-mp inspect`). Uncomment with a random token
+# of at least 32 bytes (openssl rand -hex 32). Without it the admin API is 404.
+# HEARTH_ADMIN_TOKEN=0000000000000000000000000000000000000000000000000000000000000000

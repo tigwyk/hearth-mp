@@ -1,0 +1,18 @@
+[package]
+name = "hearth-mp-client"
+description = "Hearth v0.1 sans-IO client core: handshake, patch apply, intent batching, send pacing, interpolation and prediction."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-mp-protocol.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+# The v0.4 prediction test runs the server's shared step next to the predictor.
+arena-logic = { path = "../../examples/arena-logic" }
+hearth-mp-protocol = { workspace = true, features = ["vectors"] }

@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use hearth_test::world::{RoomRef, ServiceRef, TestWorld};
+use hearth_mp_test::world::{RoomRef, ServiceRef, TestWorld};
 use serde_json::{json, Value};
 use tictactoe::{TicTacToe, TttPlayer};
 
@@ -29,14 +29,14 @@ fn world() -> World {
 
 impl World {
     /// X is the first player ("a"), O the second ("b").
-    fn new_game(&mut self) -> (hearth_test::C, hearth_test::C) {
+    fn new_game(&mut self) -> (hearth_mp_test::C, hearth_mp_test::C) {
         (
             self.world.join(&self.room, "a", json!({})),
             self.world.join(&self.room, "b", json!({})),
         )
     }
 
-    fn place(&mut self, client: hearth_test::C, cell: u8) {
+    fn place(&mut self, client: hearth_mp_test::C, cell: u8) {
         self.world
             .intent(client, json!({ "Place": { "cell": cell } }));
     }

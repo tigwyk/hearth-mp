@@ -12,12 +12,12 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 name = "diff-bench"
 version = "0.0.0"
 dependencies = [
- "hearth-sync",
+ "hearth-mp-sync",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-protocol"
+name = "hearth-mp-protocol"
 version = "0.1.0"
 dependencies = [
  "rmp-serde",
@@ -27,17 +27,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-sync"
+name = "hearth-mp-sync"
 version = "0.1.0"
 dependencies = [
- "hearth-protocol",
- "hearth-sync-derive",
+ "hearth-mp-protocol",
+ "hearth-mp-sync-derive",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-sync-derive"
+name = "hearth-mp-sync-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",

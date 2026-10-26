@@ -171,7 +171,7 @@ namespace Hearth
         {
             var attribute = typeof(TState).GetCustomAttribute<HearthSchemaAttribute>();
             if (attribute == null)
-                throw new InvalidOperationException("TState has no [HearthSchema]; run hearth codegen --unity");
+                throw new InvalidOperationException("TState has no [HearthSchema]; run hearth-mp codegen --unity");
             return (HearthRoom<TState>)await JoinCore(roomType, room, opts, attribute.Hash, new HearthRoom<TState>());
         }
 

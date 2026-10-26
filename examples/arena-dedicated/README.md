@@ -6,7 +6,7 @@ allocator is chosen at runtime:
 
 | mode | how it works | where the server runs | e2e |
 | --- | --- | --- | --- |
-| **containers** (default) | `#[hearth::room(allocator = "container", container = "ARENA_SERVER")]`; each session's `ArenaServer` object starts one Cloudflare Container from `server/Dockerfile` | Cloudflare Containers | `e2e-container.mjs` |
+| **containers** (default) | `#[hearth_mp::room(allocator = "container", container = "ARENA_SERVER")]`; each session's `ArenaServer` object starts one Cloudflare Container from `server/Dockerfile` | Cloudflare Containers | `e2e-container.mjs` |
 | **webhook fleet** | `HEARTH_ALLOCATOR_MODE = "webhook"`; the adapter POSTs a signed allocation to `fleet/allocator.mjs`, which starts `fleet/fake-server` | your own fleet | `e2e-fleet.mjs` |
 
 The room attribute is the compile-time default; `HEARTH_ALLOCATOR_MODE` overrides

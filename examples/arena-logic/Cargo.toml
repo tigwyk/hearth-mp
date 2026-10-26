@@ -8,7 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-hearth-protocol.workspace = true
+hearth-mp-protocol.workspace = true
 # Only the `Logic` trait (and `PlayerId` re-export) is needed for prediction.
-hearth-client.workspace = true
+hearth-mp-client.workspace = true
 serde.workspace = true

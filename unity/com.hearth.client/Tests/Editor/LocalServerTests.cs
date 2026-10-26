@@ -8,7 +8,7 @@ namespace Hearth.Tests
     {
         [Test]
         public void BuildCommand_PrefersHearth() =>
-            Assert.AreEqual("hearth dev --port 9000", LocalServer.BuildCommand("../tictactoe", 9000, true));
+            Assert.AreEqual("hearth-mp dev --port 9000", LocalServer.BuildCommand("../tictactoe", 9000, true));
 
         [Test]
         public void BuildCommand_FallsBackToWrangler() =>

@@ -1,12 +1,12 @@
 extends SceneTree
 ## Typed-mirror runtime test against the generated classes (plan Task 7 Step 4).
 ##
-## Run after `hearth codegen` has emitted `res://hearth/` (the generated output is
+## Run after `hearth-mp codegen` has emitted `res://hearth/` (the generated output is
 ## committed, so normally nothing to do first). It loads the generated classes at
 ## run time instead of `preload` so running before codegen fails with an
 ## actionable message rather than a parse error.
 ##
-##   hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
+##   hearth-mp codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml
 ##   godot --headless --path examples/tictactoe-godot -s tests/typed_runtime.gd
 ##
 ## The generated tic-tac-toe schema (`Board { cells, marks, turn, status }`) has
@@ -32,7 +32,7 @@ func _init() -> void:
 	if board_script == null or status_script == null or intents_script == null:
 		printerr(
 			"typed_runtime: generated classes missing under res://hearth/. Run: "
-			+ "hearth codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml"
+			+ "hearth-mp codegen --godot examples/tictactoe-godot/hearth --manifest-path examples/tictactoe/Cargo.toml"
 		)
 		quit(1)
 		return

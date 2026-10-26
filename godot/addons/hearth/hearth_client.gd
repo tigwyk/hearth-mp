@@ -114,7 +114,7 @@ func _create_backend() -> Node:
 	if instance == null:
 		push_error(
 			"Hearth: HearthNative is not registered. Build the extension " +
-			"(cargo build -p hearth-godot --release, copy the library into " +
+			"(cargo build -p hearth-mp-godot --release, copy the library into " +
 			"addons/hearth/bin/) and import the project once."
 		)
 		return null

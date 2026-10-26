@@ -1,0 +1,30 @@
+error[E0277]: the trait bound `NoRpc: RoomRpc` is not satisfied
+  --> tests/ui/rpc_without_room_rpc.rs:15:1
+   |
+15 | #[hearth_mp::room(mode = "event", max_clients = 2, binding = "NO_RPC", rpc)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `RoomRpc` is not implemented for `NoRpc`
+  --> tests/ui/rpc_without_room_rpc.rs:13:1
+   |
+13 | pub struct NoRpc;
+   | ^^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `hearth_mp::room` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: the method `call` exists for struct `RoomObject<NoRpc>`, but its trait bounds were not satisfied
+  --> tests/ui/rpc_without_room_rpc.rs:15:1
+   |
+13 | pub struct NoRpc;
+   | ---------------- doesn't satisfy `NoRpc: RoomRpc`
+14 |
+15 | #[hearth_mp::room(mode = "event", max_clients = 2, binding = "NO_RPC", rpc)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method cannot be called on `RoomObject<NoRpc>` due to unsatisfied trait bounds
+   |
+   = note: the following trait bounds were not satisfied:
+           `NoRpc: RoomRpc`
+note: the trait `RoomRpc` must be implemented
+  --> $WORKSPACE/crates/hearth-mp-server/src/room.rs
+   |
+   | pub trait RoomRpc: Room {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the attribute macro `hearth_mp::room` (in Nightly builds, run with -Z macro-backtrace for more info)

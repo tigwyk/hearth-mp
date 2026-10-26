@@ -12,5 +12,5 @@ publish = false
 [dependencies]
 # Path dependency on a member of the main workspace: Cargo resolves the member's
 # own workspace root for inherited fields, so this does not need root changes.
-hearth-sync = { path = "../../crates/hearth-sync", version = "0.1.0" }
+hearth-mp-sync = { path = "../../crates/hearth-mp-sync", version = "0.1.0" }
 serde_json = "1.0.154"

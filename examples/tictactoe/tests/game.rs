@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use hearth_client::ClientEvent;
-use hearth_protocol::ErrorCode;
-use hearth_test::{TestRoom, C};
+use hearth_mp_client::ClientEvent;
+use hearth_mp_protocol::ErrorCode;
+use hearth_mp_test::{TestRoom, C};
 use serde_json::{json, Value};
 use tictactoe::TicTacToe;
 

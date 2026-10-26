@@ -18,7 +18,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use hearth_sync::diff;
+use hearth_mp_sync::diff;
 use serde_json::{json, Map, Value};
 
 const CLIENTS: [usize; 3] = [4, 16, 64];

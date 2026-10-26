@@ -12,8 +12,8 @@
 use std::time::Duration;
 
 use arena_logic::{ArenaState, Move};
-use hearth::sync::SyncMap;
-use hearth::{Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, Result, Room, Schema};
+use hearth_mp::sync::SyncMap;
+use hearth_mp::{Client, Ctx, HearthState, JoinOpts, Leave, PlayerId, Result, Room, Schema};
 use serde::{Deserialize, Serialize};
 use worker::{Context, Env, Request, Response};
 
@@ -22,7 +22,7 @@ use worker::{Context, Env, Request, Response};
 /// also compiles into the client GDExtension); the room converts between the two
 /// around each tick.
 #[derive(Schema, Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub struct AvatarPos {
     pub pos: [f32; 2],
 }
@@ -41,7 +41,7 @@ impl From<arena_logic::Avatar> for AvatarPos {
 
 /// The synced state: what every client sees.
 #[derive(HearthState, Serialize, Deserialize)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub struct Arena {
     #[sync]
     pub avatars: SyncMap<PlayerId, AvatarPos>,
@@ -61,7 +61,7 @@ impl Default for Arena {
 
 /// The one intent: a direction for the next tick.
 #[derive(Schema, Deserialize)]
-#[hearth(crate = "hearth")]
+#[hearth(crate = "hearth_mp")]
 pub enum ArenaIntent {
     Move { dir: [i8; 2] },
 }
@@ -73,7 +73,7 @@ pub struct ArenaRoom {
     moves: Vec<(PlayerId, Move)>,
 }
 
-#[hearth::room(mode = "ticked", tick_hz = 20, max_clients = 16, binding = "ARENA")]
+#[hearth_mp::room(mode = "ticked", tick_hz = 20, max_clients = 16, binding = "ARENA")]
 impl Room for ArenaRoom {
     type State = Arena;
     type Intent = ArenaIntent;
@@ -128,13 +128,13 @@ impl Room for ArenaRoom {
     }
 }
 
-hearth::admin::registry_object!();
+hearth_mp::admin::registry_object!();
 
-fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
-    static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute::new(
+fn room_routes() -> &'static [hearth_mp_gateway::RoomRoute] {
+    static ROUTES: [hearth_mp_gateway::RoomRoute; 1] = [hearth_mp_gateway::RoomRoute::new(
         "arena",
         "ARENA",
-        hearth::server::schema_hash_hex::<ArenaRoom>,
+        hearth_mp::server::schema_hash_hex::<ArenaRoom>,
         16,
     )];
     &ROUTES
@@ -143,16 +143,16 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
 /// The gateway Worker entry: anonymous logins, room routing and the admin API.
 #[worker::event(fetch)]
 async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
-    if req.path().starts_with("/admin/") && hearth::admin::admin_token(&env).is_some() {
-        return hearth::admin::serve_admin(req, env, room_routes()).await;
+    if req.path().starts_with("/admin/") && hearth_mp::admin::admin_token(&env).is_some() {
+        return hearth_mp::admin::serve_admin(req, env, room_routes()).await;
     }
     let config = match gateway_config(&env) {
         Ok(config) => config,
         Err(message) => return Response::error(message, 500),
     };
-    hearth_gateway::serve(req, env, &config).await
+    hearth_mp_gateway::serve(req, env, &config).await
 }
 
-fn gateway_config(env: &Env) -> std::result::Result<hearth_gateway::GatewayConfig, String> {
-    Ok(hearth_gateway::GatewayConfig::new(room_routes()).auth(hearth_gateway::AuthConfig::from_env(env)?))
+fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayConfig, String> {
+    Ok(hearth_mp_gateway::GatewayConfig::new(room_routes()).auth(hearth_mp_gateway::AuthConfig::from_env(env)?))
 }

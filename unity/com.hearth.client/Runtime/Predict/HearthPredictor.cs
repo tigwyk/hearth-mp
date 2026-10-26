@@ -6,7 +6,7 @@ namespace Hearth
 {
     /// <summary>
     /// Predicts your own player with the game's shared Rust logic, compiled into
-    /// the native plugin (<c>hearth_unity_core::plugin! { logic: { "arena" => ... } }</c>).
+    /// the native plugin (<c>hearth_mp_unity_core::plugin! { logic: { "arena" => ... } }</c>).
     /// <see cref="State"/> is a typed mirror of the predicted state, with the same
     /// <c>OnChange</c> events as <c>room.State</c>.
     /// </summary>

@@ -1,0 +1,172 @@
+pub mod hearth_mp_admin
+pub mod hearth_mp_admin::registry
+pub struct hearth_mp_admin::registry::Registry<'a>
+impl<'a> hearth_mp_admin::registry::Registry<'a>
+pub fn hearth_mp_admin::registry::Registry<'a>::apply(&self, &hearth_mp_server::host::RoomReport, u64) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_admin::registry::Registry<'a>::list(&self, core::option::Option<&str>, core::option::Option<&hearth_mp_server::host::RoomName>, u32) -> hearth_mp_server::Result<(alloc::vec::Vec<hearth_mp_admin::registry::RoomRow>, core::option::Option<hearth_mp_server::host::RoomName>)>
+pub fn hearth_mp_admin::registry::Registry<'a>::new(&'a dyn hearth_mp_server::host::Sql) -> Self
+impl<'a> core::marker::Freeze for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::marker::Send for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::marker::Sync for hearth_mp_admin::registry::Registry<'a>
+impl<'a> core::marker::Unpin for hearth_mp_admin::registry::Registry<'a>
+impl<'a> core::marker::UnsafeUnpin for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::Registry<'a>
+pub struct hearth_mp_admin::registry::RegistryObject
+impl hearth_mp_admin::registry::RegistryObject
+pub async fn hearth_mp_admin::registry::RegistryObject::alarm(&self) -> worker::Result<()>
+pub async fn hearth_mp_admin::registry::RegistryObject::fetch(&self, worker::request::Request) -> worker::Result<worker::response::Response>
+pub fn hearth_mp_admin::registry::RegistryObject::new(worker::durable::State, worker::env::Env) -> Self
+impl !core::marker::Freeze for hearth_mp_admin::registry::RegistryObject
+impl !core::marker::Send for hearth_mp_admin::registry::RegistryObject
+impl !core::marker::Sync for hearth_mp_admin::registry::RegistryObject
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryObject
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryObject
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryObject
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryObject
+pub struct hearth_mp_admin::registry::RegistryService
+impl core::default::Default for hearth_mp_admin::registry::RegistryService
+pub fn hearth_mp_admin::registry::RegistryService::default() -> Self
+impl hearth_mp_server::call::Callable for hearth_mp_admin::registry::RegistryService
+pub type hearth_mp_admin::registry::RegistryService::Reply = ()
+pub type hearth_mp_admin::registry::RegistryService::Rpc = hearth_mp_server::host::RoomReport
+pub const hearth_mp_admin::registry::RegistryService::BINDING: &'static str
+impl hearth_mp_server::service::Service for hearth_mp_admin::registry::RegistryService
+pub type hearth_mp_admin::registry::RegistryService::Reply = ()
+pub type hearth_mp_admin::registry::RegistryService::Rpc = hearth_mp_server::host::RoomReport
+pub type hearth_mp_admin::registry::RegistryService::State = hearth_mp_admin::registry::RegistryState
+pub async fn hearth_mp_admin::registry::RegistryService::on_call(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, &hearth_mp_server::call::Target, hearth_mp_server::host::RoomReport) -> hearth_mp_server::Result<()>
+impl core::marker::Freeze for hearth_mp_admin::registry::RegistryService
+impl core::marker::Send for hearth_mp_admin::registry::RegistryService
+impl core::marker::Sync for hearth_mp_admin::registry::RegistryService
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryService
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryService
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryService
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryService
+pub struct hearth_mp_admin::registry::RegistryState
+impl core::default::Default for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::default() -> Self
+impl serde_core::ser::Serialize for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_admin::registry::RegistryState
+impl core::marker::Send for hearth_mp_admin::registry::RegistryState
+impl core::marker::Sync for hearth_mp_admin::registry::RegistryState
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryState
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryState
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryState
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryState
+pub struct hearth_mp_admin::registry::RoomRow
+pub hearth_mp_admin::registry::RoomRow::created_ms: u64
+pub hearth_mp_admin::registry::RoomRow::name: alloc::string::String
+pub hearth_mp_admin::registry::RoomRow::players: u8
+pub hearth_mp_admin::registry::RoomRow::room_type: alloc::string::String
+pub hearth_mp_admin::registry::RoomRow::updated_ms: u64
+impl core::clone::Clone for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_admin::registry::RoomRow
+impl core::cmp::PartialEq for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_admin::registry::RoomRow
+impl serde_core::ser::Serialize for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_admin::registry::RoomRow
+impl core::marker::Send for hearth_mp_admin::registry::RoomRow
+impl core::marker::Sync for hearth_mp_admin::registry::RoomRow
+impl core::marker::Unpin for hearth_mp_admin::registry::RoomRow
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RoomRow
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RoomRow
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RoomRow
+pub mod hearth_mp_admin::routes
+pub fn hearth_mp_admin::routes::admin_token(&worker::env::Env) -> core::option::Option<alloc::vec::Vec<u8>>
+pub async fn hearth_mp_admin::routes::serve_admin(worker::request::Request, worker::env::Env, &[hearth_mp_gateway::routes::RoomRoute]) -> worker::Result<worker::response::Response>
+pub macro hearth_mp_admin::registry_object!
+pub struct hearth_mp_admin::Registry<'a>
+impl<'a> hearth_mp_admin::registry::Registry<'a>
+pub fn hearth_mp_admin::registry::Registry<'a>::apply(&self, &hearth_mp_server::host::RoomReport, u64) -> hearth_mp_server::Result<()>
+pub fn hearth_mp_admin::registry::Registry<'a>::list(&self, core::option::Option<&str>, core::option::Option<&hearth_mp_server::host::RoomName>, u32) -> hearth_mp_server::Result<(alloc::vec::Vec<hearth_mp_admin::registry::RoomRow>, core::option::Option<hearth_mp_server::host::RoomName>)>
+pub fn hearth_mp_admin::registry::Registry<'a>::new(&'a dyn hearth_mp_server::host::Sql) -> Self
+impl<'a> core::marker::Freeze for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::marker::Send for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::marker::Sync for hearth_mp_admin::registry::Registry<'a>
+impl<'a> core::marker::Unpin for hearth_mp_admin::registry::Registry<'a>
+impl<'a> core::marker::UnsafeUnpin for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::Registry<'a>
+impl<'a> !core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::Registry<'a>
+pub struct hearth_mp_admin::RegistryObject
+impl hearth_mp_admin::registry::RegistryObject
+pub async fn hearth_mp_admin::registry::RegistryObject::alarm(&self) -> worker::Result<()>
+pub async fn hearth_mp_admin::registry::RegistryObject::fetch(&self, worker::request::Request) -> worker::Result<worker::response::Response>
+pub fn hearth_mp_admin::registry::RegistryObject::new(worker::durable::State, worker::env::Env) -> Self
+impl !core::marker::Freeze for hearth_mp_admin::registry::RegistryObject
+impl !core::marker::Send for hearth_mp_admin::registry::RegistryObject
+impl !core::marker::Sync for hearth_mp_admin::registry::RegistryObject
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryObject
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryObject
+impl !core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryObject
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryObject
+pub struct hearth_mp_admin::RegistryService
+impl core::default::Default for hearth_mp_admin::registry::RegistryService
+pub fn hearth_mp_admin::registry::RegistryService::default() -> Self
+impl hearth_mp_server::call::Callable for hearth_mp_admin::registry::RegistryService
+pub type hearth_mp_admin::registry::RegistryService::Reply = ()
+pub type hearth_mp_admin::registry::RegistryService::Rpc = hearth_mp_server::host::RoomReport
+pub const hearth_mp_admin::registry::RegistryService::BINDING: &'static str
+impl hearth_mp_server::service::Service for hearth_mp_admin::registry::RegistryService
+pub type hearth_mp_admin::registry::RegistryService::Reply = ()
+pub type hearth_mp_admin::registry::RegistryService::Rpc = hearth_mp_server::host::RoomReport
+pub type hearth_mp_admin::registry::RegistryService::State = hearth_mp_admin::registry::RegistryState
+pub async fn hearth_mp_admin::registry::RegistryService::on_call(&mut self, &mut hearth_mp_server::service::ServiceCtx<Self>, &hearth_mp_server::call::Target, hearth_mp_server::host::RoomReport) -> hearth_mp_server::Result<()>
+impl core::marker::Freeze for hearth_mp_admin::registry::RegistryService
+impl core::marker::Send for hearth_mp_admin::registry::RegistryService
+impl core::marker::Sync for hearth_mp_admin::registry::RegistryService
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryService
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryService
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryService
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryService
+pub struct hearth_mp_admin::RegistryState
+impl core::default::Default for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::default() -> Self
+impl serde_core::ser::Serialize for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_admin::registry::RegistryState
+pub fn hearth_mp_admin::registry::RegistryState::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_admin::registry::RegistryState
+impl core::marker::Send for hearth_mp_admin::registry::RegistryState
+impl core::marker::Sync for hearth_mp_admin::registry::RegistryState
+impl core::marker::Unpin for hearth_mp_admin::registry::RegistryState
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RegistryState
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RegistryState
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RegistryState
+pub struct hearth_mp_admin::RoomRow
+pub hearth_mp_admin::RoomRow::created_ms: u64
+pub hearth_mp_admin::RoomRow::name: alloc::string::String
+pub hearth_mp_admin::RoomRow::players: u8
+pub hearth_mp_admin::RoomRow::room_type: alloc::string::String
+pub hearth_mp_admin::RoomRow::updated_ms: u64
+impl core::clone::Clone for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::clone(&self) -> Self
+impl core::cmp::Eq for hearth_mp_admin::registry::RoomRow
+impl core::cmp::PartialEq for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::eq(&self, &Self) -> bool
+impl core::fmt::Debug for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for hearth_mp_admin::registry::RoomRow
+impl serde_core::ser::Serialize for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::registry::RoomRow::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+impl core::marker::Freeze for hearth_mp_admin::registry::RoomRow
+impl core::marker::Send for hearth_mp_admin::registry::RoomRow
+impl core::marker::Sync for hearth_mp_admin::registry::RoomRow
+impl core::marker::Unpin for hearth_mp_admin::registry::RoomRow
+impl core::marker::UnsafeUnpin for hearth_mp_admin::registry::RoomRow
+impl core::panic::unwind_safe::RefUnwindSafe for hearth_mp_admin::registry::RoomRow
+impl core::panic::unwind_safe::UnwindSafe for hearth_mp_admin::registry::RoomRow
+pub fn hearth_mp_admin::admin_token(&worker::env::Env) -> core::option::Option<alloc::vec::Vec<u8>>
+pub async fn hearth_mp_admin::serve_admin(worker::request::Request, worker::env::Env, &[hearth_mp_gateway::routes::RoomRoute]) -> worker::Result<worker::response::Response>

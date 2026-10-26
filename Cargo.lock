@@ -19,8 +19,8 @@ name = "arena"
 version = "0.1.0"
 dependencies = [
  "arena-logic",
- "hearth",
- "hearth-gateway",
+ "hearth-mp",
+ "hearth-mp-gateway",
  "serde",
  "serde_json",
  "worker",
@@ -30,8 +30,8 @@ dependencies = [
 name = "arena-dedicated"
 version = "0.1.0"
 dependencies = [
- "hearth",
- "hearth-gateway",
+ "hearth-mp",
+ "hearth-mp-gateway",
  "serde",
  "serde_json",
  "worker",
@@ -43,15 +43,15 @@ version = "0.1.0"
 dependencies = [
  "arena-logic",
  "godot",
- "hearth-godot",
+ "hearth-mp-godot",
 ]
 
 [[package]]
 name = "arena-logic"
 version = "0.1.0"
 dependencies = [
- "hearth-client",
- "hearth-protocol",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
  "serde",
 ]
 
@@ -660,37 +660,37 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth"
+name = "hearth-mp"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "hearth-admin",
- "hearth-matchmaker",
- "hearth-protocol",
- "hearth-server",
- "hearth-server-macros",
- "hearth-sync",
+ "hearth-mp-admin",
+ "hearth-mp-matchmaker",
+ "hearth-mp-protocol",
+ "hearth-mp-server",
+ "hearth-mp-server-macros",
+ "hearth-mp-sync",
 ]
 
 [[package]]
-name = "hearth-admin"
+name = "hearth-mp-admin"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
- "hearth-gateway",
- "hearth-server",
- "hearth-test",
+ "hearth-mp-gateway",
+ "hearth-mp-server",
+ "hearth-mp-test",
  "serde",
  "serde_json",
  "worker",
 ]
 
 [[package]]
-name = "hearth-cli"
+name = "hearth-mp-cli"
 version = "0.1.0"
 dependencies = [
- "hearth-server",
- "hearth-sync",
+ "hearth-mp-server",
+ "hearth-mp-sync",
  "serde",
  "serde_json",
  "toml",
@@ -699,26 +699,26 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-client"
+name = "hearth-mp-client"
 version = "0.1.0"
 dependencies = [
  "arena-logic",
- "hearth-protocol",
+ "hearth-mp-protocol",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-conformance-server"
+name = "hearth-mp-conformance-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures",
- "hearth-client",
- "hearth-protocol",
- "hearth-server",
- "hearth-sync",
- "hearth-test",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
+ "hearth-mp-server",
+ "hearth-mp-sync",
+ "hearth-mp-test",
  "serde",
  "serde_json",
  "tokio",
@@ -726,15 +726,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-gateway"
+name = "hearth-mp-gateway"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "futures",
  "getrandom 0.2.17",
- "hearth-matchmaker",
- "hearth-protocol",
- "hearth-server",
+ "hearth-mp-matchmaker",
+ "hearth-mp-protocol",
+ "hearth-mp-server",
  "hmac",
  "serde",
  "serde_json",
@@ -743,44 +743,44 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-godot"
+name = "hearth-mp-godot"
 version = "0.1.0"
 dependencies = [
  "godot",
- "hearth-client",
- "hearth-protocol",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-handoff-server"
+name = "hearth-mp-handoff-server"
 version = "0.1.0"
 dependencies = [
- "hearth-server",
+ "hearth-mp-server",
  "serde",
  "serde_json",
  "ureq",
 ]
 
 [[package]]
-name = "hearth-matchmaker"
+name = "hearth-mp-matchmaker"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "getrandom 0.2.17",
- "hearth-client",
- "hearth-protocol",
- "hearth-server",
- "hearth-test",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
+ "hearth-mp-server",
+ "hearth-mp-test",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-protocol"
+name = "hearth-mp-protocol"
 version = "0.1.0"
 dependencies = [
- "hearth-protocol",
+ "hearth-mp-protocol",
  "rmp-serde",
  "serde",
  "serde_json",
@@ -788,15 +788,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-server"
+name = "hearth-mp-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "futures",
  "getrandom 0.2.17",
- "hearth-protocol",
- "hearth-sync",
+ "hearth-mp-protocol",
+ "hearth-mp-sync",
  "hmac",
  "rmp-serde",
  "serde",
@@ -807,11 +807,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-server-macros"
+name = "hearth-mp-server-macros"
 version = "0.1.0"
 dependencies = [
- "hearth",
- "hearth-sync",
+ "hearth-mp",
+ "hearth-mp-sync",
  "proc-macro2",
  "quote",
  "serde",
@@ -821,11 +821,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-sync"
+name = "hearth-mp-sync"
 version = "0.1.0"
 dependencies = [
- "hearth-protocol",
- "hearth-sync-derive",
+ "hearth-mp-protocol",
+ "hearth-mp-sync-derive",
  "proptest",
  "serde",
  "serde_json",
@@ -833,7 +833,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-sync-derive"
+name = "hearth-mp-sync-derive"
 version = "0.1.0"
 dependencies = [
  "proc-macro2",
@@ -842,38 +842,38 @@ dependencies = [
 ]
 
 [[package]]
-name = "hearth-test"
+name = "hearth-mp-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "fastrand",
  "futures",
- "hearth-client",
- "hearth-matchmaker",
- "hearth-protocol",
- "hearth-server",
- "hearth-sync",
+ "hearth-mp-client",
+ "hearth-mp-matchmaker",
+ "hearth-mp-protocol",
+ "hearth-mp-server",
+ "hearth-mp-sync",
  "rusqlite",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-unity-core"
+name = "hearth-mp-unity-core"
 version = "0.1.0"
 dependencies = [
- "hearth-client",
- "hearth-protocol",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
  "serde_json",
 ]
 
 [[package]]
-name = "hearth-unity-plugin"
+name = "hearth-mp-unity-plugin"
 version = "0.1.0"
 dependencies = [
- "hearth-client",
- "hearth-protocol",
- "hearth-unity-core",
+ "hearth-mp-client",
+ "hearth-mp-protocol",
+ "hearth-mp-unity-core",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-test",
@@ -1743,11 +1743,11 @@ dependencies = [
 name = "tictactoe"
 version = "0.1.0"
 dependencies = [
- "hearth",
- "hearth-client",
- "hearth-gateway",
- "hearth-protocol",
- "hearth-test",
+ "hearth-mp",
+ "hearth-mp-client",
+ "hearth-mp-gateway",
+ "hearth-mp-protocol",
+ "hearth-mp-test",
  "serde",
  "serde_json",
  "worker",

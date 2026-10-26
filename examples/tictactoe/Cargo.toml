@@ -11,14 +11,14 @@ authors.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-hearth.workspace = true
-hearth-gateway.workspace = true
+hearth-mp.workspace = true
+hearth-mp-gateway.workspace = true
 worker.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
-hearth-test.workspace = true
-hearth-client.workspace = true
-hearth-protocol.workspace = true
+hearth-mp-test.workspace = true
+hearth-mp-client.workspace = true
+hearth-mp-protocol.workspace = true
 serde_json.workspace = true

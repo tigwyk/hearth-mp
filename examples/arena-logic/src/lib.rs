@@ -1,7 +1,7 @@
 //! Shared deterministic arena simulation for the v0.4 ticked/prediction sample.
 //!
 //! The same `step` runs in the room's `on_tick` and in the client predictor
-//! (`hearth_client::predict::Logic`), so the two must agree exactly. That is why
+//! (`hearth_mp_client::predict::Logic`), so the two must agree exactly. That is why
 //! this module is deterministic in practice: it uses only `+ - * /`, `sqrt` and
 //! comparisons on `f32`, with no transcendental functions, no platform
 //! intrinsics and no iteration over hash-ordered collections.
@@ -15,8 +15,8 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use hearth_client::Logic;
-use hearth_protocol::PlayerId;
+use hearth_mp_client::Logic;
+use hearth_mp_protocol::PlayerId;
 use serde::{Deserialize, Serialize};
 
 /// The arena is the square `[0, ARENA_MAX]²`, which is also the avatar centre's
@@ -132,7 +132,7 @@ fn separate_contacts(state: &mut ArenaState) {
 
 /// The shared simulation as a client `Logic` implementation (v0.4 Task 8).
 ///
-/// The server room's `on_tick` and `hearth-client`'s predictor both call
+/// The server room's `on_tick` and `hearth-mp-client`'s predictor both call
 /// [`step`], so they cannot drift apart.
 pub struct Arena;
 

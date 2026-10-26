@@ -1,0 +1,20 @@
+[package]
+name = "hearth-mp-cli"
+description = "Hearth CLI: `hearth-mp new`, `hearth-mp dev`, `hearth-mp deploy`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+# `src/bin/hearth-mp.rs` and `src/bin/cargo-hearth-mp.rs` are auto-discovered: the
+# second name lets `cargo hearth-mp ...` work.
+
+[dependencies]
+hearth-mp-server.workspace = true
+hearth-mp-sync.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+tungstenite.workspace = true
+ureq.workspace = true

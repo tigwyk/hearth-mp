@@ -1,0 +1,12 @@
+error[E0277]: the trait bound `u32: OwnerScoped` is not satisfied
+ --> tests/ui/owner_not_owner_scoped.rs:5:10
+  |
+5 | #[derive(HearthState, Serialize, Deserialize, Default)]
+  |          ^^^^^^^^^^^ the trait `OwnerScoped` is not implemented for `u32`
+  |
+help: the trait `OwnerScoped` is implemented for `hearth_mp_sync::SyncMap<hearth_mp_sync::PlayerId, V>`
+ --> src/schema.rs
+  |
+  | impl<V: Serialize> OwnerScoped for SyncMap<PlayerId, V> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = note: this error originates in the derive macro `HearthState` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -2,7 +2,7 @@ class_name HearthObject
 extends RefCounted
 ## Base class of the typed state mirror (plan Task 6).
 ##
-## `hearth codegen --godot` emits a thin subclass per Rust sync type: typed
+## `hearth-mp codegen --godot` emits a thin subclass per Rust sync type: typed
 ## `var`s, one `signal <gd>_changed(value)` per leaf/enum/option field, and a
 ## static `_hearth_meta()`. This runtime reloads the typed tree from the raw
 ## wire state and emits only the signals whose values changed, so game code can

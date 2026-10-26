@@ -38,7 +38,7 @@ so do not send one per rendered frame.
   is not decoded; the socket is closed with code 4006. This caps frames *to* the
   room only: a `FULL_STATE` to a client may be larger, up to the platform's own
   WebSocket message limit.
-- **Players per room: `max_clients`** (1–255), declared on `#[hearth::room]`.
+- **Players per room: `max_clients`** (1–255), declared on `#[hearth_mp::room]`.
   The platform's 32,768 WebSockets per Durable Object is far above room scale.
 - **State tree: JSON data types only**, object keys are always strings. State is
   persisted to SQLite on every handler exit, so steering the whole state on
@@ -98,10 +98,10 @@ simple = { limit = 60, period = 60 }
 ```
 
 The gateway takes the binding names and their periods from
-`GatewayConfig.limits` (`hearth_gateway::ratelimit::Limits`):
+`GatewayConfig.limits` (`hearth_mp_gateway::ratelimit::Limits`):
 
 ```rust
-limits: hearth_gateway::ratelimit::Limits::default(), // 60 s for both
+limits: hearth_mp_gateway::ratelimit::Limits::default(), // 60 s for both
 ```
 
 `Limits` has `ip_binding`, `ip_period_s`, `player_binding` and
@@ -141,7 +141,7 @@ Each room has a per-player intent token bucket, configured on the room:
 | `intent_burst` | `120` | Bucket capacity: how many intents can arrive back-to-back. |
 
 ```rust
-#[hearth::room(mode = "event", max_clients = 4, binding = "GAME",
+#[hearth_mp::room(mode = "event", max_clients = 4, binding = "GAME",
                intent_rate = 30, intent_burst = 60)]
 impl Room for Game { /* ... */ }
 ```
@@ -203,10 +203,10 @@ Measured with `scripts/bundle-size.sh` (gzip of `build/index_bg.wasm`,
 | `examples/tictactoe` | 2342 / 714 KiB | 1915 / 550 KiB | 633 KiB |
 | `examples/arena` | 2153 / 679 KiB | 1805 / 529 KiB | 609 KiB |
 | `examples/arena-dedicated` | 2102 / 654 KiB | 1759 / 516 KiB | 594 KiB |
-| `hearth new` project | 2050 / 645 KiB | 1709 / 507 KiB | 584 KiB |
+| `hearth-mp new` project | 2050 / 645 KiB | 1709 / 507 KiB | 584 KiB |
 
 "Before" is the default release profile. "After" is the workspace profile
-Hearth 1.0 uses, which `hearth new` writes into new projects too:
+Hearth 1.0 uses, which `hearth-mp new` writes into new projects too:
 
 ```toml
 [profile.release]

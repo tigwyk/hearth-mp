@@ -26,8 +26,8 @@ config structs with their constructors or `Default`.
 
 - Items marked `#[doc(hidden)]`, including `__private` modules, macro support
   types and the `ffi::__impl_*` functions.
-- Implementing `hearth_server::Host` outside the Hearth crates. `Host` is
-  soft-sealed through `hearth_server::__private::Sealed`.
+- Implementing `hearth_mp_server::Host` outside the Hearth crates. `Host` is
+  soft-sealed through `hearth_mp_server::__private::Sealed`.
 - Internal HTTP paths under `/__hearth/` and the admin routes.
 - SQL table layouts inside a room's storage. They change only through
   migrations that the runtime applies itself.

@@ -9,7 +9,7 @@ command = "cargo install -q worker-build && worker-build --release"
 name = "TICTACTOE"
 class_name = "TicTacToeObject"
 
-# Optional room registry: powers `hearth inspect rooms`. Rooms skip reporting when
+# Optional room registry: powers `hearth-mp inspect rooms`. Rooms skip reporting when
 # this binding is absent.
 [[durable_objects.bindings]]
 name = "HEARTH_REGISTRY"

@@ -1,0 +1,26 @@
+[package]
+name = "hearth-mp-gateway"
+description = "Hearth Gateway Worker library: auth providers, token verification and room routing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+hearth-mp-protocol.workspace = true
+hearth-mp-server = { workspace = true, features = ["worker"] }
+hearth-mp-matchmaker.workspace = true
+worker.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+base64.workspace = true
+getrandom.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+
+[dev-dependencies]
+hmac.workspace = true
+sha2.workspace = true
+base64.workspace = true

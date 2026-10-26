@@ -21,8 +21,8 @@ cd "$ROOT"
 BLESS=0
 [ "${1:-}" = "--bless" ] && BLESS=1
 FAILED=()
-CRATES=(hearth hearth-protocol hearth-sync hearth-client hearth-server hearth-gateway hearth-matchmaker
-        hearth-admin hearth-test hearth-unity-core hearth-godot hearth-handoff-server)
+CRATES=(hearth-mp hearth-mp-protocol hearth-mp-sync hearth-mp-client hearth-mp-server hearth-mp-gateway hearth-mp-matchmaker
+        hearth-mp-admin hearth-mp-test hearth-mp-unity-core hearth-mp-godot hearth-mp-handoff-server)
 TMP="$(mktemp -d)"
 mkdir -p api
 
@@ -54,9 +54,9 @@ elif [ "$BLESS" = 0 ]; then
 fi
 
 # --- C ABI -------------------------------------------------------------------
-HEADER=crates/hearth-unity-plugin/include/hearth_unity.h
-if ! (cd crates/hearth-unity-plugin && RUSTC_BOOTSTRAP=1 cbindgen --config cbindgen.toml --output include/hearth_unity.h --verify >/dev/null 2>&1); then
-    changed "C header out of date (regenerate: cd crates/hearth-unity-plugin && RUSTC_BOOTSTRAP=1 cbindgen --config cbindgen.toml --output include/hearth_unity.h)"
+HEADER=crates/hearth-mp-unity-plugin/include/hearth_unity.h
+if ! (cd crates/hearth-mp-unity-plugin && RUSTC_BOOTSTRAP=1 cbindgen --config cbindgen.toml --output include/hearth_unity.h --verify >/dev/null 2>&1); then
+    changed "C header out of date (regenerate: cd crates/hearth-mp-unity-plugin && RUSTC_BOOTSTRAP=1 cbindgen --config cbindgen.toml --output include/hearth_unity.h)"
 fi
 if [ "$BLESS" = 1 ]; then
     cp "$HEADER" api/hearth_unity.h

@@ -1,0 +1,25 @@
+[package]
+name = "hearth-mp-conformance-server"
+description = "Hearth conformance reference server: the real RoomRuntime over local tokio WebSockets, hosting the conformance room. A local test server only; never for production."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+hearth-mp-protocol.workspace = true
+hearth-mp-server.workspace = true
+hearth-mp-sync.workspace = true
+# Only for its in-memory SQLite `Sql` implementation (`MemHost`).
+hearth-mp-test.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+futures.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+
+[dev-dependencies]
+hearth-mp-client.workspace = true

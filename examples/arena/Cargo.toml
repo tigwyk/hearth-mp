@@ -12,9 +12,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 arena-logic = { path = "../arena-logic" }
-hearth.workspace = true
-hearth-gateway.workspace = true
+hearth-mp.workspace = true
+hearth-mp-gateway.workspace = true
 worker.workspace = true
 serde.workspace = true
-# The #[hearth::room] expansion's schema-export test uses serde_json.
+# The #[hearth_mp::room] expansion's schema-export test uses serde_json.
 serde_json.workspace = true

@@ -18,7 +18,7 @@ container the lobby hands two players to (Task 3 of the v0.5 plan).
   | `X-Hearth-Display-Name` | percent-encoded display name |
 
   A connection without `X-Hearth-Player-Id` gets `400`.
-- It reports the handoff lifecycle through `hearth-handoff-server`:
+- It reports the handoff lifecycle through `hearth-mp-handoff-server`:
   `started` on boot, `player_joined` per new player, then `result`
   (`{"winner": ...}`) and `ended` when the five-second match finishes, then the
   process exits.

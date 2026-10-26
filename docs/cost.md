@@ -1,16 +1,16 @@
 # Cost estimate
 
-`hearth cost` estimates your monthly Cloudflare bill before launch: pick a CCU
+`hearth-mp cost` estimates your monthly Cloudflare bill before launch: pick a CCU
 target, a room size and an intent rate, and it prints the billable dimensions,
 the included allowances, and the dollar total.
 
 It is **offline and pure**: no Cloudflare account, no API call, no network. Every
 price and included allowance comes from a versioned table checked into the repo
-(`crates/hearth-cli/pricing.toml`), so the same command gives the same answer on
+(`crates/hearth-mp-cli/pricing.toml`), so the same command gives the same answer on
 any machine and a price change is a data edit, not a code change.
 
 ```sh
-hearth cost --ccu 1000 --room-size 4 --intents 2
+hearth-mp cost --ccu 1000 --room-size 4 --intents 2
 ```
 
 ```
@@ -99,7 +99,7 @@ after an eviction) plus one state row per `--persist-every` ticks. See
 
 ## The pricing table
 
-`crates/hearth-cli/pricing.toml` is embedded in the binary at build time. It holds
+`crates/hearth-mp-cli/pricing.toml` is embedded in the binary at build time. It holds
 `as_of`, the `sources` URLs, and every price and included allowance:
 
 - Workers Paid: `$5`/month base, 10M requests/month included, `$0.30`/million after.
@@ -114,7 +114,7 @@ Current as of **2026-10-25**, refreshed from
 [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and
 [Durable Objects pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/).
 Prices change: when Cloudflare updates either page, edit `pricing.toml`, set
-`as_of` to the update date, and re-run `cargo test -p hearth-cli --test cost`.
+`as_of` to the update date, and re-run `cargo test -p hearth-mp-cli --test cost`.
 `--pricing <file>` previews a table without touching the shipped one.
 
 ## What the estimate deliberately leaves out
@@ -138,7 +138,7 @@ Prices change: when Cloudflare updates either page, edit `pricing.toml`, set
   runs on Cloudflare Containers bills vCPU, memory and disk per running second on
   your Cloudflare account (see
   [Containers pricing](https://developers.cloudflare.com/containers/platform/pricing/));
-  a fleet on your own infrastructure bills normally. `hearth cost` models only
+  a fleet on your own infrastructure bills normally. `hearth-mp cost` models only
   the coordination room and its gateway requests, never the match server.
 - **The Workers Free plan.** The model assumes the Workers Paid plan, because
   Durable Objects in production want it and the `$5` base is the total's floor.

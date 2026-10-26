@@ -5,7 +5,7 @@ using UnityEngine.Scripting;
 namespace Hearth
 {
     /// <summary>
-    /// A node of the typed state mirror. <c>hearth codegen --unity</c> emits
+    /// A node of the typed state mirror. <c>hearth-mp codegen --unity</c> emits
     /// subclasses with explicit load code (no reflection), so they survive IL2CPP
     /// stripping.
     /// </summary>
