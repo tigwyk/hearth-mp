@@ -27,6 +27,7 @@ fn job() -> AllocJob {
         ],
         claims: json!({ "map": "dust" }),
         region: Some("enam".to_owned()),
+        max_duration_ms: 0,
         attempt: 1,
     }
 }

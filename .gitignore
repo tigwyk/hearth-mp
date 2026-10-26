@@ -10,3 +10,5 @@ examples/tictactoe-godot/android/
 examples/tictactoe/build/
 examples/tictactoe/.wrangler/
 examples/tictactoe/.jwks-dev.json
+
+/.wrangler/

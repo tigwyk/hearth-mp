@@ -1,0 +1,18 @@
+# Docker build context for Hearth Worker container images.
+#
+# `wrangler deploy` (and `wrangler dev`) build a [[containers]] image with the
+# REPOSITORY ROOT as the build context, so without this file the context would
+# include every `target/`, `build/` and generated directory. The Dockerfile's own
+# `Dockerfile.dockerignore` only applies to plain `docker build -f <name>`
+# invocations; wrangler renames the Dockerfile, so this root file is what keeps
+# its context to source.
+.git
+**/target
+**/build
+**/.wrangler
+**/node_modules
+**/*.wasm
+bench
+docs
+godot
+unity

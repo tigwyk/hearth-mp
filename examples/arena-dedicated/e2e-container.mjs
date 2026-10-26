@@ -11,6 +11,11 @@
 // deploying: containers bill per running second). The script exits 2 with a
 // clear message on Windows against a loopback URL.
 //
+// Deployed run: `HEARTH_URL=https://hearth-arena-dedicated.<subdomain>.workers.dev
+// node e2e-container.mjs` (the Worker needs HEARTH_PUBLIC_URL set to that URL).
+// Check 6 kills a local Docker container, so a deployed run verifies checks 1-5
+// and prints the skip.
+//
 // Checks (plan Task 3 Step 3):
 //   1. two players ready up, get `/handoff/<sid>/connect` endpoints and connect
 //      with their own tickets,
@@ -29,24 +34,30 @@ import { spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import net from 'node:net';
 import path from 'node:path';
+import tls from 'node:tls';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.HEARTH_URL ?? 'http://127.0.0.1:8792';
 const WS_BASE = BASE.replace(/^http/, 'ws');
-const PORT = Number(new URL(BASE).port);
+const TARGET = new URL(BASE);
+const PORT = Number(TARGET.port || (TARGET.protocol === 'https:' ? 443 : 80));
+/// A loopback target runs local Docker; a deployed Worker runs containers on
+/// Cloudflare (no local Docker container to kill, so check 6 is skipped there).
+const LOCAL = /^(127\.0\.0\.1|localhost)$/i.test(TARGET.hostname);
 const TIMEOUT_MS = 20_000;
+/// A deployment's first container start includes image pull and instance
+/// provisioning; the room's own start timeout is 60 s, so a handoff may take
+/// that long (or a retry) before the tickets arrive.
+const HANDOFF_TIMEOUT_MS = 180_000;
 /// The room's heartbeat timeout is 60 s; leave room for the report round trips.
 const LOST_TIMEOUT_MS = 90_000;
 
-if (
-  process.platform === 'win32' &&
-  /^(127\.0\.0\.1|localhost)$/i.test(new URL(BASE).hostname)
-) {
+if (process.platform === 'win32' && LOCAL) {
   console.error(
     'e2e-container SKIPPED: wrangler dev cannot run local Cloudflare Containers on Windows.',
   );
-  console.error('  Use Linux, WSL, or macOS locally; ask before deploying a preview.');
+  console.error('  Use Linux, WSL, or macOS locally, or set HEARTH_URL to a deployed Worker.');
   process.exit(2);
 }
 
@@ -138,6 +149,9 @@ class JsonSocket {
     this.seq = 0;
     this.ws.addEventListener('message', (event) => {
       const frame = JSON.parse(String(event.data));
+      if (process.env.HEARTH_E2E_DEBUG) {
+        console.log(`   [room frame] op=${frame.op}${frame.name ? ` name=${frame.name}` : ''}`);
+      }
       if (frame.op === 'FULL_STATE') {
         this.state = frame.state;
         this.seq = frame.seq;
@@ -286,10 +300,13 @@ class FrameSocket {
 /// API cannot set. Returns the HTTP answer; on 101, `nextFrame()` reads frames.
 function rawUpgrade(pathname, extraHeaders = {}) {
   return new Promise((resolve, reject) => {
-    const socket = net.connect(PORT, '127.0.0.1');
+    const secure = TARGET.protocol === 'https:';
+    const socket = secure
+      ? tls.connect({ host: TARGET.hostname, port: PORT, servername: TARGET.hostname })
+      : net.connect(PORT, TARGET.hostname);
     const key = crypto.randomBytes(16).toString('base64');
     const headers = {
-      Host: `127.0.0.1:${PORT}`,
+      Host: TARGET.host,
       Connection: 'Upgrade',
       Upgrade: 'websocket',
       'Sec-WebSocket-Version': '13',
@@ -436,10 +453,16 @@ function ready(who) {
 
 async function waitHandoff(who, timeoutMs = TIMEOUT_MS) {
   const frame = await who.ws.waitFor(
-    (candidate) => candidate.op === 'EVENT' && candidate.name === 'hearth.handoff',
+    (candidate) =>
+      candidate.op === 'EVENT' &&
+      (candidate.name === 'hearth.handoff' || candidate.name === 'hearth.handoff_ended'),
     'hearth.handoff event',
     timeoutMs,
   );
+  if (frame.name !== 'hearth.handoff') {
+    // Fail fast with the reason the room gave up on the allocation.
+    throw new Error(`handoff failed before tickets: ${JSON.stringify(frame.data)}`);
+  }
   return frame.data;
 }
 
@@ -459,10 +482,11 @@ async function readySession(schemaHash, label) {
   const room = await mintRoom();
   const first = await player(room, schemaHash);
   const second = await player(room, schemaHash);
+  console.log(`-- ${label}: both players joined ${room}, readying up`);
   ready(first);
   ready(second);
-  const handoffA = await waitHandoff(first);
-  const handoffB = await waitHandoff(second);
+  const handoffA = await waitHandoff(first, HANDOFF_TIMEOUT_MS);
+  const handoffB = await waitHandoff(second, HANDOFF_TIMEOUT_MS);
   console.log(`-- ${label}: session ${handoffA.sid}`);
   return { room, first, second, handoffA, handoffB };
 }
@@ -511,8 +535,10 @@ async function run() {
   const schema = await request('/schema/arena');
   check(schema.status === 200, 'schema route');
   const schemaHash = schema.json.schema_hash;
-  const dockerProbe = docker(['ps']);
-  if (dockerProbe.status !== 0) fail('docker is not running (check `docker ps`)');
+  if (LOCAL) {
+    const dockerProbe = docker(['ps']);
+    if (dockerProbe.status !== 0) fail('docker is not running (check `docker ps`)');
+  }
 
   // --- checks 1-3: a full match through the container proxy ------------------
   const one = await readySession(schemaHash, 'check 1: container handoff');
@@ -617,6 +643,14 @@ async function run() {
   for (const who of [one.first, one.second, two.first, two.second]) who.ws.close();
 
   // --- check 6: kill the container; the room must report the loss -----------
+  if (!LOCAL) {
+    // A deployed Worker's container is not a local Docker container; the kill
+    // check needs Docker (`wrangler containers` has no kill command), so it is
+    // only verified on the local Linux/WSL/macOS run.
+    console.log('\nskip - check 6 (kill mid-match) needs local Docker; not verified remotely');
+    console.log('\ne2e-container ok (checks 1-5)');
+    return;
+  }
   const before = dockerContainerIds();
   const three = await readySession(schemaHash, 'check 6: kill mid-match');
   const liveA = await FrameSocket.open(socketUrl(three.handoffA, three.handoffA.ticket));

@@ -630,6 +630,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 players: row.players,
                 claims: row.claims,
                 region: row.region,
+                max_duration_ms: row.max_duration_ms,
                 attempt,
             });
         }
@@ -674,11 +675,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         let Some(row) = self.load_session(sid)? else {
             return Ok(());
         };
-        if row.status != SessionStatus::Allocating {
-            return Ok(());
-        }
-        match result {
-            Ok(endpoint) => {
+        match (row.status, result) {
+            (SessionStatus::Allocating, Ok(endpoint)) => {
                 let now = self.host.now_ms();
                 let deadline = Self::session_deadline(&row, now, row.start_timeout_ms);
                 self.host.sql().exec(
@@ -701,7 +699,31 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 self.run_handoff_event(sid, HandoffEvent::Ready { endpoint })
                     .await
             }
-            Err(error) => {
+            // A container reports `Started` as soon as its process boots, and
+            // that outbound report can beat the allocator's RPC reply. The
+            // session is genuinely up, but its endpoint and the players'
+            // tickets are still owed, so this success is not stale: record the
+            // endpoint and deliver the tickets now (the session keeps the
+            // `started` status and its heartbeat deadline).
+            (SessionStatus::Started, Ok(endpoint)) => {
+                self.host.sql().exec(
+                    "UPDATE hearth_sessions SET endpoint = ? WHERE sid = ?",
+                    vec![
+                        SqlValue::Text(endpoint.clone()),
+                        SqlValue::Text(sid.0.clone()),
+                    ],
+                )?;
+                self.secrets.remove(sid);
+                let mut ready = row.clone();
+                ready.status = SessionStatus::Ready;
+                ready.endpoint = Some(endpoint.clone());
+                for player in ready.players.clone() {
+                    self.mint_and_send_ticket(&ready, &player)?;
+                }
+                self.run_handoff_event(sid, HandoffEvent::Ready { endpoint })
+                    .await
+            }
+            (SessionStatus::Allocating, Err(error)) => {
                 if row.attempts < MAX_ALLOC_ATTEMPTS {
                     // Retry after 2^attempts seconds.
                     let backoff_ms = 1000u64 << row.attempts.min(20);
@@ -720,6 +742,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                         .await
                 }
             }
+            // A result for a finished session, or a failure that arrived after
+            // the server had already reported `Started`, is stale.
+            _ => Ok(()),
         }
     }
 
@@ -965,8 +990,14 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 Ok(())
             }
             ServerReport::Started => {
-                let started = row.status == SessionStatus::Started;
-                let _ = started;
+                // A server may retry `started` (for example after its own
+                // restart). Treat a repeat as a heartbeat: the room already saw
+                // the transition and must not run a second handler pass for it.
+                if row.status == SessionStatus::Started {
+                    self.touch_deadline(&row)
+                        .map_err(|_| HandoffError::NotFound)?;
+                    return Ok(());
+                }
                 self.start_session(&row)
                     .map_err(|_| HandoffError::NotFound)?;
                 self.run_handoff_event(sid, HandoffEvent::Started)

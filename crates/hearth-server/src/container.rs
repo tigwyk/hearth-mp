@@ -19,9 +19,11 @@
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use worker::js_sys::{Function, Object, Reflect};
+use worker::wasm_bindgen::{JsCast, JsValue};
 use worker::{
-    Container, ContainerStartupOptions, Date, DateInit, Delay, Env, Method, Request, Response,
-    Result, ScheduledTime, State,
+    Container, ContainerStartupOptions, Date, DateInit, Delay, Env, Headers, Method, Request,
+    RequestInit, Response, Result, ScheduledTime, State,
 };
 
 use crate::allocator::DEFAULT_CONTAINER_PORT;
@@ -156,18 +158,18 @@ impl ContainerObject {
             container.destroy(Some("replaced by a new start")).await?;
         }
 
-        let mut options = ContainerStartupOptions::new();
-        options.add_env("HEARTH_SID", &sid);
-        options.add_env("HEARTH_SESSION_SECRET", &secret);
-        options.add_env("HEARTH_REPORT_URL", &report_url);
-        let port_env = port.to_string();
-        options.add_env("HEARTH_PORT", &port_env);
+        let mut env_pairs: Vec<(String, String)> = vec![
+            ("HEARTH_SID".to_owned(), sid.clone()),
+            ("HEARTH_SESSION_SECRET".to_owned(), secret),
+            ("HEARTH_REPORT_URL".to_owned(), report_url),
+            ("HEARTH_PORT".to_owned(), port.to_string()),
+        ];
         for (key, value) in &env {
             if !key.starts_with(RESERVED_ENV_PREFIX) {
-                options.add_env(key, value);
+                env_pairs.push((key.clone(), value.clone()));
             }
         }
-        container.start(Some(options))?;
+        start_container(&container, &env_pairs)?;
 
         let started_ms = Date::now().as_millis();
         let record = SessionRecord {
@@ -214,7 +216,29 @@ impl ContainerObject {
             return Response::error("container is not running", 410);
         }
         let fetcher = container.get_tcp_port(record.port)?;
-        fetcher.fetch_request(req).await
+        // Containers only accept plain HTTP from the edge: `https://container`
+        // is rejected ("Connecting to a container using HTTPS is not currently
+        // supported"). The client hop is already TLS, so rebuild the request
+        // against the http:// host, carrying the identity and WebSocket upgrade
+        // headers unchanged. The proxy is only used for WebSocket upgrades, so
+        // there is no body to forward.
+        let headers = Headers::new();
+        for (name, value) in req.headers().entries() {
+            headers.set(&name, &value)?;
+        }
+        let mut target = format!("http://container{}", req.path());
+        if let Some(query) = req
+            .url()
+            .ok()
+            .and_then(|url| url.query().map(str::to_owned))
+        {
+            target.push('?');
+            target.push_str(&query);
+        }
+        let mut init = RequestInit::new();
+        init.with_method(req.method()).with_headers(headers);
+        let request = Request::new_with_init(&target, &init)?;
+        fetcher.fetch_request(request).await
     }
 
     /// Destroy the container (if any) and forget the session.
@@ -244,6 +268,54 @@ async fn healthy(container: &Container, port: u16) -> bool {
 fn scheduled(at_ms: u64) -> ScheduledTime {
     let at: worker::js_sys::Date = Date::from(DateInit::Millis(at_ms)).into();
     ScheduledTime::new(at)
+}
+
+/// Start the container with the session environment.
+///
+/// `worker` 0.8.7's `From<ContainerStartupOptions> for Object` *deletes* every
+/// non-empty option (`env`, `entrypoint`, `enableInternet`) before the runtime
+/// sees it, so the typed `start(Some(options))` silently drops the env and the
+/// dedicated server starts without `HEARTH_SID`. Its typed `env` is also a
+/// `js_sys::Map`, while the runtime API takes a plain `Record<string, string>`.
+/// For the non-empty case, build the JS options object the runtime documents and
+/// call `start` directly; the typed path stays for an empty start.
+///
+/// Verified against the deployed Worker: with the runtime-shaped object the
+/// container has the session env and the room receives the full match lifecycle
+/// (started, player joined, result, ended).
+fn start_container(container: &Container, env: &[(String, String)]) -> Result<()> {
+    if env.is_empty() {
+        return container.start(Some(ContainerStartupOptions::new()));
+    }
+    let options = Object::new();
+    let env_object = Object::new();
+    for (key, value) in env {
+        Reflect::set(
+            &env_object,
+            &JsValue::from_str(key),
+            &JsValue::from_str(value),
+        )
+        .map_err(worker::Error::from)?;
+    }
+    Reflect::set(&options, &JsValue::from_str("env"), env_object.as_ref())
+        .map_err(worker::Error::from)?;
+    // Required whenever a startup options object is passed, and the report
+    // requests must reach the Worker, so the container needs outbound access.
+    Reflect::set(
+        &options,
+        &JsValue::from_str("enableInternet"),
+        &JsValue::TRUE,
+    )
+    .map_err(worker::Error::from)?;
+    let start = Reflect::get(container.as_ref(), &JsValue::from_str("start"))
+        .map_err(worker::Error::from)?;
+    let start: Function = start
+        .dyn_into()
+        .map_err(|_| worker::Error::RustError("container start is not a JS function".to_owned()))?;
+    start
+        .call1(container.as_ref(), options.as_ref())
+        .map_err(worker::Error::from)?;
+    Ok(())
 }
 
 /// Define the Durable Object class that owns one session's container.

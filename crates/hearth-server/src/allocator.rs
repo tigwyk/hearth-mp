@@ -309,6 +309,13 @@ impl<S: ContainerStarter> Allocator for ContainerAllocator<S> {
             self.public_url.trim_end_matches('/'),
             job.sid.as_str()
         );
+        // The room knows each session's own deadline; the allocator's default is
+        // only a fallback for callers that hand in a bare job.
+        let max_duration_ms = if job.max_duration_ms == 0 {
+            self.max_duration.as_millis().min(u64::MAX as u128) as u64
+        } else {
+            job.max_duration_ms
+        };
         self.starter
             .start(StartRequest {
                 sid: job.sid.clone(),
@@ -316,7 +323,7 @@ impl<S: ContainerStarter> Allocator for ContainerAllocator<S> {
                 report_url,
                 port: self.port,
                 env: self.env.clone(),
-                max_duration_ms: self.max_duration.as_millis().min(u64::MAX as u128) as u64,
+                max_duration_ms,
             })
             .await?;
         Ok(connect_url(&self.public_url, &job.sid))

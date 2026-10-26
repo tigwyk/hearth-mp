@@ -216,6 +216,10 @@ pub struct AllocJob {
     pub players: Vec<PlayerId>,
     pub claims: Value,
     pub region: Option<String>,
+    /// The session's maximum duration in milliseconds. Adapters that start a
+    /// server with a self-destruct backstop (Containers) use it so the backstop
+    /// cannot fire before the room's own max-duration deadline.
+    pub max_duration_ms: u64,
     /// 1 for the first attempt.
     pub attempt: u32,
 }

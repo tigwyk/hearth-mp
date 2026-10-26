@@ -33,6 +33,8 @@ fn job() -> AllocJob {
         ],
         claims: serde_json::json!({ "map": "dust" }),
         region: Some("enam".to_owned()),
+        // Zero means "use the allocator's default"; the room always sets it.
+        max_duration_ms: 0,
         attempt: 1,
     }
 }
@@ -113,6 +115,18 @@ fn allocator_forwards_configured_port_env_and_duration() {
     assert_eq!(starts[0].port, 9100);
     assert_eq!(starts[0].env, allocator.env);
     assert_eq!(starts[0].max_duration_ms, 30_000);
+}
+
+#[test]
+fn job_max_duration_wins_over_the_allocator_default() {
+    let allocator = ContainerAllocator::new(FakeStarter::default(), PUBLIC_URL);
+    let mut job = job();
+    // The room knows the session's own deadline; the container backstop must not
+    // fire before it.
+    job.max_duration_ms = 90_000;
+    block_on(allocator.allocate(&job)).expect("container allocation succeeds");
+    let starts = allocator.starter.starts.borrow();
+    assert_eq!(starts[0].max_duration_ms, 90_000);
 }
 
 #[test]
@@ -358,4 +372,34 @@ fn session_env_only_in_start_rpc() {
         .expect("the gateway's ticket-only redeem");
     assert_eq!(redeemed.player_id, PlayerId("a".to_owned()));
     assert_eq!(redeemed.sid, job.sid);
+}
+
+#[test]
+fn started_report_before_allocator_result_still_sends_tickets() {
+    // A container reports `Started` as soon as its process boots; that report
+    // can beat the allocator's RPC reply. The session must still get the
+    // endpoint and the players their tickets instead of stranding `started`
+    // with no ticket (observed against the deployed Worker as `lost`).
+    let mut room = TestRoom::<Lobby>::new();
+    let a = room.join("a", json!({}));
+    let _b = room.join("b", json!({}));
+    room.intent(a, json!("Start"));
+    let job = room.jobs().into_iter().next().expect("an allocation job");
+
+    room.report(&job.sid, &job.secret, ServerReport::Started)
+        .expect("the container's early Started report");
+    room.complete_job(&job.sid, Ok(format!("{PUBLIC_URL}/ws")));
+
+    let events = handoff_data(&room, a);
+    assert_eq!(
+        events.len(),
+        1,
+        "the late allocator success still sends a ticket"
+    );
+    let ticket = events[0]["ticket"].as_str().expect("a ticket").to_owned();
+    let redeemed = room
+        .redeem_trusted(&job.sid, &ticket)
+        .expect("the session is still active");
+    assert_eq!(redeemed.player_id, PlayerId("a".to_owned()));
+    assert!(room.jobs().is_empty(), "no retry was scheduled");
 }
