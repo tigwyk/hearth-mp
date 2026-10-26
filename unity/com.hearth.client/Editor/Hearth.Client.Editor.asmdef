@@ -1,0 +1,20 @@
+{
+    "name": "Hearth.Client.Editor",
+    "rootNamespace": "Hearth.Editor",
+    "references": [
+        "Hearth.Client"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

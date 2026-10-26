@@ -12,3 +12,10 @@ examples/tictactoe/.wrangler/
 examples/tictactoe/.jwks-dev.json
 
 /.wrangler/
+
+# Unity plugin binaries and the WebGL core: built by scripts/build-unity-native.sh.
+unity/com.hearth.client/Plugins/**/*.dll
+unity/com.hearth.client/Plugins/**/*.so
+unity/com.hearth.client/Plugins/**/*.a
+unity/com.hearth.client/Plugins/**/*.bundle
+unity/com.hearth.client/Runtime/StreamingAssets~/

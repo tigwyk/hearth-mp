@@ -1,0 +1,11 @@
+/Library/
+/Temp/
+/Logs/
+/UserSettings/
+/obj/
+/Build/
+/Builds/
+*.csproj
+*.sln
+/Assets/StreamingAssets/
+/Assets/StreamingAssets.meta

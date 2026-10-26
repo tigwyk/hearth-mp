@@ -2,7 +2,7 @@
 
 Authoritative multiplayer rooms in Rust on Cloudflare Durable Objects. Implement
 one `Room` trait; the framework owns sockets, state sync, persistence,
-hibernation and auth. A Godot SDK is included.
+hibernation and auth. Godot and Unity SDKs are included.
 
 **Hard line:** Hearth v0.1 rooms are event-driven. Anything needing more than
 ~20 Hz authoritative simulation, UDP, or more than ~100 MB of live state per
@@ -75,6 +75,41 @@ containers (`item_added`/`item_removed`/`item_changed`, `changed`), and enums
 expose `variant`/`value`. Without a schema, `Hearth.state` stays the raw
 dictionary. The `Hearth` autoload also exposes `login_anonymous`, `create_room`,
 `join`, `send_intent` and `leave`; the tic-tac-toe Godot sample wires them up.
+
+## Unity
+
+Unity 2022.3 or newer. Build the native plugin for your platforms, then add the
+package by git URL (Package Manager → Add package from git URL):
+
+```sh
+scripts/build-unity-native.sh            # or --only windows|linux|macos|android|ios|webgl
+```
+
+```
+https://github.com/<owner>/hearth-rs.git?path=unity/com.hearth.client
+```
+
+Add a `HearthClient` component and generate typed state from the server crate:
+
+```sh
+hearth codegen --unity MyUnityProject/Assets/Hearth --manifest-path my-game/Cargo.toml
+```
+
+```csharp
+await client.LoginAnonymousAsync();
+var name = await client.CreateRoomAsync("tictactoe");
+var room = await client.JoinAsync<TicTacToeBoard>("tictactoe", name);
+room.State.Marks.OnAdd += (player, mark) => ...;
+room.State.Cells.OnChange += RenderBoard;
+room.State.OnStatusChange += status => ...;   // status.Variant == TicTacToeStatus.Won
+room.Send(TicTacToeIntents.Place(4));
+```
+
+Every callback runs on the main thread. Drops are retried (`OnReconnecting`,
+`OnReconnected`); `OnDisconnected` fires only when the client gives up. WebGL
+uses the wasm core (`--only webgl`) and the browser's WebSocket. `Window/Hearth`
+shows each client's live state and patches, and can start `hearth dev` when you
+press Play. The sample is `examples/tictactoe-unity`.
 
 ## A room
 

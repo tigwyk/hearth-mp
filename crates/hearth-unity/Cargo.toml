@@ -1,0 +1,27 @@
+[package]
+name = "hearth-unity"
+description = "Hearth Unity native plugin: a panic-safe C ABI (and a wasm-bindgen build for WebGL) over the hearth-client core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+name = "hearth_unity"
+# cdylib for desktop and Android, staticlib for iOS, rlib for the tests.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+# The WebGL build: `cargo build --target wasm32-unknown-unknown --features webgl`.
+webgl = ["dep:wasm-bindgen"]
+
+[dependencies]
+hearth-client.workspace = true
+hearth-protocol.workspace = true
+serde_json.workspace = true
+wasm-bindgen = { version = "0.2.129", optional = true }
+
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

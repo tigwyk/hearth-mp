@@ -68,7 +68,11 @@ impl ClientConfig {
 }
 
 /// A server frame, decoded for the caller.
-#[derive(Clone, Debug, PartialEq)]
+///
+/// Serialises as `{"type": "<snake_case variant>", ..fields}`, the JSON shape
+/// the Unity plugin hands to C#.
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum ClientEvent {
     /// `JOIN_OK`: the socket is joined as this player and seat.
     Joined { player_id: PlayerId, seat: u8 },

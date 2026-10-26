@@ -1,0 +1,16 @@
+{
+  "name": "com.hearth.client",
+  "version": "0.1.0",
+  "displayName": "Hearth Client",
+  "description": "Unity client for Hearth game rooms on Cloudflare Durable Objects: async join, typed state with OnChange events, reconnect, WebGL support.",
+  "unity": "2022.3",
+  "license": "MIT OR Apache-2.0",
+  "keywords": ["multiplayer", "networking", "websocket", "cloudflare", "hearth"],
+  "author": {
+    "name": "Lee Ingram",
+    "email": "lee@soylentcola.com"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}
