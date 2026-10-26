@@ -54,11 +54,17 @@ fn opcode_table_matches_code() {
 
 #[test]
 fn error_code_table_matches_code() {
-    let spec: Vec<String> = table(&spec(), "8. Error codes").into_iter().map(|row| row[0].clone()).collect();
+    let spec: Vec<String> = table(&spec(), "8. Error codes")
+        .into_iter()
+        .map(|row| row[0].clone())
+        .collect();
     for name in &spec {
         let parsed: ErrorCode = serde_json::from_value(serde_json::json!(name))
             .unwrap_or_else(|e| panic!("spec code `{name}` is not an ErrorCode: {e}"));
-        assert_eq!(serde_json::to_value(parsed).unwrap(), serde_json::json!(name));
+        assert_eq!(
+            serde_json::to_value(parsed).unwrap(),
+            serde_json::json!(name)
+        );
     }
     // Every known variant, so a new one cannot be added without the spec row.
     let known = [
@@ -78,7 +84,13 @@ fn error_code_table_matches_code() {
     ];
     let code: Vec<String> = known
         .iter()
-        .map(|c| serde_json::to_value(c).unwrap().as_str().unwrap().to_owned())
+        .map(|c| {
+            serde_json::to_value(c)
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_owned()
+        })
         .collect();
     assert_eq!(spec, code);
 }
@@ -106,7 +118,10 @@ fn close_code_table_matches_code() {
     .map(|(name, value)| (name.to_owned(), value))
     .collect();
     assert_eq!(spec, code);
-    assert!(code.values().all(|c| (4000..=4010).contains(c)), "assigned codes stay in 4000-4010");
+    assert!(
+        code.values().all(|c| (4000..=4010).contains(c)),
+        "assigned codes stay in 4000-4010"
+    );
 }
 
 /// `JoinOk` -> `JOIN_OK`.

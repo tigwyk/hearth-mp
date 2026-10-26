@@ -70,7 +70,12 @@ impl JwtConfig {
     /// Accept tokens from `issuer` for `audience`, checked with `keys`; no display
     /// name claim (set `name_claim` to read one).
     pub fn new(issuer: impl Into<String>, audience: impl Into<String>, keys: JwtKeys) -> Self {
-        Self { issuer: issuer.into(), audience: audience.into(), keys, name_claim: None }
+        Self {
+            issuer: issuer.into(),
+            audience: audience.into(),
+            keys,
+            name_claim: None,
+        }
     }
 }
 

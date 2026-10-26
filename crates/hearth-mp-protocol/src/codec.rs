@@ -23,7 +23,16 @@ pub enum ProtocolError {
 
 /// Every JSON `op` this version knows, including the reserved `PING`.
 const KNOWN_OPS: [&str; 10] = [
-    "HELLO", "JOIN_OK", "FULL_STATE", "PATCH", "INTENT", "EVENT", "ACK", "PING", "ERROR", "LEAVE",
+    "HELLO",
+    "JOIN_OK",
+    "FULL_STATE",
+    "PATCH",
+    "INTENT",
+    "EVENT",
+    "ACK",
+    "PING",
+    "ERROR",
+    "LEAVE",
 ];
 
 /// The opcode for a frame.
@@ -82,7 +91,9 @@ pub fn decode(msg: &WireMsg) -> Result<Frame, ProtocolError> {
                     .ok()
                     .and_then(|v| v.get("op").and_then(|op| op.as_str()).map(str::to_owned));
                 match op {
-                    Some(op) if !KNOWN_OPS.contains(&op.as_str()) => ProtocolError::UnknownOpcode(op),
+                    Some(op) if !KNOWN_OPS.contains(&op.as_str()) => {
+                        ProtocolError::UnknownOpcode(op)
+                    }
                     _ => ProtocolError::Malformed(err.to_string()),
                 }
             })

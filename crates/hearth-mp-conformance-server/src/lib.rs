@@ -48,7 +48,11 @@ pub fn schema_hash() -> String {
 }
 
 enum Cmd {
-    Connect { socket: Socket, player: String, out: UnboundedSender<Out> },
+    Connect {
+        socket: Socket,
+        player: String,
+        out: UnboundedSender<Out>,
+    },
     Message(Socket, WireMsg),
     Closed(Socket),
 }
@@ -78,6 +82,8 @@ async fn connection(stream: TcpStream, rooms: Rooms) {
     }
 
     let mut target: Option<(String, String)> = None;
+    // tungstenite's handshake callback fixes this signature, large Err and all.
+    #[allow(clippy::result_large_err)]
     let callback = |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
         match parse_room_path(request.uri().path(), request.uri().query().unwrap_or("")) {
             Some(found) => {
@@ -85,7 +91,8 @@ async fn connection(stream: TcpStream, rooms: Rooms) {
                 Ok(response)
             }
             None => {
-                let mut error = ErrorResponse::new(Some("expected /rooms/conf/<name>?player=<id>".to_owned()));
+                let mut error =
+                    ErrorResponse::new(Some("expected /rooms/conf/<name>?player=<id>".to_owned()));
                 *error.status_mut() = tokio_tungstenite::tungstenite::http::StatusCode::NOT_FOUND;
                 Err(error)
             }
@@ -101,7 +108,14 @@ async fn connection(stream: TcpStream, rooms: Rooms) {
     let socket = NEXT_SOCKET.fetch_add(1, Ordering::Relaxed);
     let (out_tx, mut out_rx) = unbounded_channel::<Out>();
     let room = room_sender(&rooms, &name);
-    if room.send(Cmd::Connect { socket, player, out: out_tx.clone() }).is_err() {
+    if room
+        .send(Cmd::Connect {
+            socket,
+            player,
+            out: out_tx.clone(),
+        })
+        .is_err()
+    {
         return;
     }
 
@@ -120,7 +134,10 @@ async fn connection(stream: TcpStream, rooms: Rooms) {
                     }
                 }
                 Out::Close(code, reason) => {
-                    let frame = CloseFrame { code: CloseCode::from(code), reason: reason.into() };
+                    let frame = CloseFrame {
+                        code: CloseCode::from(code),
+                        reason: reason.into(),
+                    };
                     let _ = ws_tx.send(Message::Close(Some(frame))).await;
                     break;
                 }
@@ -152,12 +169,15 @@ async fn connection(stream: TcpStream, rooms: Rooms) {
 /// `/rooms/conf/<name>` plus `player=<id>` in the query.
 fn parse_room_path(path: &str, query: &str) -> Option<(String, String)> {
     let mut parts = path.trim_start_matches('/').split('/');
-    let (Some("rooms"), Some(ROOM_TYPE), Some(name), None) = (parts.next(), parts.next(), parts.next(), parts.next()) else {
+    let (Some("rooms"), Some(ROOM_TYPE), Some(name), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
         return None;
     };
-    let player = query
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("player=").or_else(|| pair.strip_prefix("token=")))?;
+    let player = query.split('&').find_map(|pair| {
+        pair.strip_prefix("player=")
+            .or_else(|| pair.strip_prefix("token="))
+    })?;
     (!name.is_empty() && !player.is_empty()).then(|| (name.to_owned(), player.to_owned()))
 }
 
@@ -180,32 +200,51 @@ async fn http(mut stream: TcpStream) -> std::io::Result<()> {
                 .lines()
                 .find_map(|line| {
                     let (name, value) = line.split_once(':')?;
-                    name.eq_ignore_ascii_case("content-length").then(|| value.trim().parse::<usize>().ok())?
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())?
                 })
                 .unwrap_or(0);
             if request.len() >= end + 4 + length {
-                break (head, String::from_utf8_lossy(&request[end + 4..end + 4 + length]).into_owned());
+                break (
+                    head,
+                    String::from_utf8_lossy(&request[end + 4..end + 4 + length]).into_owned(),
+                );
             }
         }
     };
     let target = head.split(' ').nth(1).unwrap_or("");
     let (status, body) = if let Some(room_type) = target.strip_prefix("/schema/") {
         if room_type == ROOM_TYPE {
-            ("200 OK", serde_json::json!({ "schema_hash": schema_hash() }).to_string())
+            (
+                "200 OK",
+                serde_json::json!({ "schema_hash": schema_hash() }).to_string(),
+            )
         } else {
             ("404 Not Found", "unknown room type".to_owned())
         }
     } else if target == "/auth/anonymous" {
         let device = serde_json::from_str::<serde_json::Value>(&body)
             .ok()
-            .and_then(|v| v.get("device_id").and_then(|d| d.as_str()).map(str::to_owned))
-            .filter(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+            .and_then(|v| {
+                v.get("device_id")
+                    .and_then(|d| d.as_str())
+                    .map(str::to_owned)
+            })
+            .filter(|d| {
+                !d.is_empty()
+                    && d.chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+            });
         match device {
             Some(id) => (
                 "200 OK",
-                serde_json::json!({ "token": id, "player_id": id, "display_name": null }).to_string(),
+                serde_json::json!({ "token": id, "player_id": id, "display_name": null })
+                    .to_string(),
             ),
-            None => ("400 Bad Request", "device_id must be [A-Za-z0-9_-]+".to_owned()),
+            None => (
+                "400 Bad Request",
+                "device_id must be [A-Za-z0-9_-]+".to_owned(),
+            ),
         }
     } else {
         ("404 Not Found", "not found".to_owned())
@@ -234,9 +273,14 @@ fn room_sender(rooms: &Rooms, name: &str) -> UnboundedSender<Cmd> {
 async fn room_task(name: String, mut rx: UnboundedReceiver<Cmd>) {
     let host = TokioHost::new();
     let mut runtime = RoomRuntime::<Conf, TokioHost>::new(host.clone(), "CONF");
-    let room = RoomName { room_type: ROOM_TYPE.to_owned(), name };
+    let room = RoomName {
+        room_type: ROOM_TYPE.to_owned(),
+        name,
+    };
     loop {
-        let wait = host.alarm_at().map(|at| Duration::from_millis(at.saturating_sub(hearth_mp_server::Host::now_ms(&host))));
+        let wait = host.alarm_at().map(|at| {
+            Duration::from_millis(at.saturating_sub(hearth_mp_server::Host::now_ms(&host)))
+        });
         let cmd = tokio::select! {
             cmd = rx.recv() => cmd,
             _ = tokio::time::sleep(wait.unwrap_or_default()), if wait.is_some() => {
@@ -248,9 +292,15 @@ async fn room_task(name: String, mut rx: UnboundedReceiver<Cmd>) {
         };
         match cmd {
             None => break,
-            Some(Cmd::Connect { socket, player, out }) => {
+            Some(Cmd::Connect {
+                socket,
+                player,
+                out,
+            }) => {
                 host.add_socket(socket, out);
-                runtime.connect(socket, Session::anon(PlayerId(player)), room.clone(), None).await;
+                runtime
+                    .connect(socket, Session::anon(PlayerId(player)), room.clone(), None)
+                    .await;
             }
             Some(Cmd::Message(socket, wire)) => runtime.message(socket, wire).await,
             Some(Cmd::Closed(socket)) => {
@@ -269,7 +319,9 @@ use hearth_mp_server::Host as _;
 /// Bind `127.0.0.1:<port>` (0 for any free port) and serve until the process
 /// ends, on the current thread.
 pub fn run(port: u16) -> std::io::Result<()> {
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
     let local = tokio::task::LocalSet::new();
     local.block_on(&runtime, async move {
         let listener = TcpListener::bind(("127.0.0.1", port)).await?;

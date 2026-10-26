@@ -55,7 +55,12 @@ impl Room for Conf {
         Ok(())
     }
 
-    async fn on_intent(&mut self, ctx: &mut Ctx<Self>, who: &Client, intent: ConfIntent) -> Result<()> {
+    async fn on_intent(
+        &mut self,
+        ctx: &mut Ctx<Self>,
+        who: &Client,
+        intent: ConfIntent,
+    ) -> Result<()> {
         match intent {
             ConfIntent::Add(amount) => ctx.state().n += amount,
             ConfIntent::SetSecret(text) => {

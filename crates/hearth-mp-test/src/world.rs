@@ -616,10 +616,7 @@ impl TestWorld {
             .saturating_add(u64::try_from(delta.as_millis()).unwrap_or(u64::MAX));
         self.inner.clock.set(target);
         let mut fired = 0;
-        loop {
-            let Some(key) = self.due_object(target) else {
-                break;
-            };
+        while let Some(key) = self.due_object(target) {
             self.with_object(&key, |obj| Box::pin(async move { obj.alarm().await }));
             self.pump();
             fired += 1;

@@ -9,10 +9,13 @@ fn frozen_wire_strings_are_unchanged() {
     let list = std::fs::read_to_string(root.join("scripts/wire-constants.txt"))
         .expect("scripts/wire-constants.txt");
     let mut checked = 0;
-    for line in list.lines().filter(|l| !l.is_empty() && !l.starts_with('#')) {
+    for line in list
+        .lines()
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+    {
         let (constant, file) = line.split_once('\t').expect("<string>\t<file>");
-        let source = std::fs::read_to_string(root.join(file))
-            .unwrap_or_else(|err| panic!("{file}: {err}"));
+        let source =
+            std::fs::read_to_string(root.join(file)).unwrap_or_else(|err| panic!("{file}: {err}"));
         assert!(source.contains(constant), "{constant} is gone from {file}");
         checked += 1;
     }

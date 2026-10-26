@@ -135,7 +135,10 @@ fn whole_floats_go_out_as_integers() {
     // The server's u8 field rejects `3.0` with BAD_INTENT.
     assert_eq!(float_to_json(3.0), json!(3));
     assert_eq!(float_to_json(-7.0), json!(-7));
-    assert_eq!(float_to_json(9_007_199_254_740_992.0), json!(9_007_199_254_740_992_i64));
+    assert_eq!(
+        float_to_json(9_007_199_254_740_992.0),
+        json!(9_007_199_254_740_992_i64)
+    );
     assert!(float_to_json(3.0).is_i64());
     assert_eq!(float_to_json(0.5), json!(0.5));
     assert_eq!(float_to_json(1e300), json!(1e300));

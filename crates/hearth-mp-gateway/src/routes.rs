@@ -41,8 +41,19 @@ impl RoomRoute {
     /// static ROUTES: [RoomRoute; 1] =
     ///     [RoomRoute::new("tictactoe", "TICTACTOE", schema_hash_hex::<TicTacToe>, 2)];
     /// ```
-    pub const fn new(room_type: &'static str, binding: &'static str, schema_hash: fn() -> String, max_clients: u8) -> Self {
-        Self { room_type, binding, container: None, schema_hash, max_clients }
+    pub const fn new(
+        room_type: &'static str,
+        binding: &'static str,
+        schema_hash: fn() -> String,
+        max_clients: u8,
+    ) -> Self {
+        Self {
+            room_type,
+            binding,
+            container: None,
+            schema_hash,
+            max_clients,
+        }
     }
 
     /// Enable `GET /handoff/{sid}/connect` through this container binding.

@@ -317,10 +317,7 @@ impl HearthNative {
 
     /// Deliver incoming frames whose injected latency has elapsed.
     fn deliver_due_incoming(&mut self, now_ms: u64) {
-        loop {
-            let Some(front) = self.incoming.front() else {
-                break;
-            };
+        while let Some(front) = self.incoming.front() {
             if front.0 > now_ms {
                 break;
             }
@@ -333,10 +330,7 @@ impl HearthNative {
 
     /// Send outgoing frames whose injected latency has elapsed.
     fn deliver_due_outgoing(&mut self, peer: &mut Gd<WebSocketPeer>, now_ms: u64) {
-        loop {
-            let Some(front) = self.outgoing.front() else {
-                break;
-            };
+        while let Some(front) = self.outgoing.front() {
             if front.0 > now_ms {
                 break;
             }

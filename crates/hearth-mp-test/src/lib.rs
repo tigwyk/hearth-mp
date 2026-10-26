@@ -20,7 +20,9 @@ use hearth_mp_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_mp_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
 use hearth_mp_server::handoff::{AllocJob, HandoffError, Redeemed, ServerReport, SessionId};
 use hearth_mp_server::runtime::StopJob;
-use hearth_mp_server::{schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Session, Sql};
+use hearth_mp_server::{
+    schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Session, Sql,
+};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
 
@@ -184,10 +186,7 @@ impl<R: Room> TestRoom<R> {
             .now_ms()
             .saturating_add(u64::try_from(delta.as_millis()).unwrap_or(u64::MAX));
         let mut fired = 0;
-        loop {
-            let Some(at) = self.host.alarm_at() else {
-                break;
-            };
+        while let Some(at) = self.host.alarm_at() {
             if at > target {
                 break;
             }
@@ -400,10 +399,7 @@ impl<R: Room> TestRoom<R> {
     /// Send everything the client core has queued, then decode server replies.
     fn flush(&mut self, c: C) {
         let now = self.host.now_ms();
-        loop {
-            let Some(msg) = self.clients[c.0].core.poll_send(now) else {
-                break;
-            };
+        while let Some(msg) = self.clients[c.0].core.poll_send(now) {
             let socket = self.sockets[c.0];
             block_on(self.runtime().message(socket, msg));
         }
