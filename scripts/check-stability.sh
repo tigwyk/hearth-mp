@@ -14,6 +14,10 @@
 # - GDScript: tests/api_snapshot.gd vs api/godot-gdscript.txt
 #   (GODOT = the Godot console executable).
 # - The Wasm bundle budget (scripts/bundle-size.sh), last.
+#
+# PUBLIC_API_TOOLCHAIN pins the nightly for `cargo public-api` (CI sets it; the
+# output can change between nightlies). HEARTH_SKIP_ENGINES=1 skips the C# and GDScript checks (CI runs them in the
+# Unity and Godot jobs, which have the engines).
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -30,7 +34,7 @@ changed() { FAILED+=("$1"); echo "CHANGED: $1"; }
 
 # --- Rust public APIs ------------------------------------------------------
 for crate in "${CRATES[@]}"; do
-    if ! cargo public-api -p "$crate" --simplified > "$TMP/$crate.txt" 2> "$TMP/$crate.err"; then
+    if ! cargo ${PUBLIC_API_TOOLCHAIN:+"+$PUBLIC_API_TOOLCHAIN"} public-api -p "$crate" --simplified > "$TMP/$crate.txt" 2> "$TMP/$crate.err"; then
         cat "$TMP/$crate.err" >&2
         changed "cargo public-api -p $crate failed"
         continue
@@ -66,7 +70,10 @@ fi
 
 # --- C# (Unity) ------------------------------------------------------------
 UNITY="${UNITY:-/c/Program Files/Unity/Hub/Editor/6000.6.4f1/Editor/Unity.exe}"
-if [ -x "$UNITY" ]; then
+SKIP_ENGINES="${HEARTH_SKIP_ENGINES:-0}"
+if [ "$SKIP_ENGINES" = 1 ]; then
+    echo "note: C# API check skipped (HEARTH_SKIP_ENGINES=1)"
+elif [ -x "$UNITY" ]; then
     PROJECT="$ROOT/examples/tictactoe-unity"
     command -v cygpath >/dev/null && PROJECT="$(cygpath -w "$PROJECT")"
     RESULTS="$TMP/unity-api.xml"
@@ -83,7 +90,9 @@ fi
 
 # --- GDScript (Godot) ------------------------------------------------------
 GODOT="${GODOT:-$(command -v godot || echo "/c/Program Files/Godot/Godot_console.exe")}"
-if [ -x "$GODOT" ]; then
+if [ "$SKIP_ENGINES" = 1 ]; then
+    echo "note: GDScript API check skipped (HEARTH_SKIP_ENGINES=1)"
+elif [ -x "$GODOT" ]; then
     if [ -x examples/tictactoe-godot/scripts/sync-addon.ps1 ] || [ -f examples/tictactoe-godot/scripts/sync-addon.ps1 ]; then
         pwsh -NoProfile -File examples/tictactoe-godot/scripts/sync-addon.ps1 > /dev/null 2>&1 || true
     fi

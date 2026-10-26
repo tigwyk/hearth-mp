@@ -454,7 +454,7 @@ mod tests {
             16,
             "16 hex characters of randomness"
         );
-        assert_eq!(SessionId::new(&room()).as_str() != sid.as_str(), true);
+        assert_ne!(SessionId::new(&room()).as_str(), sid.as_str());
     }
 
     #[test]

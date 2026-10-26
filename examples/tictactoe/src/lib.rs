@@ -197,8 +197,8 @@ impl Room for TicTacToe {
                     state.status = Status::Draw;
                     results = state
                         .marks
-                        .iter()
-                        .map(|(player, _)| (player.clone(), Outcome::Draw))
+                        .keys()
+                        .map(|player| (player.clone(), Outcome::Draw))
                         .collect();
                 } else if let Some((next, _)) = state
                     .marks

@@ -83,7 +83,7 @@ fn matches_server_when_no_interference() {
 
     for tick in 1..=100u32 {
         let dir = match tick % 7 {
-            0 | 1 | 2 => [1, 0],
+            0..=2 => [1, 0],
             3 | 4 => [-1, 1],
             _ => [0, -1],
         };

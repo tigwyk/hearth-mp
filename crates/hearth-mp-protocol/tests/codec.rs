@@ -138,8 +138,10 @@ fn state_frames_over_the_intent_cap_decode() {
     };
     for encoding in [Encoding::MsgPack, Encoding::Json] {
         let msg = encode(&frame, encoding);
-        assert!(matches!(&msg, WireMsg::Binary(b) if b.len() > MAX_FRAME_BYTES)
-            || matches!(&msg, WireMsg::Text(t) if t.len() > MAX_FRAME_BYTES));
+        assert!(
+            matches!(&msg, WireMsg::Binary(b) if b.len() > MAX_FRAME_BYTES)
+                || matches!(&msg, WireMsg::Text(t) if t.len() > MAX_FRAME_BYTES)
+        );
         assert_eq!(decode(&msg), Ok(frame.clone()));
     }
 }
@@ -158,7 +160,10 @@ fn opcode_byte_must_match_body_tag() {
 
 #[test]
 fn unknown_opcodes_are_their_own_error() {
-    assert_eq!(decode(&WireMsg::Binary(vec![0x40, 0x80])), Err(ProtocolError::UnknownOpcode("0x40".into())));
+    assert_eq!(
+        decode(&WireMsg::Binary(vec![0x40, 0x80])),
+        Err(ProtocolError::UnknownOpcode("0x40".into()))
+    );
     assert_eq!(
         decode(&WireMsg::Text(r#"{"op":"FUTURE","x":1}"#.into())),
         Err(ProtocolError::UnknownOpcode("FUTURE".into()))

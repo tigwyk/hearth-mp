@@ -139,8 +139,8 @@ fn view_is_merge_of_both() {
 
 #[test]
 fn has_owner_flag_matches_the_fields() {
-    assert!(<Match as HearthState>::HAS_OWNER);
-    assert!(!<Plain as HearthState>::HAS_OWNER);
+    const { assert!(<Match as HearthState>::HAS_OWNER) };
+    const { assert!(!<Plain as HearthState>::HAS_OWNER) };
 }
 
 /// Same types and fields as [`Match`], but the server-only field has a

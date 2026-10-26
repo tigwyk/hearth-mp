@@ -40,9 +40,20 @@ fn identity_headers_from_clients_are_dropped() {
         "Host",
         "authorization",
     ] {
-        assert!(!hearth_mp_gateway::forwarded_header(name), "{name} must be dropped");
+        assert!(
+            !hearth_mp_gateway::forwarded_header(name),
+            "{name} must be dropped"
+        );
     }
-    for name in ["Upgrade", "Sec-WebSocket-Key", "Sec-WebSocket-Protocol", "User-Agent"] {
-        assert!(hearth_mp_gateway::forwarded_header(name), "{name} must be forwarded");
+    for name in [
+        "Upgrade",
+        "Sec-WebSocket-Key",
+        "Sec-WebSocket-Protocol",
+        "User-Agent",
+    ] {
+        assert!(
+            hearth_mp_gateway::forwarded_header(name),
+            "{name} must be forwarded"
+        );
     }
 }

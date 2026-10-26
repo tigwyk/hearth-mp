@@ -298,11 +298,12 @@ macro_rules! predictor {
                 player_id: ::godot::builtin::GString,
                 _seat: i32,
             ) {
-                self.predictor =
-                    ::std::option::Option::Some($crate::hearth_mp_client::Predictor::<$logic>::new(
+                self.predictor = ::std::option::Option::Some(
+                    $crate::hearth_mp_client::Predictor::<$logic>::new(
                         $crate::hearth_mp_protocol::PlayerId(player_id.to_string()),
                         $crate::PREDICT_TICK_HZ,
-                    ));
+                    ),
+                );
                 self.refresh_authoritative();
                 self.reconcile(&[]);
             }

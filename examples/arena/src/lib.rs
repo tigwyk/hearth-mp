@@ -154,5 +154,6 @@ async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response>
 }
 
 fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayConfig, String> {
-    Ok(hearth_mp_gateway::GatewayConfig::new(room_routes()).auth(hearth_mp_gateway::AuthConfig::from_env(env)?))
+    Ok(hearth_mp_gateway::GatewayConfig::new(room_routes())
+        .auth(hearth_mp_gateway::AuthConfig::from_env(env)?))
 }

@@ -10,8 +10,12 @@ use std::time::Duration;
 
 use hearth_mp_client::ClientEvent;
 use hearth_mp_protocol::{encode, Encoding, Frame, PlayerId, Value};
-use hearth_mp_server::handoff::{HandoffError, HandoffRequest, ServerReport, SessionId, TICKET_TTL};
-use hearth_mp_server::{Client, Ctx, HandoffEvent, JoinOpts, Leave, Mode, Result, Room, RoomConfig};
+use hearth_mp_server::handoff::{
+    HandoffError, HandoffRequest, ServerReport, SessionId, TICKET_TTL,
+};
+use hearth_mp_server::{
+    Client, Ctx, HandoffEvent, JoinOpts, Leave, Mode, Result, Room, RoomConfig,
+};
 use hearth_mp_sync::{HearthState, Schema};
 use hearth_mp_test::TestRoom;
 use serde::{Deserialize, Serialize};

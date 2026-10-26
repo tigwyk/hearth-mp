@@ -311,7 +311,7 @@ fn list(sql: &dyn Sql, pool: &str, limit: u32, now: u64) -> Result<Vec<OpenRoom>
             },
         ));
     }
-    rows.sort_by(|left, right| (left.0, left.1).cmp(&(right.0, right.1)));
+    rows.sort_by_key(|left| (left.0, left.1));
     Ok(rows
         .into_iter()
         .take(limit as usize)
