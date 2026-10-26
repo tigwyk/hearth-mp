@@ -17,12 +17,15 @@ use std::time::Duration;
 use futures::lock::Mutex;
 use hearth_protocol::{PlayerId, Value, WireMsg, PING_TEXT, PONG_TEXT};
 use worker::{
-    console_log, Date, DateInit, Delay, Env, Method, Request, RequestInit, Response, ScheduledTime,
-    SqlCursor, SqlStorageValue, State, WebSocket, WebSocketIncomingMessage, WebSocketPair,
-    WebSocketRequestResponsePair,
+    console_log, Date, DateInit, Delay, Env, Fetch, Headers, Method, Request, RequestInit,
+    Response, ScheduledTime, SqlCursor, SqlStorageValue, State, WebSocket,
+    WebSocketIncomingMessage, WebSocketPair, WebSocketRequestResponsePair,
 };
 
+use crate::allocator::{Allocator, WebhookAllocator};
 use crate::call::{CallError, Envelope, Target};
+use crate::fetcher::{Fetcher, HttpReq, HttpResp};
+use crate::handoff::{AllocJob, HandoffError, ServerReport, SessionId};
 use crate::host::{Attachment, Host, RoomName, Session, Sql, SqlValue, ANON_PROVIDER};
 use crate::room::{Room, RoomRpc};
 use crate::runtime::RoomRuntime;
@@ -36,6 +39,14 @@ const ROOM_HEADER: &str = "X-Hearth-Room";
 const NAME_HEADER: &str = "X-Hearth-Name";
 const CALL_PATH: &str = "/__hearth/call";
 const CALL_URL: &str = "https://hearth/__hearth/call";
+/// The dedicated server's redeem path (secret + single-use ticket).
+const REDEEM_PATH: &str = "/__hearth/redeem";
+/// The dedicated server's lifecycle report path.
+const REPORT_PATH: &str = "/__hearth/report";
+/// The gateway's container-proxy redeem path: ticket only, no session secret.
+const REDEEM_TRUSTED_PATH: &str = "/__hearth/redeem_trusted";
+/// `HEARTH_ALLOCATOR_SECRET` must be at least this long.
+const ALLOCATOR_SECRET_MIN: usize = 32;
 
 /// [`Host`] backed by a Durable Object: hibernation sockets, SQLite storage and
 /// the single alarm.
@@ -302,6 +313,72 @@ pub struct RoomObject<R: Room> {
     binding: &'static str,
     rt: Rc<Mutex<RoomRuntime<R, WorkerHost>>>,
     tick_loop: Rc<TickLoop>,
+    handoff: Rc<HandoffRunner>,
+}
+
+/// Runs a room's handoff jobs outside the runtime mutex.
+///
+/// The DO is kept alive by `State::wait_until` while the allocation subrequest
+/// runs; the runtime lock is only held to take jobs and to deliver results, so a
+/// slow allocator never blocks a player's intent.
+struct HandoffRunner {
+    env: Env,
+    /// A single runner at a time; DO events may interleave at await points.
+    running: Cell<bool>,
+}
+
+/// The allocator a room type selected with
+/// `#[hearth::room(allocator = "...")]`. Task 3 adds the `Container` arm.
+enum RoomAllocator {
+    Webhook(WebhookAllocator<WorkerFetcher>),
+}
+
+impl RoomAllocator {
+    async fn allocate(&self, job: &AllocJob) -> std::result::Result<String, String> {
+        match self {
+            Self::Webhook(allocator) => allocator.allocate(job).await,
+        }
+    }
+
+    async fn stop(&self, sid: &SessionId) -> std::result::Result<(), String> {
+        match self {
+            Self::Webhook(allocator) => allocator.stop(sid).await,
+        }
+    }
+}
+
+/// The [`Fetcher`] seam over the Workers `fetch` API. The gateway keeps its own
+/// copy for auth providers; a room's allocator must not depend on the gateway.
+struct WorkerFetcher;
+
+impl Fetcher for WorkerFetcher {
+    async fn send(&self, req: HttpReq) -> std::result::Result<HttpResp, String> {
+        let mut init = RequestInit::new();
+        let headers = Headers::new();
+        for (name, value) in &req.headers {
+            headers.set(name, value).map_err(|err| err.to_string())?;
+        }
+        init.with_headers(headers);
+        init.with_method(match req.method {
+            "POST" => Method::Post,
+            _ => Method::Get,
+        });
+        if let Some(body) = req.body {
+            init.with_body(Some(body.into()));
+        }
+        let request = Request::new_with_init(&req.url, &init)
+            .map_err(|err| format!("request build failed: {err}"))?;
+        let mut response = Fetch::Request(request)
+            .send()
+            .await
+            .map_err(|err| format!("subrequest failed: {err}"))?;
+        let status = response.status_code();
+        let body = response
+            .text()
+            .await
+            .map_err(|err| format!("reading the response failed: {err}"))?;
+        Ok(HttpResp { status, body })
+    }
 }
 
 /// Bookkeeping for the in-object tick loop. The loop itself lives in
@@ -328,12 +405,17 @@ impl<R: Room> RoomObject<R> {
         let pair = WebSocketRequestResponsePair::new(PING_TEXT, PONG_TEXT)
             .expect("hearth: keepalive request/response pair is valid");
         state.set_websocket_auto_response(&pair);
+        let runner = Rc::new(HandoffRunner {
+            env: env.clone(),
+            running: Cell::new(false),
+        });
         let host = WorkerHost::new(Rc::clone(&state), env);
         Self {
             state,
             binding,
             rt: Rc::new(Mutex::new(RoomRuntime::new(host, binding))),
             tick_loop: Rc::new(TickLoop::default()),
+            handoff: runner,
         }
     }
 
@@ -359,6 +441,189 @@ impl<R: Room> RoomObject<R> {
             .wait_until(async move { tick_loop(rt, loop_state, generation).await });
     }
 
+    /// The allocator this room type selected, built from the deployment
+    /// environment. A missing configuration fails each job with a clear message.
+    fn allocator(&self) -> std::result::Result<RoomAllocator, String> {
+        match R::ALLOCATOR {
+            Some("webhook") => {
+                let var = |name: &str| {
+                    self.handoff
+                        .env
+                        .var(name)
+                        .map(|value| value.to_string())
+                        .map_err(|_| format!("{name} is not set"))
+                };
+                let url = var("HEARTH_ALLOCATOR_URL")?;
+                let secret = var("HEARTH_ALLOCATOR_SECRET")?;
+                let public_url = var("HEARTH_PUBLIC_URL")?;
+                if secret.len() < ALLOCATOR_SECRET_MIN {
+                    return Err(format!(
+                        "HEARTH_ALLOCATOR_SECRET must be at least {ALLOCATOR_SECRET_MIN} bytes"
+                    ));
+                }
+                let allow_insecure = cfg!(debug_assertions) || self.insecure_endpoints_allowed();
+                Ok(RoomAllocator::Webhook(WebhookAllocator {
+                    url,
+                    secret: secret.into_bytes(),
+                    public_url,
+                    allow_insecure_endpoints: allow_insecure,
+                    fetcher: WorkerFetcher,
+                }))
+            }
+            // Task 3 wires the Cloudflare Containers allocator here.
+            Some("container") => Err("container allocator not wired".to_owned()),
+            Some(other) => Err(format!("unknown allocator `{other}`")),
+            None => Err("allocator not configured".to_owned()),
+        }
+    }
+
+    fn insecure_endpoints_allowed(&self) -> bool {
+        self.handoff
+            .env
+            .var("HEARTH_ALLOW_INSECURE_ENDPOINTS")
+            .map(|value| matches!(value.to_string().as_str(), "1" | "true" | "yes"))
+            .unwrap_or(false)
+    }
+
+    /// Run the room's handoff allocate and stop jobs. The runtime lock is held
+    /// only to take jobs; the allocation subrequest runs in `State::wait_until`
+    /// (which keeps this object in memory) and takes the lock again only to
+    /// deliver its results, so a slow allocator never blocks a handler.
+    async fn service_handoff(&self) {
+        if self.handoff.running.get() {
+            return;
+        }
+        let (jobs, stops) = {
+            let mut rt = self.rt.lock().await;
+            (rt.take_jobs(), rt.take_stop_jobs())
+        };
+        if jobs.is_empty() && stops.is_empty() {
+            return;
+        }
+        let allocator = match self.allocator() {
+            Ok(allocator) => allocator,
+            Err(message) => {
+                console_log!("hearth: handoff allocator unavailable: {message}");
+                let mut rt = self.rt.lock().await;
+                for job in jobs {
+                    rt.job_done(&job.sid, Err(message.clone())).await;
+                }
+                for stop in stops {
+                    console_log!(
+                        "hearth: handoff stop for {} skipped: {message}",
+                        stop.sid.as_str()
+                    );
+                }
+                return;
+            }
+        };
+        self.handoff.running.set(true);
+        let rt = Rc::clone(&self.rt);
+        let runner = Rc::clone(&self.handoff);
+        let stop_sids: Vec<SessionId> = stops.into_iter().map(|stop| stop.sid).collect();
+        let job_count = jobs.len();
+        self.state.wait_until(async move {
+            let mut allocations = Vec::with_capacity(job_count);
+            for job in jobs {
+                allocations.push((job.sid.clone(), allocator.allocate(&job).await));
+            }
+            let mut stopped = Vec::with_capacity(stop_sids.len());
+            for sid in stop_sids {
+                stopped.push((sid.clone(), allocator.stop(&sid).await));
+            }
+            // Deliver only after every allocation finished; the lock is free
+            // while the subrequests above run.
+            {
+                let mut runtime = rt.lock().await;
+                for (sid, result) in allocations {
+                    runtime.job_done(&sid, result).await;
+                }
+            }
+            for (sid, result) in stopped {
+                if let Err(message) = result {
+                    console_log!(
+                        "hearth: handoff stop for {} failed: {message}",
+                        sid.as_str()
+                    );
+                }
+            }
+            runner.running.set(false);
+        });
+    }
+
+    /// `POST /__hearth/redeem`: the dedicated server exchanges a ticket with the
+    /// session secret. The gateway is the only caller.
+    async fn redeem_request(&self, mut req: Request) -> worker::Result<Response> {
+        #[derive(serde::Deserialize)]
+        struct Body {
+            sid: SessionId,
+            secret: String,
+            ticket: String,
+        }
+        if req.method() != Method::Post {
+            return Response::error("not found", 404);
+        }
+        let Ok(body) = req.json::<Body>().await else {
+            return Response::error("malformed redeem body", 400);
+        };
+        let result = self
+            .rt
+            .lock()
+            .await
+            .redeem(&body.sid, &body.secret, &body.ticket)
+            .await;
+        handoff_reply(result)
+    }
+
+    /// `POST /__hearth/redeem_trusted`: the gateway's container proxy has no
+    /// session secret; the single-use ticket is the only credential.
+    async fn redeem_trusted_request(&self, mut req: Request) -> worker::Result<Response> {
+        #[derive(serde::Deserialize)]
+        struct Body {
+            sid: SessionId,
+            ticket: String,
+        }
+        if req.method() != Method::Post {
+            return Response::error("not found", 404);
+        }
+        let Ok(body) = req.json::<Body>().await else {
+            return Response::error("malformed redeem body", 400);
+        };
+        let result = self
+            .rt
+            .lock()
+            .await
+            .redeem_trusted(&body.sid, &body.ticket)
+            .await;
+        handoff_reply(result)
+    }
+
+    /// `POST /__hearth/report`: one lifecycle report from the dedicated server.
+    async fn report_request(&self, mut req: Request) -> worker::Result<Response> {
+        #[derive(serde::Deserialize)]
+        struct Body {
+            sid: SessionId,
+            secret: String,
+            report: ServerReport,
+        }
+        if req.method() != Method::Post {
+            return Response::error("not found", 404);
+        }
+        let Ok(body) = req.json::<Body>().await else {
+            return Response::error("malformed report body", 400);
+        };
+        match self
+            .rt
+            .lock()
+            .await
+            .report(&body.sid, &body.secret, body.report)
+            .await
+        {
+            Ok(()) => Response::empty()?.with_status(204).cloned(),
+            Err(error) => Response::error(error.to_string(), error.status()),
+        }
+    }
+
     /// Dispatch the room's internal paths. The Gateway and the admin router
     /// build these URLs themselves; a player request never reaches this object.
     pub async fn fetch(&self, req: Request) -> worker::Result<Response> {
@@ -367,6 +632,9 @@ impl<R: Room> RoomObject<R> {
             "/__hearth/inspect" => self.inspect(req).await,
             "/__hearth/dispose" => self.dispose(req).await,
             "/__hearth/tail" => self.tail(req).await,
+            REDEEM_PATH => self.redeem_request(req).await,
+            REPORT_PATH => self.report_request(req).await,
+            REDEEM_TRUSTED_PATH => self.redeem_trusted_request(req).await,
             // A room without `RoomRpc` rejects calls here; the macro routes
             // this path to `call` only for a room that accepts them.
             CALL_PATH => msgpack_error(CallError::BadRpc(
@@ -377,6 +645,7 @@ impl<R: Room> RoomObject<R> {
         };
         // A join may have started ticking; a dispose may have stopped it.
         self.ensure_tick_loop(false).await;
+        self.service_handoff().await;
         response
     }
 
@@ -474,6 +743,8 @@ impl<R: Room> RoomObject<R> {
         // A first intent or a recovered socket restarts a lost loop, and the
         // first join starts ticking.
         self.ensure_tick_loop(false).await;
+        // A join may be the event that unblocks a handoff allocation.
+        self.service_handoff().await;
         Ok(())
     }
 
@@ -486,6 +757,7 @@ impl<R: Room> RoomObject<R> {
     ) -> worker::Result<()> {
         self.rt.lock().await.close(ws).await;
         self.ensure_tick_loop(false).await;
+        self.service_handoff().await;
         Ok(())
     }
 
@@ -496,6 +768,7 @@ impl<R: Room> RoomObject<R> {
     ) -> worker::Result<()> {
         self.rt.lock().await.close(ws).await;
         self.ensure_tick_loop(false).await;
+        self.service_handoff().await;
         Ok(())
     }
 
@@ -504,6 +777,9 @@ impl<R: Room> RoomObject<R> {
         // The watchdog alarm: renew the loop's keepalive window and restart it
         // after an eviction, even when no client event woke the object.
         self.ensure_tick_loop(true).await;
+        // An alarm may be the first event after hibernation: retry timers for
+        // handoff sessions fire here, so the runner must run on every wake.
+        self.service_handoff().await;
         Response::empty()
     }
 }
@@ -574,6 +850,8 @@ impl<R: RoomRpc> RoomObject<R> {
         }
         let reply = self.rt.lock().await.call(envelope, &name).await;
         self.ensure_tick_loop(false).await;
+        // An on_call handler may have asked for a handoff.
+        self.service_handoff().await;
         msgpack_reply(&reply)
     }
 }
@@ -694,6 +972,16 @@ impl<S: PlayerService> PlayerObject<S> {
     pub async fn alarm(&self) -> worker::Result<()> {
         self.rt.lock().await.alarm().await;
         Ok(())
+    }
+}
+
+/// A HTTP reply for one redeem: the `Redeemed` JSON, or the error's status.
+fn handoff_reply(
+    result: std::result::Result<crate::handoff::Redeemed, HandoffError>,
+) -> worker::Result<Response> {
+    match result {
+        Ok(redeemed) => Response::from_json(&redeemed),
+        Err(error) => Response::error(error.to_string(), error.status()),
     }
 }
 

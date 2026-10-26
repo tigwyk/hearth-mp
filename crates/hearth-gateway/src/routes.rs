@@ -4,6 +4,7 @@
 use hearth_matchmaker::{MmReply, MmRpc};
 use hearth_protocol::Value;
 use hearth_server::call::{Envelope, Target};
+use hearth_server::handoff::SessionId;
 use hearth_server::worker::call_object;
 use serde::Deserialize;
 use worker::{Env, Headers, Method, Request, RequestInit, Response, Result};
@@ -66,6 +67,12 @@ const CONNECT_URL: &str = "https://room/__hearth/connect";
 /// The player DO's read-only view path.
 const PLAYER_VIEW_URL: &str = "https://player/__hearth/view";
 const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
+/// The dedicated server's session secret, the only credential for a handoff
+/// redeem or report (there is no player token on these routes).
+const SESSION_SECRET_HEADER: &str = "X-Hearth-Session-Secret";
+/// The room's internal handoff paths; the gateway builds these URLs itself.
+const REDEEM_PATH: &str = "/__hearth/redeem";
+const REPORT_PATH: &str = "/__hearth/report";
 
 #[derive(Deserialize)]
 struct TokenQuery {
@@ -91,6 +98,8 @@ enum Route<'a> {
     Match(&'a str),
     Lobby(&'a str),
     Me,
+    HandoffRedeem(&'a str),
+    HandoffReport(&'a str),
 }
 
 /// Dispatch one request. `cfg` is the Worker's static gateway configuration.
@@ -126,6 +135,8 @@ pub async fn serve(req: Request, env: Env, cfg: &GatewayConfig) -> Result<Respon
         Route::Match(room_type) => match_room(req, &env, secret, cfg, room_type).await,
         Route::Lobby(room_type) => lobby(req, &env, secret, cfg, room_type).await,
         Route::Me => player_view(req, &env, secret, cfg).await,
+        Route::HandoffRedeem(sid) => handoff_redeem(req, &env, cfg, sid).await,
+        Route::HandoffReport(sid) => handoff_report(req, &env, cfg, sid).await,
     }
 }
 
@@ -182,6 +193,12 @@ fn parse_route<'a>(method: &Method, path: &'a str) -> Option<Route<'a>> {
         }
         (Some("lobby"), Some(room_type), None, None) if *method == Method::Get => {
             Some(Route::Lobby(room_type))
+        }
+        (Some("handoff"), Some(sid), Some("redeem"), None) if *method == Method::Post => {
+            Some(Route::HandoffRedeem(sid))
+        }
+        (Some("handoff"), Some(sid), Some("report"), None) if *method == Method::Post => {
+            Some(Route::HandoffReport(sid))
         }
         (Some("me"), None, None, None) if *method == Method::Get => Some(Route::Me),
         _ => None,
@@ -243,6 +260,110 @@ fn schema(routes: &[RoomRoute], room_type: &str) -> Result<Response> {
         return Response::error("unknown room type", 404);
     };
     Response::from_json(&serde_json::json!({ "schema_hash": (route.schema_hash)() }))
+}
+
+/// Resolve a handoff session id to the room that owns it and the route that
+/// reaches its Durable Object. The room is decoded from the sid; the caller
+/// never supplies a room type.
+fn handoff_route<'a>(
+    cfg: &'a GatewayConfig,
+    sid_text: &str,
+) -> Option<(&'a RoomRoute, hearth_server::RoomName)> {
+    let room = SessionId(sid_text.to_owned()).room()?;
+    let route = cfg
+        .rooms
+        .iter()
+        .find(|route| route.room_type == room.room_type)?;
+    Some((route, room))
+}
+
+/// `POST /handoff/{sid}/redeem`: the dedicated server exchanges a player's
+/// single-use ticket. The session secret is the credential; there is no player
+/// token on this route.
+async fn handoff_redeem(
+    mut req: Request,
+    env: &Env,
+    cfg: &GatewayConfig,
+    sid_text: &str,
+) -> Result<Response> {
+    #[derive(Deserialize)]
+    struct RedeemBody {
+        ticket: String,
+    }
+    let Some((route, room)) = handoff_route(cfg, sid_text) else {
+        return Response::error("unknown handoff session", 404);
+    };
+    let Some(secret) = req.headers().get(SESSION_SECRET_HEADER)? else {
+        return Response::error("missing X-Hearth-Session-Secret header", 403);
+    };
+    let Ok(body) = req.json::<RedeemBody>().await else {
+        return Response::error("malformed redeem body", 400);
+    };
+    let forward = serde_json::json!({
+        "sid": sid_text,
+        "secret": secret,
+        "ticket": body.ticket,
+    })
+    .to_string();
+    forward_handoff(env, route.binding, &room.name, REDEEM_PATH, forward).await
+}
+
+/// `POST /handoff/{sid}/report`: one lifecycle report from the dedicated
+/// server, forwarded with the session secret.
+async fn handoff_report(
+    mut req: Request,
+    env: &Env,
+    cfg: &GatewayConfig,
+    sid_text: &str,
+) -> Result<Response> {
+    let Some((route, room)) = handoff_route(cfg, sid_text) else {
+        return Response::error("unknown handoff session", 404);
+    };
+    let Some(secret) = req.headers().get(SESSION_SECRET_HEADER)? else {
+        return Response::error("missing X-Hearth-Session-Secret header", 403);
+    };
+    let Ok(report) = req.json::<Value>().await else {
+        return Response::error("malformed report body", 400);
+    };
+    let forward = serde_json::json!({
+        "sid": sid_text,
+        "secret": secret,
+        "report": report,
+    })
+    .to_string();
+    forward_handoff(env, route.binding, &room.name, REPORT_PATH, forward).await
+}
+
+/// POST one handoff request to the room's Durable Object and pass its answer
+/// (status and JSON body) straight back to the dedicated server.
+async fn forward_handoff(
+    env: &Env,
+    binding: &str,
+    room_name: &str,
+    path: &str,
+    body: String,
+) -> Result<Response> {
+    let namespace = env.durable_object(binding)?;
+    let id = namespace.id_from_name(room_name)?;
+    let stub = id.get_stub()?;
+    let headers = Headers::new();
+    headers.set("Content-Type", "application/json")?;
+    let mut init = RequestInit::new();
+    init.with_method(Method::Post)
+        .with_headers(headers)
+        .with_body(Some(body.into()));
+    let request = Request::new_with_init(&format!("https://room{path}"), &init)?;
+    let mut incoming = stub.fetch_with_request(request).await?;
+    let status = incoming.status_code();
+    let text = incoming.text().await?;
+    if status == 204 {
+        return Ok(Response::empty()?.with_status(204));
+    }
+    let mut response = Response::ok(text)?.with_status(status);
+    response
+        .headers_mut()
+        .set("Content-Type", "application/json")?;
+    Ok(response)
 }
 
 async fn connect(

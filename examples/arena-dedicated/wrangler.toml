@@ -1,0 +1,29 @@
+name = "hearth-arena-dedicated"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+[[durable_objects.bindings]]
+name = "ARENA_LOBBY"
+class_name = "ArenaLobbyObject"
+
+[[durable_objects.bindings]]
+name = "ARENA_PLAYER"
+class_name = "ArenaPlayerObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ArenaLobbyObject", "ArenaPlayerObject"]
+
+# The webhook allocator (e2e starts fleet/allocator.mjs on port 8791). The
+# session secret lives in .dev.vars, never here. `HEARTH_PUBLIC_URL` is what the
+# allocator reports as the dedicated server's report base.
+[vars]
+HEARTH_ALLOCATOR_URL = "http://127.0.0.1:8791/allocate"
+HEARTH_PUBLIC_URL = "http://127.0.0.1:8790"
+HEARTH_ALLOW_INSECURE_ENDPOINTS = "1"
+
+[observability]
+enabled = true

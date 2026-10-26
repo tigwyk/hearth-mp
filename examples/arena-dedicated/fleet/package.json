@@ -1,0 +1,6 @@
+{
+  "name": "arena-dedicated-fleet",
+  "private": true,
+  "type": "module",
+  "description": "Local fake server fleet: a webhook allocator that spawns fake dedicated servers."
+}

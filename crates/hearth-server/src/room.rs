@@ -42,6 +42,11 @@ pub trait RoomConfig {
     /// Ticked rooms only: persist the state every N ticks. Set it with the
     /// `#[hearth::room(persist_every = N)]` attribute.
     const PERSIST_EVERY: u32 = 20;
+    /// Which allocator this room's handoff sessions use: `Some("webhook")` or
+    /// `Some("container")`. Set it with the
+    /// `#[hearth::room(allocator = "webhook")]` attribute; `None` disables
+    /// `Ctx::handoff` (the adapter fails its jobs with a clear error).
+    const ALLOCATOR: Option<&'static str> = None;
 }
 
 /// One client. Identity comes from the gateway, never from the client's own

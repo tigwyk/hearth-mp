@@ -1,0 +1,15 @@
+[package]
+name = "fake-server"
+description = "A fake dedicated game server for the Hearth v0.5 fleet e2e: redeems tickets over TCP and reports the match lifecycle."
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+# Its own workspace: the fleet's dedicated servers are normal processes built
+# separately from the room/gateway workspace.
+[workspace]
+
+[dependencies]
+hearth-handoff-server = { path = "../../../../crates/hearth-handoff-server" }
+hearth-server = { path = "../../../../crates/hearth-server" }
+serde_json = "1.0"

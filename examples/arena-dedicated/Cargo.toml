@@ -1,0 +1,18 @@
+[package]
+name = "arena-dedicated"
+description = "Hearth v0.5 sample: a lobby that hands players to a webhook-allocated dedicated server."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hearth.workspace = true
+hearth-gateway.workspace = true
+worker.workspace = true
+serde.workspace = true
+serde_json.workspace = true

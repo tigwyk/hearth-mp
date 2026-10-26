@@ -30,6 +30,8 @@ struct RoomArgs {
     intent_rate: Option<u32>,
     intent_burst: Option<u32>,
     binding: Option<(String, Span)>,
+    /// `allocator = "webhook" | "container"`.
+    allocator: Option<(String, Span)>,
     rpc: Option<Span>,
 }
 
@@ -123,6 +125,10 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
     let reconnect_grace_secs = args.reconnect_grace_secs.unwrap_or(30);
     let intent_rate = args.intent_rate.unwrap_or(60);
     let intent_burst = args.intent_burst.unwrap_or(120);
+    let allocator = match &args.allocator {
+        Some((allocator, _)) => quote!(::std::option::Option::Some(#allocator)),
+        None => quote!(::std::option::Option::None),
+    };
 
     // Ticked mode: a required tick rate in 5..=20 Hz (the ADR's ceiling) and a
     // persist interval; event mode leaves both at the trait defaults.
@@ -199,6 +205,7 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
                 ::std::time::Duration::from_secs(#reconnect_grace_secs);
             const INTENT_RATE: u32 = #intent_rate;
             const INTENT_BURST: u32 = #intent_burst;
+            const ALLOCATOR: ::std::option::Option<&'static str> = #allocator;
         }
 
         #callable
@@ -447,6 +454,17 @@ fn parse_room_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
                 let value = str_value(&meta, "binding")?;
                 args.binding = Some((value.value(), value.span()));
             }
+            "allocator" => {
+                let value = str_value(&meta, "allocator")?;
+                let allocator = value.value();
+                if allocator != "webhook" && allocator != "container" {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "allocator must be \"webhook\" or \"container\"",
+                    ));
+                }
+                args.allocator = Some((allocator, value.span()));
+            }
             "rpc" => match &meta {
                 Meta::Path(path) if path.is_ident("rpc") => args.rpc = Some(path.span()),
                 _ => return Err(syn::Error::new_spanned(&meta, "rpc is a flag; write `rpc`")),
@@ -647,6 +665,21 @@ mod tests {
         assert_eq!(
             expansion_error(&format!("{base}, intent_burst = 0")),
             "intent_burst must be at least 1"
+        );
+    }
+
+    #[test]
+    fn allocator_is_emitted_or_none() {
+        let base = "mode = \"event\", max_clients = 2, binding = \"GAME\"";
+        let default = expanded(base);
+        assert!(default.contains("const ALLOCATOR"), "{default}");
+        assert!(default.contains("None"), "{default}");
+        let webhook = expanded(&format!("{base}, allocator = \"webhook\""));
+        assert!(webhook.contains("Some"), "{webhook}");
+        assert!(webhook.contains("webhook"), "{webhook}");
+        assert_eq!(
+            expansion_error(&format!("{base}, allocator = \"kubernetes\"")),
+            "allocator must be \"webhook\" or \"container\""
         );
     }
 }

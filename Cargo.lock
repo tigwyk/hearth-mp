@@ -27,6 +27,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "arena-dedicated"
+version = "0.1.0"
+dependencies = [
+ "hearth",
+ "hearth-gateway",
+ "serde",
+ "serde_json",
+ "worker",
+]
+
+[[package]]
 name = "arena-godot-ext"
 version = "0.1.0"
 dependencies = [
