@@ -1,0 +1,178 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # cargo public-api output depends on the nightly; the api/ snapshots were made with this one.
+  NIGHTLY: nightly-2026-10-25
+  WRANGLER: wrangler@4.152.0
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: actionlint
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -color
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Includes the conformance scenarios (Rust runner) and the wire-constants check.
+      - run: cargo test --workspace --locked
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: >
+          cargo check --locked --target wasm32-unknown-unknown
+          -p hearth-mp-gateway -p hearth-mp-admin -p tictactoe -p arena -p arena-dedicated
+      # Crates outside the workspace: their own lockfiles and targets.
+      - name: Standalone crates
+        run: |
+          for manifest in bench/diff-bench bench/tick-bench examples/arena-unity-plugin \
+                          examples/arena-dedicated/server examples/arena-dedicated/fleet/fake-server; do
+            echo "::group::$manifest"
+            cargo check --locked --all-targets --manifest-path "$manifest/Cargo.toml"
+            echo "::endgroup::"
+          done
+
+  stability:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: rustup toolchain install "$NIGHTLY" --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-public-api@0.52.0,cbindgen@0.29.4,worker-build@0.8.7
+      # The C# and GDScript snapshots are checked in the Unity and Godot jobs.
+      - run: bash scripts/check-stability.sh
+        env:
+          HEARTH_SKIP_ENGINES: "1"
+          PUBLIC_API_TOOLCHAIN: ${{ env.NIGHTLY }}
+
+  godot:
+    strategy:
+      fail-fast: false
+      matrix:
+        # 4.3 is the addon's compatibility_minimum; 4.7 is the current release.
+        godot: [4.3-stable, 4.7.2-stable]
+    runs-on: ubuntu-latest
+    env:
+      GODOT: ${{ github.workspace }}/.godot-bin/godot
+      HEARTH_CONFORMANCE_URL: http://127.0.0.1:8790
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Godot ${{ matrix.godot }}
+        run: |
+          mkdir -p .godot-bin && cd .godot-bin
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${{ matrix.godot }}/Godot_v${{ matrix.godot }}_linux.x86_64.zip"
+          unzip -q godot.zip && mv Godot_v*_linux.x86_64 godot && chmod +x godot
+      - name: Build the GDExtension and sync the addon
+        run: |
+          cargo build --locked --release -p hearth-mp-godot
+          mkdir -p godot/addons/hearth/bin/linux
+          cp target/release/libhearth_mp_godot.so godot/addons/hearth/bin/linux/
+          pwsh -NoProfile -File examples/tictactoe-godot/scripts/sync-addon.ps1
+      - name: Start the conformance server
+        run: |
+          cargo build --locked -p hearth-mp-conformance-server
+          target/debug/hearth-mp-conformance-server &
+          for i in $(seq 1 60); do curl -fs -o /dev/null "$HEARTH_CONFORMANCE_URL/schema/conf" && break; sleep 1; done
+      - name: Import the project
+        # A fresh checkout has no .godot/ cache: global class names need one import pass.
+        run: |
+          "$GODOT" --headless --path examples/tictactoe-godot --import \
+            || "$GODOT" --headless --path examples/tictactoe-godot --editor --quit \
+            || true
+      - name: GDScript tests
+        run: |
+          run() { echo "::group::$*"; "$GODOT" --headless --path examples/tictactoe-godot -s "$@"; status=$?; echo "::endgroup::"; return $status; }
+          set -e
+          for t in patch_conformance reconnect_conformance typed_runtime typed_object_path api_snapshot; do
+            run "tests/$t.gd"
+          done
+          for web in 0 1; do
+            HEARTH_FORCE_WEB=$web run tests/scenario_runner.gd
+            HEARTH_FORCE_WEB=$web run tests/stuck_server.gd
+          done
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: worker-build@0.8.7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Throwaway .dev.vars
+        working-directory: examples/tictactoe
+        run: |
+          {
+            echo "HEARTH_SECRET=$(openssl rand -hex 32)"
+            echo "HEARTH_ADMIN_TOKEN=$(openssl rand -hex 32)"
+            echo "HEARTH_JWT_JWKS_URL=http://127.0.0.1:8799/jwks.json"
+            echo "HEARTH_JWT_ISS=https://e2e.hearth.test"
+            echo "HEARTH_JWT_AUD=hearth-e2e"
+            echo "HEARTH_JWT_NAME_CLAIM=name"
+          } > .dev.vars
+      - name: Start wrangler dev
+        working-directory: examples/tictactoe
+        run: |
+          npx --yes "$WRANGLER" dev --port 8787 --ip 127.0.0.1 > "$RUNNER_TEMP/wrangler.log" 2>&1 &
+          for i in $(seq 1 300); do curl -fs -o /dev/null http://127.0.0.1:8787/schema/tictactoe && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/wrangler.log"; exit 1
+      - name: e2e
+        working-directory: examples/tictactoe
+        run: |
+          export HEARTH_ADMIN_TOKEN="$(grep '^HEARTH_ADMIN_TOKEN=' .dev.vars | cut -d= -f2)"
+          node e2e.mjs
+          E2E_JWT=1 node e2e.mjs
+      - if: failure()
+        run: cat "$RUNNER_TEMP/wrangler.log"
