@@ -74,6 +74,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # cargo semver-checks diffs against the last release tag
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -81,7 +83,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-public-api@0.52.0,cbindgen@0.29.4,worker-build@0.8.7
+          tool: cargo-public-api@0.52.0,cargo-semver-checks@0.51.0,cbindgen@0.29.4,worker-build@0.8.7
       # The C# and GDScript snapshots are checked in the Unity and Godot jobs.
       - run: bash scripts/check-stability.sh
         env:

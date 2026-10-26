@@ -48,7 +48,8 @@ for crate in "${CRATES[@]}"; do
 done
 
 # --- semver against the last release tag -----------------------------------
-LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
+# Tags on HEAD are skipped: a release run must compare against the previous release, not itself.
+LAST_TAG="$(git tag --merged HEAD --sort=-v:refname | grep -vxF -f <(git tag --points-at HEAD) | head -n1 || true)"
 if [ -z "$LAST_TAG" ]; then
     echo "note: no release tag yet; cargo semver-checks skipped"
 elif [ "$BLESS" = 0 ]; then
