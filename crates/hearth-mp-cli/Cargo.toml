@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 # `src/bin/hearth-mp.rs` and `src/bin/cargo-hearth-mp.rs` are auto-discovered: the
 # second name lets `cargo hearth-mp ...` work.

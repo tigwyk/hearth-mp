@@ -6,6 +6,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+publish = false
 
 [lib]
 # The library name Unity's P/Invoke loads; a game's own plugin crate uses it too.

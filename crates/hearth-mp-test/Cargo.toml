@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 hearth-mp-protocol.workspace = true
@@ -20,4 +24,5 @@ fastrand.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
-hearth-mp-matchmaker.workspace = true
+# path-only: a dev-dependency cycle with matchmaker; cargo drops it from the published manifest.
+hearth-mp-matchmaker = { path = "../hearth-mp-matchmaker" }
