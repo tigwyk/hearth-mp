@@ -1,0 +1,57 @@
+name: Release
+
+# Push a tag like v0.1.0. Runs the whole CI suite, then publishes a GitHub release with the Unity
+# package and Godot addon zips built from CI's native artifacts.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  checks: write # the called ci.yml's Unity job posts a check run
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches the crate and Unity package versions
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          crate=$(sed -n '/^\[workspace.package\]/,/^\[/{s/^version = "\(.*\)"/\1/p}' Cargo.toml)
+          unity=$(sed -n 's/.*"version": "\(.*\)".*/\1/p' unity/com.hearth.client/package.json | head -1)
+          echo "tag=$version Cargo.toml=$crate package.json=$unity"
+          [ "$version" = "$crate" ] && [ "$version" = "$unity" ]
+      # Each Unity artifact is rooted at the package dir (Plugins/, Runtime/StreamingAssets~/).
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: unity-{windows,linux,macos,ios,android,webgl}
+          path: unity/com.hearth.client
+          merge-multiple: true
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: godot-*
+          path: godot-bin
+      - name: Package
+        run: |
+          mkdir dist
+          for os in windows linux macos; do
+            mkdir -p "godot/addons/hearth/bin/$os"
+            cp -r "godot-bin/godot-$os/." "godot/addons/hearth/bin/$os/"
+          done
+          (cd unity && zip -qr "../dist/com.hearth.client-$GITHUB_REF_NAME.zip" com.hearth.client)
+          (cd godot && zip -qr "../dist/hearth-godot-addon-$GITHUB_REF_NAME.zip" addons/hearth)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/*.zip --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $flags
