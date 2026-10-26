@@ -719,6 +719,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hearth-handoff-server"
+version = "0.1.0"
+dependencies = [
+ "hearth-server",
+ "serde",
+ "serde_json",
+ "ureq",
+]
+
+[[package]]
 name = "hearth-matchmaker"
 version = "0.1.0"
 dependencies = [
@@ -747,12 +757,16 @@ name = "hearth-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "futures",
+ "getrandom 0.2.17",
  "hearth-protocol",
  "hearth-sync",
+ "hmac",
  "rmp-serde",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "worker",
 ]

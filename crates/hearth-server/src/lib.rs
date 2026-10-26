@@ -6,8 +6,11 @@
 //! natively in `hearth-test`.
 
 pub mod admin;
+pub mod allocator;
 pub mod call;
 pub mod ctx;
+pub mod fetcher;
+pub mod handoff;
 pub mod host;
 mod outbox;
 pub mod room;
@@ -20,8 +23,14 @@ mod store;
 pub mod worker;
 
 pub use admin::{Cause, InspectClient, InspectDoc, TailMsg};
+pub use allocator::{validate_endpoint, verify_webhook, Allocator, WebhookAllocator};
 pub use call::{CallError, Callable, Envelope, Target};
 pub use ctx::Ctx;
+pub use fetcher::{CannedFetcher, Fetcher, HttpReq, HttpResp};
+pub use handoff::{
+    AllocJob, HandoffError, HandoffEvent, HandoffRequest, Redeemed, ServerReport, SessionId,
+    SessionStatus,
+};
 pub use hearth_protocol::PlayerId;
 pub use host::{Attachment, Host, RoomName, RoomReport, Session, Sql, SqlValue, ANON_PROVIDER};
 pub use room::{Client, JoinOpts, Leave, Mode, Room, RoomConfig, RoomRpc, TimerKey};

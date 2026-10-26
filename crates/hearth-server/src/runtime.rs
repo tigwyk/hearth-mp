@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -10,6 +11,10 @@ use hearth_sync::{diff, HearthState};
 use crate::admin::{Cause, InspectClient, InspectDoc, TailMsg};
 use crate::call::{rpc_from_value, rpc_to_value, CallError, Caller, Envelope, HostCaller, Target};
 use crate::ctx::{Ctx, Effect};
+use crate::handoff::{
+    self, AllocJob, HandoffError, HandoffEvent, Redeemed, ServerReport, SessionId, SessionStatus,
+    HANDOFF_ENDED_EVENT, HANDOFF_EVENT, JOB_IN_FLIGHT, MAX_ALLOC_ATTEMPTS, TICKET_TTL,
+};
 use crate::host::{Attachment, Host, RoomName, RoomReport, Session, SqlValue, ANON_PROVIDER};
 use crate::outbox;
 use crate::room::{Client, JoinOpts, Leave, Mode, Room, RoomRpc, TimerKey};
@@ -30,6 +35,38 @@ const REGISTRY_NAME: &str = "global";
 /// Binding of the optional matchmaker. A room whose gateway told it which
 /// matchmaker pools it also reports there.
 const MATCHMAKER_BINDING: &str = "HEARTH_MATCHMAKER";
+/// One handoff session's timeout/retry deadline (`h:handoff:<sid>`).
+const HANDOFF_TIMER_PREFIX: &str = "h:handoff:";
+/// Persisted stop jobs: sessions whose dedicated server must be stopped. The
+/// adapter takes them after every event and on every wake.
+const CREATE_STOPS_TABLE: &str = "CREATE TABLE IF NOT EXISTS hearth_stops (\
+    sid TEXT PRIMARY KEY, \
+    endpoint TEXT NOT NULL, \
+    created_ms INTEGER NOT NULL)";
+
+/// A dedicated server that must be stopped, as the adapter's job runner sees it.
+#[derive(Clone, Debug)]
+pub struct StopJob {
+    pub sid: SessionId,
+    pub endpoint: String,
+}
+
+/// One persisted handoff session, decoded row by row.
+#[derive(Clone, Debug)]
+struct SessionRow {
+    sid: SessionId,
+    status: SessionStatus,
+    secret_hash: Vec<u8>,
+    players: Vec<PlayerId>,
+    claims: Value,
+    region: Option<String>,
+    endpoint: Option<String>,
+    attempts: u32,
+    created_ms: u64,
+    start_timeout_ms: u64,
+    heartbeat_timeout_ms: u64,
+    max_duration_ms: u64,
+}
 /// How often a ticking room schedules a watchdog alarm. The alarm renews the
 /// loop driver's `wait_until` keepalive (whose eviction window is 15 minutes)
 /// and restarts the loop after an eviction. One alarm per five minutes is
@@ -81,6 +118,13 @@ pub struct RoomRuntime<R: Room, H: Host> {
     /// Intents received between ticks, applied at the start of the next tick in
     /// arrival order. Lost on eviction; the client then sees them unconfirmed.
     pending: Vec<(PlayerId, u32, R::Intent)>,
+    /// Plaintext handoff session secrets that have not reached a dedicated
+    /// server yet. A fresh isolate regenerates a missing one (and updates its
+    /// hash) because the server has never seen it.
+    secrets: HashMap<SessionId, String>,
+    /// Allocation jobs currently running in the adapter, with the moment the
+    /// in-flight window ends.
+    in_flight: HashMap<SessionId, u64>,
 }
 
 /// The fields a lobby report carries: seated players, capacity, lock and the
@@ -141,6 +185,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
             next_tick_ms: None,
             tick_watchdog_ms: None,
             pending: Vec::new(),
+            secrets: HashMap::new(),
+            in_flight: HashMap::new(),
         }
     }
 
@@ -247,6 +293,789 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         })
     }
 
+    // ---- Handoff sessions -------------------------------------------------
+
+    fn create_handoff_tables(&self) -> Result<()> {
+        self.host
+            .sql()
+            .exec(handoff::CREATE_SESSIONS_TABLE, Vec::new())?;
+        self.host
+            .sql()
+            .exec(handoff::CREATE_TICKETS_TABLE, Vec::new())?;
+        self.host.sql().exec(CREATE_STOPS_TABLE, Vec::new())?;
+        Ok(())
+    }
+
+    /// Delete ended/failed sessions (and their tickets) older than the
+    /// retention window. Runs on load; the test suite never advances 24 h.
+    fn prune_sessions(&self) -> Result<()> {
+        let now = self.host.now_ms();
+        let cutoff = now.saturating_sub(handoff::SESSION_RETENTION.as_millis() as u64);
+        self.host.sql().exec(
+            "DELETE FROM hearth_tickets WHERE sid IN \
+             (SELECT sid FROM hearth_sessions WHERE status IN ('ended','failed') AND ended_ms < ?)",
+            vec![SqlValue::Int(cutoff as i64)],
+        )?;
+        self.host.sql().exec(
+            "DELETE FROM hearth_sessions WHERE status IN ('ended','failed') AND ended_ms < ?",
+            vec![SqlValue::Int(cutoff as i64)],
+        )?;
+        Ok(())
+    }
+
+    fn load_session(&self, sid: &SessionId) -> Result<Option<SessionRow>> {
+        let rows = self.host.sql().exec(
+            "SELECT sid, status, secret_hash, players, claims, region, endpoint, attempts, \
+             created_ms, ended_ms, start_timeout_ms, heartbeat_timeout_ms, max_duration_ms \
+             FROM hearth_sessions WHERE sid = ?",
+            vec![SqlValue::Text(sid.0.clone())],
+        )?;
+        let Some(row) = rows.into_iter().next() else {
+            return Ok(None);
+        };
+        let Some(status) = row
+            .get("status")
+            .and_then(Value::as_str)
+            .and_then(SessionStatus::parse)
+        else {
+            anyhow::bail!("hearth_sessions.status is not a Hearth status");
+        };
+        // `players` and `claims` are JSON text columns (the plan's table shape),
+        // so decode the string; tolerate an already-decoded array too.
+        let players = match row.get("players") {
+            Some(Value::String(raw)) => {
+                serde_json::from_str::<Vec<PlayerId>>(raw).unwrap_or_default()
+            }
+            Some(value) => {
+                serde_json::from_value::<Vec<PlayerId>>(value.clone()).unwrap_or_default()
+            }
+            None => Vec::new(),
+        };
+        let claims = match row.get("claims") {
+            Some(Value::String(raw)) => serde_json::from_str(raw).unwrap_or(Value::Null),
+            Some(value) => value.clone(),
+            None => Value::Null,
+        };
+        let region = row.get("region").and_then(Value::as_str).map(str::to_owned);
+        let endpoint = row
+            .get("endpoint")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        Ok(Some(SessionRow {
+            sid: SessionId(
+                row.get("sid")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .unwrap_or_default(),
+            ),
+            status,
+            secret_hash: store::json_to_bytes(row.get("secret_hash"))?,
+            players,
+            claims,
+            region,
+            endpoint,
+            attempts: row.get("attempts").and_then(Value::as_u64).unwrap_or(0) as u32,
+            created_ms: row.get("created_ms").and_then(Value::as_u64).unwrap_or(0),
+            start_timeout_ms: row
+                .get("start_timeout_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or(handoff::DEFAULT_START_TIMEOUT.as_millis() as u64),
+            heartbeat_timeout_ms: row
+                .get("heartbeat_timeout_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or(handoff::DEFAULT_HEARTBEAT_TIMEOUT.as_millis() as u64),
+            max_duration_ms: row
+                .get("max_duration_ms")
+                .and_then(Value::as_u64)
+                .unwrap_or(handoff::DEFAULT_MAX_DURATION.as_millis() as u64),
+        }))
+    }
+
+    fn handoff_timer_key(sid: &SessionId) -> String {
+        format!("{HANDOFF_TIMER_PREFIX}{}", sid.0)
+    }
+
+    fn handoff_timer_due(&self, sid: &SessionId) -> Result<Option<u64>> {
+        let rows = self.host.sql().exec(
+            "SELECT due_ms FROM hearth_timers WHERE key = ?",
+            vec![SqlValue::Text(Self::handoff_timer_key(sid))],
+        )?;
+        Ok(rows
+            .first()
+            .and_then(|row| row.get("due_ms"))
+            .and_then(Value::as_u64))
+    }
+
+    fn set_handoff_timer(&self, sid: &SessionId, due_ms: u64) -> Result<()> {
+        self.timer_set(&Self::handoff_timer_key(sid), due_ms)
+    }
+
+    fn clear_handoff_timer(&self, sid: &SessionId) -> Result<()> {
+        self.timer_delete(&Self::handoff_timer_key(sid))
+    }
+
+    /// The absolute deadline for the next timeout: the requested gap, capped by
+    /// the session's hard maximum duration.
+    fn session_deadline(row: &SessionRow, now_ms: u64, gap_ms: u64) -> u64 {
+        let hard = row.created_ms.saturating_add(row.max_duration_ms);
+        now_ms.saturating_add(gap_ms).min(hard)
+    }
+
+    /// Whether any session still keeps the room alive (allocating/ready/started).
+    fn has_active_sessions(&self) -> Result<bool> {
+        let rows = self.host.sql().exec(
+            "SELECT 1 AS active FROM hearth_sessions \
+             WHERE status IN ('allocating','ready','started') LIMIT 1",
+            Vec::new(),
+        )?;
+        Ok(!rows.is_empty())
+    }
+
+    pub fn active_sessions(&self) -> Result<u64> {
+        let rows = self.host.sql().exec(
+            "SELECT COUNT(*) AS n FROM hearth_sessions \
+             WHERE status IN ('allocating','ready','started')",
+            Vec::new(),
+        )?;
+        Ok(rows
+            .first()
+            .and_then(|row| row.get("n"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0))
+    }
+
+    /// A player's verified identity, from their live socket or their held seat,
+    /// defaulting to the anonymous provider (the `Redeemed` shape needs one).
+    fn identity_for(&self, player: &PlayerId) -> Result<(String, Option<String>)> {
+        if let Some((_, attachment)) = self.socket_of_player(player) {
+            return Ok((attachment.provider, attachment.display_name));
+        }
+        let rows = self.host.sql().exec(
+            "SELECT provider, display_name FROM hearth_held WHERE player_id = ?",
+            vec![SqlValue::Text(player.0.clone())],
+        )?;
+        if let Some(row) = rows.first() {
+            return Ok((
+                row.get("provider")
+                    .and_then(Value::as_str)
+                    .unwrap_or(ANON_PROVIDER)
+                    .to_owned(),
+                row.get("display_name")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+            ));
+        }
+        Ok((ANON_PROVIDER.to_owned(), None))
+    }
+
+    /// Send one player their private `hearth.handoff` event with a fresh ticket.
+    fn mint_and_send_ticket(&mut self, row: &SessionRow, player: &PlayerId) -> Result<()> {
+        let Some(endpoint) = row.endpoint.clone() else {
+            return Ok(());
+        };
+        let (ticket, hash) = handoff::new_ticket();
+        let now = self.host.now_ms();
+        let expires_ms = now.saturating_add(TICKET_TTL.as_millis() as u64);
+        self.host.sql().exec(
+            "INSERT INTO hearth_tickets (hash, sid, player_id, exp_ms, used) \
+             VALUES (?, ?, ?, ?, 0)",
+            vec![
+                SqlValue::Blob(hash),
+                SqlValue::Text(row.sid.0.clone()),
+                SqlValue::Text(player.0.clone()),
+                SqlValue::Int(expires_ms as i64),
+            ],
+        )?;
+        let data = serde_json::json!({
+            "sid": row.sid.0,
+            "endpoint": endpoint,
+            "ticket": ticket,
+            "expires_ms": expires_ms,
+        });
+        self.send_to_player(
+            player,
+            Frame::Event {
+                name: HANDOFF_EVENT.to_owned(),
+                data,
+            },
+        );
+        Ok(())
+    }
+
+    fn notify_players_ended(&self, row: &SessionRow, reason: &str) {
+        let data = serde_json::json!({"sid": row.sid.0, "reason": reason});
+        for player in &row.players {
+            self.send_to_player(
+                player,
+                Frame::Event {
+                    name: HANDOFF_ENDED_EVENT.to_owned(),
+                    data: data.clone(),
+                },
+            );
+        }
+    }
+
+    fn enqueue_stop(&self, sid: &SessionId, endpoint: &str) -> Result<()> {
+        self.host.sql().exec(
+            "INSERT OR REPLACE INTO hearth_stops (sid, endpoint, created_ms) VALUES (?, ?, ?)",
+            vec![
+                SqlValue::Text(sid.0.clone()),
+                SqlValue::Text(endpoint.to_owned()),
+                SqlValue::Int(self.host.now_ms() as i64),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Take the sessions whose dedicated server must be stopped. The adapter
+    /// runs each `stop` outside the runtime lock.
+    pub fn take_stop_jobs(&mut self) -> Vec<StopJob> {
+        if self.ensure_loaded_now().is_err() {
+            return Vec::new();
+        }
+        let rows = match self.host.sql().exec(
+            "SELECT sid, endpoint FROM hearth_stops ORDER BY sid",
+            Vec::new(),
+        ) {
+            Ok(rows) => rows,
+            Err(_) => return Vec::new(),
+        };
+        let mut jobs = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Some(sid) = row.get("sid").and_then(Value::as_str) else {
+                continue;
+            };
+            let Some(endpoint) = row.get("endpoint").and_then(Value::as_str) else {
+                continue;
+            };
+            jobs.push(StopJob {
+                sid: SessionId(sid.to_owned()),
+                endpoint: endpoint.to_owned(),
+            });
+        }
+        let _ = self.host.sql().exec("DELETE FROM hearth_stops", Vec::new());
+        jobs
+    }
+
+    /// Sessions that need an allocation attempt now. A job stays in flight for
+    /// [`JOB_IN_FLIGHT`]; after that it is re-issued with `attempt + 1`. A
+    /// session waiting for its retry backoff is skipped until the gate passes.
+    pub fn take_jobs(&mut self) -> Vec<AllocJob> {
+        if self.ensure_loaded_now().is_err() || self.incompatible {
+            return Vec::new();
+        }
+        let now = self.host.now_ms();
+        let sessions = match self.sessions_with_status(SessionStatus::Allocating) {
+            Ok(sessions) => sessions,
+            Err(err) => {
+                log_error(err);
+                return Vec::new();
+            }
+        };
+        let mut jobs = Vec::new();
+        for row in sessions {
+            if let Some(deadline) = self.in_flight.get(&row.sid).copied() {
+                if now < deadline {
+                    continue;
+                }
+                self.in_flight.remove(&row.sid);
+            }
+            match self.handoff_timer_due(&row.sid) {
+                Ok(Some(due)) if due > now => continue,
+                Ok(Some(_)) => {
+                    let _ = self.clear_handoff_timer(&row.sid);
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    log_error(err);
+                    continue;
+                }
+            }
+            let attempt = row.attempts.saturating_add(1);
+            if let Err(err) = self.host.sql().exec(
+                "UPDATE hearth_sessions SET attempts = ? WHERE sid = ?",
+                vec![
+                    SqlValue::Int(i64::from(attempt)),
+                    SqlValue::Text(row.sid.0.clone()),
+                ],
+            ) {
+                log_error(err);
+                continue;
+            }
+            let secret = match self.secrets.get(&row.sid).cloned() {
+                Some(secret) => secret,
+                None => {
+                    // The isolate restarted before the allocator saw the
+                    // secret: regenerate it and store the new hash.
+                    let (secret, hash) = handoff::new_secret();
+                    if let Err(err) = self.host.sql().exec(
+                        "UPDATE hearth_sessions SET secret_hash = ? WHERE sid = ?",
+                        vec![SqlValue::Blob(hash), SqlValue::Text(row.sid.0.clone())],
+                    ) {
+                        log_error(err);
+                        continue;
+                    }
+                    self.secrets.insert(row.sid.clone(), secret.clone());
+                    secret
+                }
+            };
+            self.in_flight.insert(
+                row.sid.clone(),
+                now.saturating_add(JOB_IN_FLIGHT.as_millis() as u64),
+            );
+            jobs.push(AllocJob {
+                sid: row.sid,
+                secret,
+                room: self.room_or_unknown(),
+                players: row.players,
+                claims: row.claims,
+                region: row.region,
+                attempt,
+            });
+        }
+        jobs
+    }
+
+    fn sessions_with_status(&self, status: SessionStatus) -> Result<Vec<SessionRow>> {
+        let rows = self.host.sql().exec(
+            "SELECT sid FROM hearth_sessions WHERE status = ? ORDER BY created_ms, sid",
+            vec![SqlValue::Text(status.as_str().to_owned())],
+        )?;
+        let mut sessions = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Some(sid) = row.get("sid").and_then(Value::as_str) else {
+                continue;
+            };
+            if let Some(session) = self.load_session(&SessionId(sid.to_owned()))? {
+                sessions.push(session);
+            }
+        }
+        Ok(sessions)
+    }
+
+    /// The adapter reports the allocation result here. `Ok` completes the
+    /// session (`ready`, tickets, `on_handoff(Ready)`); `Err` schedules a retry
+    /// or fails the session after [`MAX_ALLOC_ATTEMPTS`].
+    pub async fn job_done(&mut self, sid: &SessionId, result: std::result::Result<String, String>) {
+        if let Err(err) = self.handle_job_done(sid, result).await {
+            log_error(err);
+        }
+    }
+
+    async fn handle_job_done(
+        &mut self,
+        sid: &SessionId,
+        result: std::result::Result<String, String>,
+    ) -> Result<()> {
+        if self.ensure_loaded().await? {
+            return Ok(());
+        }
+        self.in_flight.remove(sid);
+        let Some(row) = self.load_session(sid)? else {
+            return Ok(());
+        };
+        if row.status != SessionStatus::Allocating {
+            return Ok(());
+        }
+        match result {
+            Ok(endpoint) => {
+                let now = self.host.now_ms();
+                let deadline = Self::session_deadline(&row, now, row.start_timeout_ms);
+                self.host.sql().exec(
+                    "UPDATE hearth_sessions SET status = 'ready', endpoint = ?, \
+                     deadline_ms = ? WHERE sid = ?",
+                    vec![
+                        SqlValue::Text(endpoint.clone()),
+                        SqlValue::Int(deadline as i64),
+                        SqlValue::Text(sid.0.clone()),
+                    ],
+                )?;
+                self.secrets.remove(sid);
+                self.set_handoff_timer(sid, deadline)?;
+                let mut ready = row.clone();
+                ready.status = SessionStatus::Ready;
+                ready.endpoint = Some(endpoint.clone());
+                for player in ready.players.clone() {
+                    self.mint_and_send_ticket(&ready, &player)?;
+                }
+                self.run_handoff_event(sid, HandoffEvent::Ready { endpoint })
+                    .await
+            }
+            Err(error) => {
+                if row.attempts < MAX_ALLOC_ATTEMPTS {
+                    // Retry after 2^attempts seconds.
+                    let backoff_ms = 1000u64 << row.attempts.min(20);
+                    let due = self.host.now_ms().saturating_add(backoff_ms);
+                    self.set_handoff_timer(sid, due)?;
+                    self.log_json(serde_json::json!({
+                        "hearth": "handoff_retry",
+                        "room": self.room_label(),
+                        "session": sid.0,
+                        "attempt": row.attempts,
+                        "msg": error,
+                    }));
+                    Ok(())
+                } else {
+                    self.end_session(sid, SessionStatus::Failed, &error, true)
+                        .await
+                }
+            }
+        }
+    }
+
+    /// Mark a session ended or failed: no more reports/redeems, players get
+    /// `hearth.handoff_ended`, `on_handoff` runs, and a stop job is queued.
+    async fn end_session(
+        &mut self,
+        sid: &SessionId,
+        status: SessionStatus,
+        reason: &str,
+        notify_players: bool,
+    ) -> Result<()> {
+        let Some(row) = self.load_session(sid)? else {
+            return Ok(());
+        };
+        if !row.status.is_active() {
+            return Ok(());
+        }
+        let now = self.host.now_ms();
+        self.host.sql().exec(
+            "UPDATE hearth_sessions SET status = ?, ended_ms = ?, deadline_ms = 0 WHERE sid = ?",
+            vec![
+                SqlValue::Text(status.as_str().to_owned()),
+                SqlValue::Int(now as i64),
+                SqlValue::Text(sid.0.clone()),
+            ],
+        )?;
+        self.clear_handoff_timer(sid)?;
+        self.secrets.remove(sid);
+        self.in_flight.remove(sid);
+        if notify_players {
+            self.notify_players_ended(&row, reason);
+        }
+        if let Some(endpoint) = &row.endpoint {
+            self.enqueue_stop(sid, endpoint)?;
+        }
+        let event = match status {
+            SessionStatus::Ended => HandoffEvent::Ended {
+                reason: reason.to_owned(),
+            },
+            _ => HandoffEvent::Failed {
+                reason: reason.to_owned(),
+            },
+        };
+        self.run_handoff_event(sid, event).await?;
+        self.sync_empty_timer().await
+    }
+
+    /// Schedule the empty-room dispose when nothing (client, held seat or active
+    /// session) keeps the room alive any more.
+    async fn sync_empty_timer(&mut self) -> Result<()> {
+        if !self.any_live_or_held()? {
+            self.start_empty_timer()?;
+        }
+        self.reschedule_alarm().await
+    }
+
+    async fn run_handoff_event(&mut self, sid: &SessionId, event: HandoffEvent) -> Result<()> {
+        if self.state.is_none() {
+            return Ok(());
+        }
+        let before = self.capture_views();
+        let admin_before = self.admin_before();
+        let roster = self.clients_roster()?;
+        let snapshot = self.snapshot()?;
+        let state = self.state.take().expect("state loaded");
+        let mut ctx = self.make_ctx(state, roster);
+        let result = self.room.on_handoff(&mut ctx, sid, event).await;
+        let (state, effects) = ctx.into_parts();
+        self.state = Some(state);
+        let effects = if result.is_ok() {
+            effects
+        } else {
+            self.state = Some(rmp_serde::from_slice(&snapshot)?);
+            self.log_json(serde_json::json!({
+                "hearth": "handler_error",
+                "room": self.room_label(),
+                "session": sid.0,
+                "msg": result.expect_err("handoff handler failed").to_string(),
+            }));
+            Vec::new()
+        };
+        let seq = self.persist()?;
+        self.patch_joined(&before, seq, None, None);
+        self.admin_after(
+            admin_before,
+            vec![Cause::Timer {
+                key: format!("handoff:{}", sid.0),
+            }],
+            Vec::new(),
+            seq,
+        );
+        let (events, rest) = split_events(effects);
+        self.deliver_events(&events);
+        self.apply_rest_and_kicks(rest).await?;
+        self.finish_pass().await;
+        Ok(())
+    }
+
+    /// A handoff timeout fired: the retry gate passed, the server missed its
+    /// start window, its heartbeat went quiet, or the session hit max duration.
+    async fn handoff_timeout(&mut self, sid: &SessionId) -> Result<()> {
+        let Some(row) = self.load_session(sid)? else {
+            return Ok(());
+        };
+        let now = self.host.now_ms();
+        match row.status {
+            SessionStatus::Allocating => Ok(()),
+            SessionStatus::Ready => {
+                self.end_session(sid, SessionStatus::Failed, "start timeout", true)
+                    .await
+            }
+            SessionStatus::Started => {
+                let reason = if now >= row.created_ms.saturating_add(row.max_duration_ms) {
+                    "max duration"
+                } else {
+                    "lost"
+                };
+                self.end_session(sid, SessionStatus::Failed, reason, true)
+                    .await
+            }
+            SessionStatus::Ended | SessionStatus::Failed => Ok(()),
+        }
+    }
+
+    /// Redeem a ticket with the session secret. `Forbidden` deliberately hides
+    /// which check failed.
+    pub async fn redeem(
+        &mut self,
+        sid: &SessionId,
+        secret: &str,
+        ticket: &str,
+    ) -> std::result::Result<Redeemed, HandoffError> {
+        if self.ensure_loaded().await.is_err() {
+            return Err(HandoffError::NotFound);
+        }
+        let row = self.session_or_error(sid)?;
+        if !row.status.is_active() {
+            return Err(HandoffError::Gone);
+        }
+        if !handoff::constant_time_eq(&handoff::hash_secret(secret), &row.secret_hash) {
+            return Err(HandoffError::Forbidden);
+        }
+        self.consume_ticket(sid, ticket)
+    }
+
+    /// The gateway's container-proxy variant: the ticket is the only credential.
+    pub async fn redeem_trusted(
+        &mut self,
+        sid: &SessionId,
+        ticket: &str,
+    ) -> std::result::Result<Redeemed, HandoffError> {
+        if self.ensure_loaded().await.is_err() {
+            return Err(HandoffError::NotFound);
+        }
+        let row = self.session_or_error(sid)?;
+        if !row.status.is_active() {
+            return Err(HandoffError::Gone);
+        }
+        self.consume_ticket(sid, ticket)
+    }
+
+    fn session_or_error(&self, sid: &SessionId) -> std::result::Result<SessionRow, HandoffError> {
+        match self.load_session(sid) {
+            Ok(Some(row)) => Ok(row),
+            Ok(None) => Err(HandoffError::NotFound),
+            Err(_) => Err(HandoffError::NotFound),
+        }
+    }
+
+    fn consume_ticket(
+        &mut self,
+        sid: &SessionId,
+        ticket: &str,
+    ) -> std::result::Result<Redeemed, HandoffError> {
+        let hash = handoff::hash_ticket(ticket);
+        let rows = self
+            .host
+            .sql()
+            .exec(
+                "SELECT sid, player_id, exp_ms, used FROM hearth_tickets WHERE hash = ?",
+                vec![SqlValue::Blob(hash)],
+            )
+            .map_err(|_| HandoffError::NotFound)?;
+        let Some(row) = rows.into_iter().next() else {
+            return Err(HandoffError::Forbidden);
+        };
+        let Some(ticket_sid) = row.get("sid").and_then(Value::as_str) else {
+            return Err(HandoffError::Forbidden);
+        };
+        let Some(player) = row.get("player_id").and_then(Value::as_str) else {
+            return Err(HandoffError::Forbidden);
+        };
+        let used = row.get("used").and_then(Value::as_i64).unwrap_or(1) != 0;
+        let exp_ms = row.get("exp_ms").and_then(Value::as_u64).unwrap_or(0);
+        if ticket_sid != sid.0 || used || exp_ms < self.host.now_ms() {
+            return Err(HandoffError::Forbidden);
+        }
+        self.host
+            .sql()
+            .exec(
+                "UPDATE hearth_tickets SET used = 1 WHERE hash = ?",
+                vec![SqlValue::Blob(handoff::hash_ticket(ticket))],
+            )
+            .map_err(|_| HandoffError::NotFound)?;
+        let player_id = PlayerId(player.to_owned());
+        let (provider, display_name) = self
+            .identity_for(&player_id)
+            .map_err(|_| HandoffError::NotFound)?;
+        let row = self.session_or_error(sid)?;
+        Ok(Redeemed {
+            player_id,
+            provider,
+            display_name,
+            claims: row.claims,
+            sid: sid.clone(),
+        })
+    }
+
+    /// A server lifecycle report. `Heartbeat` only moves the deadline and runs
+    /// no handler pass; every other report is one pass. Reports for a finished
+    /// session are accepted and ignored.
+    pub async fn report(
+        &mut self,
+        sid: &SessionId,
+        secret: &str,
+        event: ServerReport,
+    ) -> std::result::Result<(), HandoffError> {
+        if self.ensure_loaded().await.is_err() {
+            return Err(HandoffError::NotFound);
+        }
+        let row = self.session_or_error(sid)?;
+        if !handoff::constant_time_eq(&handoff::hash_secret(secret), &row.secret_hash) {
+            return Err(HandoffError::Forbidden);
+        }
+        if !row.status.is_active() {
+            return Ok(());
+        }
+        match event {
+            ServerReport::Heartbeat => {
+                self.touch_deadline(&row)
+                    .map_err(|_| HandoffError::NotFound)?;
+                Ok(())
+            }
+            ServerReport::Started => {
+                let started = row.status == SessionStatus::Started;
+                let _ = started;
+                self.start_session(&row)
+                    .map_err(|_| HandoffError::NotFound)?;
+                self.run_handoff_event(sid, HandoffEvent::Started)
+                    .await
+                    .map_err(|_| HandoffError::NotFound)
+            }
+            ServerReport::PlayerJoined { player } => {
+                self.touch_deadline(&row)
+                    .map_err(|_| HandoffError::NotFound)?;
+                self.run_handoff_event(sid, HandoffEvent::PlayerJoined(player))
+                    .await
+                    .map_err(|_| HandoffError::NotFound)
+            }
+            ServerReport::PlayerLeft { player } => {
+                self.touch_deadline(&row)
+                    .map_err(|_| HandoffError::NotFound)?;
+                self.run_handoff_event(sid, HandoffEvent::PlayerLeft(player))
+                    .await
+                    .map_err(|_| HandoffError::NotFound)
+            }
+            ServerReport::Result { data } => {
+                self.touch_deadline(&row)
+                    .map_err(|_| HandoffError::NotFound)?;
+                self.run_handoff_event(sid, HandoffEvent::Result(data))
+                    .await
+                    .map_err(|_| HandoffError::NotFound)
+            }
+            ServerReport::Ended { reason } => self
+                .end_session(sid, SessionStatus::Ended, &reason, true)
+                .await
+                .map_err(|_| HandoffError::NotFound),
+        }
+    }
+
+    fn touch_deadline(&self, row: &SessionRow) -> Result<()> {
+        if row.status != SessionStatus::Started {
+            return Ok(());
+        }
+        let now = self.host.now_ms();
+        let deadline = Self::session_deadline(row, now, row.heartbeat_timeout_ms);
+        self.host.sql().exec(
+            "UPDATE hearth_sessions SET deadline_ms = ? WHERE sid = ?",
+            vec![
+                SqlValue::Int(deadline as i64),
+                SqlValue::Text(row.sid.0.clone()),
+            ],
+        )?;
+        self.set_handoff_timer(&row.sid, deadline)
+    }
+
+    fn start_session(&self, row: &SessionRow) -> Result<()> {
+        let now = self.host.now_ms();
+        let deadline = Self::session_deadline(row, now, row.heartbeat_timeout_ms);
+        self.host.sql().exec(
+            "UPDATE hearth_sessions SET status = 'started', deadline_ms = ? WHERE sid = ?",
+            vec![
+                SqlValue::Int(deadline as i64),
+                SqlValue::Text(row.sid.0.clone()),
+            ],
+        )?;
+        self.set_handoff_timer(&row.sid, deadline)
+    }
+
+    /// Send a fresh ticket for `sid` to a player who reconnected while the
+    /// session is ready or started.
+    pub fn reissue_ticket(&mut self, sid: &SessionId, player: &PlayerId) {
+        if let Err(err) = self.reissue_ticket_inner(sid, player) {
+            log_error(err);
+        }
+    }
+
+    fn reissue_ticket_inner(&mut self, sid: &SessionId, player: &PlayerId) -> Result<()> {
+        let Some(row) = self.load_session(sid)? else {
+            return Ok(());
+        };
+        if !matches!(row.status, SessionStatus::Ready | SessionStatus::Started) {
+            return Ok(());
+        }
+        if !row.players.contains(player) {
+            return Ok(());
+        }
+        if self.socket_of_player(player).is_none() {
+            return Ok(());
+        }
+        self.mint_and_send_ticket(&row, player)
+    }
+
+    /// A player just joined or resumed: reissue a ticket for every active
+    /// session they belong to, so a reconnect during a handoff can still enter.
+    fn reissue_tickets_for(&mut self, player: &PlayerId) {
+        let sessions = ["ready", "started"];
+        for status in sessions {
+            let Ok(rows) = self.host.sql().exec(
+                "SELECT sid FROM hearth_sessions WHERE status = ? AND players LIKE ?",
+                vec![
+                    SqlValue::Text(status.to_owned()),
+                    SqlValue::Text(format!("%\"{}\"%", player.0)),
+                ],
+            ) else {
+                continue;
+            };
+            for row in rows {
+                if let Some(sid) = row.get("sid").and_then(Value::as_str) {
+                    self.reissue_ticket(&SessionId(sid.to_owned()), player);
+                }
+            }
+        }
+    }
+
     /// The room's own address: its class binding plus its persisted name.
     fn me(&self) -> Target {
         let name = match &self.identity {
@@ -271,7 +1100,15 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     fn make_ctx(&self, state: R::State, roster: Vec<Client>) -> Ctx<R> {
         let sql = self.host.sql_handle();
         let now = self.host.now_ms();
-        Ctx::new(state, roster, sql, now, self.tick, self.caller())
+        Ctx::new(
+            state,
+            roster,
+            sql,
+            now,
+            self.tick,
+            self.room_or_unknown(),
+            self.caller(),
+        )
     }
 
     /// Persist the room's identity without a connect. Test worlds and the
@@ -810,6 +1647,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         self.next_tick_ms = None;
         self.tick_watchdog_ms = None;
         self.pending.clear();
+        self.secrets.clear();
+        self.in_flight.clear();
     }
 
     /// The admin tail's view of a state value, counting the render for the
@@ -1315,6 +2154,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
 
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
+        // A player joining during a ready/started handoff gets a fresh ticket
+        // for the dedicated server, exactly like a reconnect.
+        self.reissue_tickets_for(&who.player_id);
         self.apply_rest_and_kicks(rest).await?;
         self.finish_pass().await;
         Ok(())
@@ -1401,6 +2243,7 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         );
         let (events, rest) = split_events(effects);
         self.deliver_events(&events);
+        self.reissue_tickets_for(&who.player_id);
         self.apply_rest_and_kicks(rest).await?;
         self.finish_pass().await;
         Ok(())
@@ -1879,6 +2722,13 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                 }
                 continue;
             }
+            if let Some(sid) = key.strip_prefix(HANDOFF_TIMER_PREFIX) {
+                self.handoff_timeout(&SessionId(sid.to_string())).await?;
+                if self.state.is_none() {
+                    break;
+                }
+                continue;
+            }
             if let Some(user_key) = key.strip_prefix(USER_TIMER_PREFIX) {
                 self.run_timer(TimerKey(user_key.to_string())).await?;
                 if self.state.is_none() {
@@ -2186,6 +3036,56 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
                     self.metadata = Some(metadata);
                 }
                 Effect::Dispose => dispose = true,
+                Effect::Handoff { sid, request } => {
+                    let seated: Vec<PlayerId> = self
+                        .clients_roster()?
+                        .into_iter()
+                        .map(|client| client.player_id)
+                        .collect();
+                    let known = !request.players.is_empty()
+                        && request.players.iter().all(|player| seated.contains(player));
+                    if !known {
+                        self.log_json(serde_json::json!({
+                            "hearth": "handoff_unknown_player",
+                            "room": self.room_label(),
+                            "session": sid.0,
+                        }));
+                    } else {
+                        let now = self.host.now_ms();
+                        let (secret, hash) = handoff::new_secret();
+                        self.host.sql().exec(
+                            "INSERT OR REPLACE INTO hearth_sessions (\
+                             sid, status, secret_hash, players, claims, region, endpoint, \
+                             attempts, created_ms, deadline_ms, ended_ms, \
+                             start_timeout_ms, heartbeat_timeout_ms, max_duration_ms) \
+                             VALUES (?, 'allocating', ?, ?, ?, ?, NULL, 0, ?, 0, NULL, ?, ?, ?)",
+                            vec![
+                                SqlValue::Text(sid.0.clone()),
+                                SqlValue::Blob(hash),
+                                SqlValue::Text(serde_json::to_string(&request.players)?),
+                                SqlValue::Text(serde_json::to_string(&request.claims)?),
+                                match &request.region {
+                                    Some(region) => SqlValue::Text(region.clone()),
+                                    None => SqlValue::Null,
+                                },
+                                SqlValue::Int(now as i64),
+                                SqlValue::Int(request.start_timeout.as_millis() as i64),
+                                SqlValue::Int(request.heartbeat_timeout.as_millis() as i64),
+                                SqlValue::Int(request.max_duration.as_millis() as i64),
+                            ],
+                        )?;
+                        self.secrets.insert(sid, secret);
+                        // An active session keeps the room alive: no dispose.
+                        self.timer_delete(EMPTY_TIMER)?;
+                    }
+                }
+                Effect::ReservedEventName { name } => {
+                    self.log_json(serde_json::json!({
+                        "hearth": "reserved_event_name",
+                        "room": self.room_label(),
+                        "name": name,
+                    }));
+                }
                 // Events are delivered by the caller, notify rows were written
                 // above; nested kicks are not supported in v0.1.
                 Effect::Event { .. } | Effect::Kick(_) | Effect::Notify { .. } => {}
@@ -2254,6 +3154,12 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     }
 
     async fn ensure_loaded(&mut self) -> Result<bool> {
+        self.ensure_loaded_now()
+    }
+
+    /// The synchronous body of [`Self::ensure_loaded`]: every storage call is
+    /// local, so the sync jobs API (`take_jobs`, `take_stop_jobs`) can load too.
+    fn ensure_loaded_now(&mut self) -> Result<bool> {
         if self.state.is_some() {
             return Ok(self.incompatible);
         }
@@ -2271,6 +3177,8 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
         store::ensure_held_columns(self.host.sql())?;
         self.host.sql().exec(store::CREATE_META_TABLE, Vec::new())?;
         outbox::create(self.host.sql())?;
+        self.create_handoff_tables()?;
+        self.prune_sessions()?;
         if self.identity.is_none() {
             if let Some((room, created_ms)) = self.read_meta()? {
                 self.identity = Some(room);
@@ -2572,7 +3480,9 @@ impl<R: Room, H: Host + 'static> RoomRuntime<R, H> {
     }
 
     fn any_live_or_held(&self) -> Result<bool> {
-        Ok(!self.joined().is_empty() || !self.held_clients()?.is_empty())
+        Ok(!self.joined().is_empty()
+            || !self.held_clients()?.is_empty()
+            || self.has_active_sessions()?)
     }
 
     fn capture_views(&self) -> CapturedViews<H::Socket> {

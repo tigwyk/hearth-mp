@@ -16,6 +16,8 @@ use std::time::Duration;
 use futures::executor::block_on;
 use hearth_client::{ClientConfig, ClientCore, ClientEvent};
 use hearth_protocol::{Encoding, PatchOp, PlayerId, Value, WireMsg};
+use hearth_server::handoff::{AllocJob, HandoffError, Redeemed, ServerReport, SessionId};
+use hearth_server::runtime::StopJob;
 use hearth_server::{schema_hash_hex, Host, InspectDoc, Room, RoomName, RoomRuntime, Session, Sql};
 use mem_host::MemEvent;
 pub use mem_host::{MemHost, Socket};
@@ -222,6 +224,64 @@ impl<R: Room> TestRoom<R> {
     /// The virtual clock's current time in milliseconds.
     pub fn clock_ms(&self) -> u64 {
         self.host.now_ms()
+    }
+
+    /// The handoff allocation jobs the adapter should run now.
+    pub fn jobs(&mut self) -> Vec<AllocJob> {
+        self.runtime().take_jobs()
+    }
+
+    /// The handoff dedicated servers that must be stopped now.
+    pub fn stop_jobs(&mut self) -> Vec<StopJob> {
+        self.runtime().take_stop_jobs()
+    }
+
+    /// Report an allocation result back to the room.
+    pub fn complete_job(&mut self, sid: &SessionId, result: std::result::Result<String, String>) {
+        block_on(self.runtime().job_done(sid, result));
+        self.pump();
+    }
+
+    /// Redeem a ticket the way the dedicated server does, with the session
+    /// secret.
+    pub fn redeem(
+        &mut self,
+        sid: &SessionId,
+        secret: &str,
+        ticket: &str,
+    ) -> std::result::Result<Redeemed, HandoffError> {
+        let result = block_on(self.runtime().redeem(sid, secret, ticket));
+        self.pump();
+        result
+    }
+
+    /// Redeem a ticket the way the gateway's container proxy does: ticket only.
+    pub fn redeem_trusted(
+        &mut self,
+        sid: &SessionId,
+        ticket: &str,
+    ) -> std::result::Result<Redeemed, HandoffError> {
+        let result = block_on(self.runtime().redeem_trusted(sid, ticket));
+        self.pump();
+        result
+    }
+
+    /// Send one server lifecycle report with the session secret.
+    pub fn report(
+        &mut self,
+        sid: &SessionId,
+        secret: &str,
+        event: ServerReport,
+    ) -> std::result::Result<(), HandoffError> {
+        let result = block_on(self.runtime().report(sid, secret, event));
+        self.pump();
+        result
+    }
+
+    /// Send a fresh handoff ticket for `sid` to `player` (the reconnect path).
+    pub fn reissue_ticket(&mut self, sid: &SessionId, player: &PlayerId) {
+        self.runtime().reissue_ticket(sid, player);
+        self.pump();
     }
 
     /// Drop the runtime (as hibernation does) while keeping storage and sockets.

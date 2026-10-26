@@ -1,4 +1,4 @@
-error: handoff rooms arrive in Hearth v0.5
+error: handoff is not a room mode; call ctx.handoff(...) from an event or ticked room (see docs/handoff.md)
  --> tests/ui/mode_handoff.rs:7:15
   |
 7 | #[room(mode = "handoff")]

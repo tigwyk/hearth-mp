@@ -10,13 +10,17 @@ pub mod itch;
 pub mod jwt;
 pub mod steam;
 
-use std::cell::RefCell;
 use std::time::Duration;
 
 use serde_json::Value;
 use worker::{Delay, Env, Fetch, Headers, Method, Request, RequestInit};
 
 use crate::auth::Identity;
+
+/// The HTTP seam lives in `hearth-server` so the gateway's auth providers and the
+/// server's handoff allocator share one definition. The Worker implementation
+/// stays here: it is the only part that needs the Workers API.
+pub use hearth_server::fetcher::{CannedFetcher, Fetcher, HttpReq, HttpResp};
 
 /// The secret every Hearth token is signed with.
 const SECRET_BINDING: &str = "HEARTH_SECRET";
@@ -58,28 +62,6 @@ impl ProviderError {
     }
 }
 
-/// One outbound provider HTTP call.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct HttpReq {
-    pub method: &'static str,
-    pub url: String,
-    pub headers: Vec<(String, String)>,
-    pub body: Option<String>,
-}
-
-/// A provider's HTTP answer, decoded as text.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct HttpResp {
-    pub status: u16,
-    pub body: String,
-}
-
-/// Performs provider HTTP calls. Native tests use [`CannedFetcher`].
-#[allow(async_fn_in_trait)]
-pub trait Fetcher {
-    async fn send(&self, req: HttpReq) -> Result<HttpResp, String>;
-}
-
 /// The real fetcher: a Worker subrequest that gives up after five seconds.
 pub struct WorkerFetcher;
 
@@ -119,59 +101,6 @@ impl Fetcher for WorkerFetcher {
             }
             futures::future::Either::Right((_, _)) => Err("timeout".to_owned()),
         }
-    }
-}
-
-/// A test fetcher: canned answers by URL prefix, plus the requests it saw.
-#[derive(Default)]
-pub struct CannedFetcher {
-    routes: Vec<(String, HttpResp)>,
-    requests: RefCell<Vec<HttpReq>>,
-    failure: Option<String>,
-}
-
-impl CannedFetcher {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Answer every request whose URL starts with `prefix` with `status`/`body`.
-    pub fn route(mut self, prefix: &str, status: u16, body: &str) -> Self {
-        self.routes.push((
-            prefix.to_owned(),
-            HttpResp {
-                status,
-                body: body.to_owned(),
-            },
-        ));
-        self
-    }
-
-    /// Make the next call fail without an HTTP answer, like a timeout.
-    pub fn failing(mut self, message: &str) -> Self {
-        self.failure = Some(message.to_owned());
-        self
-    }
-
-    /// Every request this fetcher was asked to send, in order.
-    pub fn requests(&self) -> Vec<HttpReq> {
-        self.requests.borrow().clone()
-    }
-}
-
-impl Fetcher for CannedFetcher {
-    async fn send(&self, req: HttpReq) -> Result<HttpResp, String> {
-        if let Some(message) = &self.failure {
-            self.requests.borrow_mut().push(req);
-            return Err(message.clone());
-        }
-        let answer = self
-            .routes
-            .iter()
-            .find(|(prefix, _)| req.url.starts_with(prefix))
-            .map(|(_, response)| response.clone());
-        self.requests.borrow_mut().push(req);
-        answer.ok_or_else(|| "no canned response".to_owned())
     }
 }
 

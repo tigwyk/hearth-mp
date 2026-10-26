@@ -81,7 +81,8 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
         "handoff" => {
             return Err(syn::Error::new(
                 args.mode.as_ref().expect("mode present").1,
-                "handoff rooms arrive in Hearth v0.5",
+                "handoff is not a room mode; call ctx.handoff(...) from an event or ticked room \
+                 (see docs/handoff.md)",
             ))
         }
         _ => {

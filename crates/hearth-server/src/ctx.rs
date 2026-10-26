@@ -5,7 +5,8 @@ use hearth_protocol::{PlayerId, Value};
 use serde::Serialize;
 
 use crate::call::{rpc_to_value, CallError, Callable, Caller, Target};
-use crate::host::Sql;
+use crate::handoff::{is_reserved_event, HandoffRequest, SessionId};
+use crate::host::{RoomName, Sql};
 use crate::room::{Client, Room, TimerKey};
 
 /// A side effect buffered by [`Ctx`]. The runtime applies effects only when the
@@ -34,6 +35,16 @@ pub(crate) enum Effect {
         name: String,
         body: Value,
     },
+    /// Ask the runtime to record a handoff session as part of this commit.
+    Handoff {
+        sid: SessionId,
+        request: HandoffRequest,
+    },
+    /// A room tried to send a framework-reserved `hearth.` event name; the
+    /// runtime logs the drop.
+    ReservedEventName {
+        name: String,
+    },
 }
 
 /// The room's capabilities for one handler. State changes are diffed and
@@ -46,6 +57,7 @@ pub struct Ctx<R: Room> {
     sql: Rc<dyn Sql>,
     now_ms: u64,
     tick: u64,
+    room: RoomName,
     caller: Caller,
 }
 
@@ -56,6 +68,7 @@ impl<R: Room> Ctx<R> {
         sql: Rc<dyn Sql>,
         now_ms: u64,
         tick: u64,
+        room: RoomName,
         caller: Caller,
     ) -> Self {
         Self {
@@ -65,6 +78,7 @@ impl<R: Room> Ctx<R> {
             sql,
             now_ms,
             tick,
+            room,
             caller,
         }
     }
@@ -82,6 +96,9 @@ impl<R: Room> Ctx<R> {
 
     /// Send one event to one player.
     pub fn send(&mut self, who: &PlayerId, name: &str, data: impl Serialize) {
+        if self.reject_reserved(name) {
+            return;
+        }
         self.effects.push(Effect::Event {
             to: Some(who.clone()),
             name: name.to_owned(),
@@ -91,11 +108,38 @@ impl<R: Room> Ctx<R> {
 
     /// Send one event to every joined player.
     pub fn broadcast(&mut self, name: &str, data: impl Serialize) {
+        if self.reject_reserved(name) {
+            return;
+        }
         self.effects.push(Effect::Event {
             to: None,
             name: name.to_owned(),
             data: to_json(data),
         });
+    }
+
+    /// Framework-owned `hearth.` event names never reach a client: the runtime
+    /// logs the drop (`reserved_event_name`) when the handler commits.
+    fn reject_reserved(&mut self, name: &str) -> bool {
+        if !is_reserved_event(name) {
+            return false;
+        }
+        self.effects.push(Effect::ReservedEventName {
+            name: name.to_owned(),
+        });
+        true
+    }
+
+    /// Ask the runtime to hand these players to a dedicated server. Buffered
+    /// like any other effect, so a handler that later fails creates nothing.
+    /// The session exists only after the handler commits.
+    pub fn handoff(&mut self, request: HandoffRequest) -> SessionId {
+        let sid = SessionId::new(&self.room);
+        self.effects.push(Effect::Handoff {
+            sid: sid.clone(),
+            request,
+        });
+        sid
     }
 
     /// Schedule a durable timer. A second timer with the same key replaces the
@@ -150,6 +194,12 @@ impl<R: Room> Ctx<R> {
     /// This room's own address.
     pub fn me(&self) -> &Target {
         self.caller.me()
+    }
+
+    /// This room's identity (`room_type`/`name`), the room half of a
+    /// [`SessionId`].
+    pub fn room_name(&self) -> &RoomName {
+        &self.room
     }
 
     /// Call another object and wait for its reply. The call is sent at once: it

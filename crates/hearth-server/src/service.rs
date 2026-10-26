@@ -392,7 +392,9 @@ impl<S: Service, H: Host + 'static> ServiceRuntime<S, H> {
                 | Effect::Lock
                 | Effect::Dispose
                 | Effect::SetMetadata(_)
-                | Effect::Notify { .. } => {}
+                | Effect::Notify { .. }
+                | Effect::Handoff { .. }
+                | Effect::ReservedEventName { .. } => {}
             }
         }
         self.reschedule_alarm().await

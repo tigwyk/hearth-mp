@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::call::Target;
+use crate::handoff::{HandoffEvent, SessionId};
 use crate::Result;
 
 /// How a room runs.
@@ -143,6 +144,19 @@ pub trait Room: RoomConfig + Default + 'static {
     /// Ticked rooms only: one fixed simulation step of `dt` (`1 s / TICK_HZ`).
     /// Intents for this tick already ran, so they are visible in `ctx.state()`.
     async fn on_tick(&mut self, _ctx: &mut crate::Ctx<Self>, _dt: Duration) -> Result<()> {
+        Ok(())
+    }
+
+    /// A handoff session's lifecycle event: allocation became `ready`, the
+    /// dedicated server `started`, a player joined or left it, a `result`
+    /// arrived, or the session `ended`/`failed`. Runs as a normal handler pass,
+    /// so state changes are diffed and flushed like any other event.
+    async fn on_handoff(
+        &mut self,
+        _ctx: &mut crate::Ctx<Self>,
+        _sid: &SessionId,
+        _event: HandoffEvent,
+    ) -> Result<()> {
         Ok(())
     }
 }
