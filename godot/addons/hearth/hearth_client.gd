@@ -65,14 +65,20 @@ var device_id_override: String = ""
 var _backend = null
 var _typed_root = null
 var _token: String = ""
+## Test seams: the join deadline in ms and the HTTP timeout in seconds.
+var _join_timeout_ms := _JOIN_TIMEOUT_MS
+var _http_timeout_s := _HTTP_TIMEOUT_S
+## Bumped by every join(), so an old join's deadline timer does nothing.
+var _join_attempt := 0
+var _join_pending := false
 
 const _WEB_CLIENT = preload("res://addons/hearth/hearth_web_client.gd")
 const _PATCH = preload("res://addons/hearth/hearth_patch.gd")
 const _DEVICE_ID_PATH := "user://hearth_device_id"
 ## `POST /match` attempts per `quick_join`: the first try plus 3 retries.
 const _MATCH_ATTEMPTS := 4
-## How long `quick_join` waits for a matchmade room's JOIN_OK or ERROR.
-const _JOIN_TIMEOUT_MS := 10000
+## How long a join waits for JOIN_OK before it fails with TIMEOUT.
+const _JOIN_TIMEOUT_MS := 15000
 ## HTTP attempts per call when the gateway answers 429: the first try plus 2.
 const _MAX_ATTEMPTS_PER_REQUEST := 3
 ## Seconds before a gateway call that gets no answer fails with HTTP_FAILED.
@@ -216,7 +222,7 @@ func quick_join(room_type: String, pool := "default", opts := {}) -> void:
 		if outcome == "joined":
 			return
 		if outcome != "ROOM_FULL":
-			# The room's own error was already emitted; only a timeout has none.
+			# The error was already emitted; a timeout also reports MATCH_FAILED.
 			if outcome == "TIMEOUT":
 				_emit_error("MATCH_FAILED", "joining %s timed out" % room, -1)
 			return
@@ -271,7 +277,22 @@ func join(room_type: String, room: String, opts := {}) -> void:
 	if _token.is_empty():
 		_emit_error("NOT_LOGGED_IN", "call login_anonymous() first", -1)
 		return
+	_join_attempt += 1
+	_join_pending = true
 	_backend.connect_to_room(_room_url(room_type, room), schema_hash, opts)
+	if is_inside_tree():
+		get_tree().create_timer(_join_timeout_ms / 1000.0).timeout.connect(
+			_on_join_deadline.bind(_join_attempt, room_type, room)
+		)
+
+
+## A server that accepts the socket but never answers fails the join with
+## TIMEOUT instead of leaving it waiting forever.
+func _on_join_deadline(attempt: int, room_type: String, room: String) -> void:
+	if attempt != _join_attempt or not _join_pending:
+		return
+	leave()
+	_emit_error("TIMEOUT", "no JOIN_OK from %s/%s within %d ms" % [room_type, room, _join_timeout_ms], -1)
 
 
 ## `join()` and wait for its first outcome: `"joined"`, the error code the room
@@ -286,13 +307,11 @@ func _join_and_wait(room_type: String, room: String, opts: Dictionary) -> String
 	joined.connect(on_joined)
 	error.connect(on_error)
 	join(room_type, room, opts)
-	var deadline := Time.get_ticks_msec() + _JOIN_TIMEOUT_MS
-	while not bool(outcome["done"]) and Time.get_ticks_msec() < deadline:
+	# join() always ends in JOIN_OK or an ERROR (TIMEOUT at the latest).
+	while not bool(outcome["done"]):
 		await get_tree().process_frame
 	joined.disconnect(on_joined)
 	error.disconnect(on_error)
-	if not bool(outcome["done"]):
-		return "TIMEOUT"
 	return "joined" if String(outcome["code"]).is_empty() else String(outcome["code"])
 
 
@@ -362,6 +381,7 @@ func send_intent(intent) -> int:
 
 ## Send `LEAVE` and close the socket.
 func leave() -> void:
+	_join_pending = false
 	if _backend != null:
 		_backend.leave()
 
@@ -405,7 +425,7 @@ func _request(
 ) -> Dictionary:
 	for attempt in _MAX_ATTEMPTS_PER_REQUEST:
 		var request := HTTPRequest.new()
-		request.timeout = _HTTP_TIMEOUT_S
+		request.timeout = _http_timeout_s
 		add_child(request)
 		var headers := PackedStringArray(["Content-Type: application/json"])
 		if authenticated:
@@ -483,6 +503,7 @@ func _refresh_state() -> void:
 
 
 func _on_joined(joined_player_id: String, joined_seat: int) -> void:
+	_join_pending = false
 	player_id = joined_player_id
 	seat = joined_seat
 	joined.emit(joined_player_id, joined_seat)
@@ -543,6 +564,7 @@ func _emit_handoff_ended(data: Variant) -> void:
 
 
 func _on_error(code: String, message: String, ref_seq: int) -> void:
+	_join_pending = false
 	error.emit(code, message, ref_seq)
 
 

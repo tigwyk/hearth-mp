@@ -184,8 +184,11 @@ impl HearthNative {
         self.incoming.clear();
         self.outgoing.clear();
         if let Some(mut peer) = self.peer.clone() {
-            let leave = self.core.leave();
-            send_frame(&mut peer, &leave);
+            // A socket still connecting (a join that timed out) has nobody to tell.
+            if peer.get_ready_state() == State::OPEN {
+                let leave = self.core.leave();
+                send_frame(&mut peer, &leave);
+            }
             peer.close();
         }
         self.peer = None;

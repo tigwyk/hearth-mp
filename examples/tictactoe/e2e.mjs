@@ -516,6 +516,39 @@ async function jwtPhase() {
   const me = await request('/me', { token: jwtToken });
   check(me.status === 200, 'a JWT-issued token works on the authenticated routes');
 
+  // Client X-Hearth-* headers never reach the room: the room records the
+  // token's display name, not a forged one (it keeps names in server-only
+  // state, which admin inspect shows).
+  if (ADMIN_TOKEN) {
+    const schemaHash = (await request('/schema/tictactoe')).json.schema_hash;
+    const nameRoom = (await request('/rooms/tictactoe', { method: 'POST', token: jwtToken })).json.room;
+    const forgedJoin = async (token) => {
+      const forged = await rawUpgrade(
+        `${WS_BASE}/rooms/tictactoe/${encodeURIComponent(nameRoom)}?token=${encodeURIComponent(token)}`,
+        { 'X-Hearth-Display-Name': 'Admin', 'X-Hearth-Matchmaker': 'tictactoe:weur' },
+      );
+      check(forged.status === 101, 'a player upgrades even with forged identity headers');
+      const raw = new RawSocket(forged.socket, forged.pending);
+      raw.sendText(JSON.stringify({ op: 'HELLO', protocol: 1, schema_hash: schemaHash, opts: {} }));
+      check((await raw.nextText()).op === 'JOIN_OK', 'the forged-header socket joins');
+      return raw;
+    };
+    // The JWT player has a name, so it shows the room records names at all; the
+    // anonymous one has none, which is the case a forged header used to fill.
+    const anon = await login(`device-forge-${randomBytes(8).toString('hex')}`);
+    const sockets = [await forgedJoin(jwtToken), await forgedJoin(anon.token)];
+    const inspected = await adminRequest(`/admin/rooms/tictactoe/${encodeURIComponent(nameRoom)}`);
+    const names = inspected.json?.state?.names ?? {};
+    check(names['jwt_e2e-player'] === 'E2E Player', `the room got the token's display name (${JSON.stringify(names)})`);
+    check(
+      !(anon.player_id in names),
+      `an anonymous player cannot name itself with a header (${JSON.stringify(names)})`,
+    );
+    for (const raw of sockets) raw.close();
+  } else {
+    console.log('skip - forged display name check (set HEARTH_ADMIN_TOKEN)');
+  }
+
   jwks.server.close();
   console.log('e2e ok (jwt)');
   process.exit(0);

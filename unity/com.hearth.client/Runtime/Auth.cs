@@ -38,6 +38,9 @@ namespace Hearth
                 PlayerPrefs.Save();
             });
 
+        /// <summary>A gateway call with no answer by then fails with <c>HTTP_FAILED</c> instead of hanging.</summary>
+        internal static int HttpTimeoutSeconds = 15;
+
         /// <summary>POST JSON and parse the JSON reply. A non-2xx status throws <c>HTTP_&lt;status&gt;</c>.</summary>
         internal static async Task<JObject> PostAsync(string url, string body, string token)
         {
@@ -45,7 +48,7 @@ namespace Hearth
             {
                 uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body ?? "")),
                 downloadHandler = new DownloadHandlerBuffer(),
-                timeout = 15, // seconds; a stuck server fails with HTTP_FAILED instead of hanging
+                timeout = HttpTimeoutSeconds,
             };
             request.SetRequestHeader("Content-Type", "application/json");
             if (token != null)

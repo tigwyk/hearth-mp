@@ -37,6 +37,10 @@ pub struct Board {
     pub turn: PlayerId,
     #[sync]
     pub status: Status,
+    /// Server-only: each seated player's display name, as the gateway verified
+    /// it. Visible through admin inspect, never to clients.
+    #[serde(default)]
+    pub names: std::collections::BTreeMap<PlayerId, String>,
 }
 
 /// Intents are the only way a client can change the room.
@@ -132,6 +136,9 @@ impl Room for TicTacToe {
             1
         };
         state.marks.insert(who.player_id.clone(), mark);
+        if let Some(name) = &who.display_name {
+            state.names.insert(who.player_id.clone(), name.clone());
+        }
 
         if state.marks.len() == 2 {
             state.cells = vec![0; 9];
@@ -228,6 +235,7 @@ impl Room for TicTacToe {
     async fn on_leave(&mut self, ctx: &mut Ctx<Self>, who: &Client, _reason: Leave) -> Result<()> {
         let state = ctx.state();
         state.marks.remove(&who.player_id);
+        state.names.remove(&who.player_id);
         if !matches!(state.status, Status::Waiting) {
             // A player left: stop the game and wait for a new opponent.
             state.status = Status::Waiting;
