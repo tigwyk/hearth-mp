@@ -32,6 +32,8 @@ struct RoomArgs {
     binding: Option<(String, Span)>,
     /// `allocator = "webhook" | "container"`.
     allocator: Option<(String, Span)>,
+    /// `container = "ARENA_SERVER"`: the session container class's DO binding.
+    container: Option<(String, Span)>,
     rpc: Option<Span>,
 }
 
@@ -129,6 +131,10 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
         Some((allocator, _)) => quote!(::std::option::Option::Some(#allocator)),
         None => quote!(::std::option::Option::None),
     };
+    let container = match &args.container {
+        Some((container, _)) => quote!(::std::option::Option::Some(#container)),
+        None => quote!(::std::option::Option::None),
+    };
 
     // Ticked mode: a required tick rate in 5..=20 Hz (the ADR's ceiling) and a
     // persist interval; event mode leaves both at the trait defaults.
@@ -206,6 +212,7 @@ fn expand_room_impl(attr: &TokenStream2, item: &TokenStream2) -> syn::Result<Tok
             const INTENT_RATE: u32 = #intent_rate;
             const INTENT_BURST: u32 = #intent_burst;
             const ALLOCATOR: ::std::option::Option<&'static str> = #allocator;
+            const CONTAINER: ::std::option::Option<&'static str> = #container;
         }
 
         #callable
@@ -464,6 +471,17 @@ fn parse_room_args(attr: &TokenStream2) -> syn::Result<RoomArgs> {
                     ));
                 }
                 args.allocator = Some((allocator, value.span()));
+            }
+            "container" => {
+                let value = str_value(&meta, "container")?;
+                let binding = value.value();
+                if binding.is_empty() {
+                    return Err(syn::Error::new(
+                        value.span(),
+                        "container must name the DO binding, e.g. container = \"ARENA_SERVER\"",
+                    ));
+                }
+                args.container = Some((binding, value.span()));
             }
             "rpc" => match &meta {
                 Meta::Path(path) if path.is_ident("rpc") => args.rpc = Some(path.span()),

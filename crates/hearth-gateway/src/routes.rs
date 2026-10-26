@@ -1,10 +1,12 @@
 //! HTTP surface: auth providers, room minting, schema lookup, WebSocket routing,
 //! quick-join, the lobby listing and the caller's own player view.
 
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine as _;
 use hearth_matchmaker::{MmReply, MmRpc};
 use hearth_protocol::Value;
 use hearth_server::call::{Envelope, Target};
-use hearth_server::handoff::SessionId;
+use hearth_server::handoff::{Redeemed, SessionId};
 use hearth_server::worker::call_object;
 use serde::Deserialize;
 use worker::{Env, Headers, Method, Request, RequestInit, Response, Result};
@@ -19,6 +21,10 @@ pub struct RoomRoute {
     pub room_type: &'static str,
     /// Durable Object binding name, e.g. `"TICTACTOE"`.
     pub binding: &'static str,
+    /// The session container class's Durable Object binding, when this room type
+    /// uses `allocator = "container"`. It enables
+    /// `GET /handoff/{sid}/connect`, the WebSocket proxy into the container.
+    pub container: Option<&'static str>,
     /// The state's schema hash, which clients echo in `HELLO`.
     pub schema_hash: fn() -> String,
     /// The room's seat capacity, passed to the matchmaker so a minted room is
@@ -73,10 +79,24 @@ const SESSION_SECRET_HEADER: &str = "X-Hearth-Session-Secret";
 /// The room's internal handoff paths; the gateway builds these URLs itself.
 const REDEEM_PATH: &str = "/__hearth/redeem";
 const REPORT_PATH: &str = "/__hearth/report";
+/// The gateway's ticket-only redeem path on the room: no session secret exists
+/// on the client side of a container handoff, so the single-use ticket is the
+/// only credential and the gateway is the only caller.
+const REDEEM_TRUSTED_PATH: &str = "/__hearth/redeem_trusted";
+/// The session container object's WebSocket proxy path.
+const CONTAINER_PROXY_URL: &str = "https://container/__hearth/proxy/connect";
+/// The redeemed player's claims as base64url JSON, forwarded to the dedicated
+/// server. It is a header, so it cannot contain JSON's braces/quotes verbatim.
+const CLAIMS_HEADER: &str = "X-Hearth-Claims";
 
 #[derive(Deserialize)]
 struct TokenQuery {
     token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct TicketQuery {
+    ticket: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -100,6 +120,7 @@ enum Route<'a> {
     Me,
     HandoffRedeem(&'a str),
     HandoffReport(&'a str),
+    HandoffConnect(&'a str),
 }
 
 /// Dispatch one request. `cfg` is the Worker's static gateway configuration.
@@ -137,6 +158,7 @@ pub async fn serve(req: Request, env: Env, cfg: &GatewayConfig) -> Result<Respon
         Route::Me => player_view(req, &env, secret, cfg).await,
         Route::HandoffRedeem(sid) => handoff_redeem(req, &env, cfg, sid).await,
         Route::HandoffReport(sid) => handoff_report(req, &env, cfg, sid).await,
+        Route::HandoffConnect(sid) => handoff_connect(req, &env, cfg, sid).await,
     }
 }
 
@@ -199,6 +221,9 @@ fn parse_route<'a>(method: &Method, path: &'a str) -> Option<Route<'a>> {
         }
         (Some("handoff"), Some(sid), Some("report"), None) if *method == Method::Post => {
             Some(Route::HandoffReport(sid))
+        }
+        (Some("handoff"), Some(sid), Some("connect"), None) if *method == Method::Get => {
+            Some(Route::HandoffConnect(sid))
         }
         (Some("me"), None, None, None) if *method == Method::Get => Some(Route::Me),
         _ => None,
@@ -343,6 +368,20 @@ async fn forward_handoff(
     path: &str,
     body: String,
 ) -> Result<Response> {
+    let (status, text) = post_room_json(env, binding, room_name, path, body).await?;
+    handoff_response(status, text)
+}
+
+/// POST one JSON body to a room object and return its status with the response
+/// body text. The shared half of the dedicated-server routes and the container
+/// proxy.
+async fn post_room_json(
+    env: &Env,
+    binding: &str,
+    room_name: &str,
+    path: &str,
+    body: String,
+) -> Result<(u16, String)> {
     let namespace = env.durable_object(binding)?;
     let id = namespace.id_from_name(room_name)?;
     let stub = id.get_stub()?;
@@ -356,14 +395,104 @@ async fn forward_handoff(
     let mut incoming = stub.fetch_with_request(request).await?;
     let status = incoming.status_code();
     let text = incoming.text().await?;
+    Ok((status, text))
+}
+
+/// A room's JSON answer as a gateway response (204 stays empty).
+fn handoff_response(status: u16, body: String) -> Result<Response> {
     if status == 204 {
-        return Ok(Response::empty()?.with_status(204));
+        return Response::empty().map(|response| response.with_status(204));
     }
-    let mut response = Response::ok(text)?.with_status(status);
+    let mut response = Response::ok(body)?.with_status(status);
     response
         .headers_mut()
         .set("Content-Type", "application/json")?;
     Ok(response)
+}
+
+/// `GET /handoff/{sid}/connect?ticket=<t>`: the WebSocket proxy into a session's
+/// container.
+///
+/// The ticket is redeemed with the room *before* the upgrade is attempted, so a
+/// used, expired or foreign ticket answers 403/410 without ever opening a
+/// socket. Only then is the upgrade forwarded to the session's container object,
+/// with identity headers built from the redeemed player; any client-supplied
+/// `X-Hearth-*` header is dropped.
+async fn handoff_connect(
+    req: Request,
+    env: &Env,
+    cfg: &GatewayConfig,
+    sid_text: &str,
+) -> Result<Response> {
+    let Some((route, room)) = handoff_route(cfg, sid_text) else {
+        return Response::error("unknown handoff session", 404);
+    };
+    let Some(container_binding) = route.container else {
+        return Response::error("container handoff is not enabled for this room type", 404);
+    };
+    let upgrade = req
+        .headers()
+        .get("Upgrade")?
+        .is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
+    if !upgrade {
+        return Response::error("expected a websocket upgrade", 426);
+    }
+    let Ok(query) = req.query::<TicketQuery>() else {
+        return Response::error("invalid query", 400);
+    };
+    let Some(ticket) = query.ticket.filter(|ticket| !ticket.is_empty()) else {
+        return Response::error("missing ticket", 400);
+    };
+
+    // Redeem first: the ticket is the only credential on this path, and a used
+    // or expired one must answer before any upgrade.
+    let redeem_body = serde_json::json!({ "sid": sid_text, "ticket": ticket }).to_string();
+    let (status, body) = post_room_json(
+        env,
+        route.binding,
+        &room.name,
+        REDEEM_TRUSTED_PATH,
+        redeem_body,
+    )
+    .await?;
+    if status != 200 {
+        return handoff_response(status, body);
+    }
+    let redeemed: Redeemed = match serde_json::from_str(&body) {
+        Ok(redeemed) => redeemed,
+        Err(_) => return Response::error("room returned a malformed redeem", 502),
+    };
+
+    // Build the container's request here instead of forwarding the client's: the
+    // container only ever sees this URL, and identity comes from the redeem.
+    let headers = Headers::new();
+    for (name, value) in req.headers().entries() {
+        let lower = name.to_ascii_lowercase();
+        if lower == "host" || lower == "authorization" || lower.starts_with("x-hearth-") {
+            continue;
+        }
+        headers.set(&name, &value)?;
+    }
+    headers.set(PLAYER_HEADER, &redeemed.player_id.0)?;
+    headers.set(PROVIDER_HEADER, &redeemed.provider)?;
+    if let Some(display_name) = &redeemed.display_name {
+        if !display_name.is_empty() {
+            headers.set(DISPLAY_NAME_HEADER, &percent_encode(display_name))?;
+        }
+    }
+    let claims = match serde_json::to_vec(&redeemed.claims) {
+        Ok(claims) => URL_SAFE_NO_PAD.encode(claims),
+        Err(_) => return Response::error("redeemed claims are not JSON", 502),
+    };
+    headers.set(CLAIMS_HEADER, &claims)?;
+    let mut init = RequestInit::new();
+    init.with_method(Method::Get).with_headers(headers);
+    let outgoing = Request::new_with_init(CONTAINER_PROXY_URL, &init)?;
+
+    let namespace = env.durable_object(container_binding)?;
+    let id = namespace.id_from_name(sid_text)?;
+    let stub = id.get_stub()?;
+    stub.fetch_with_request(outgoing).await
 }
 
 async fn connect(

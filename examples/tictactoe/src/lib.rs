@@ -260,6 +260,7 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
     static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
         room_type: "tictactoe",
         binding: "TICTACTOE",
+        container: None,
         schema_hash: hearth::server::schema_hash_hex::<TicTacToe>,
         max_clients: 2,
     }];

@@ -1,12 +1,20 @@
 //! Hearth v0.5 sample: a dedicated-server lobby.
 //!
 //! `ArenaLobby` is an ordinary event-mode room. When at least two players are
-//! ready it calls `ctx.handoff`; the adapter asks the configured webhook
-//! allocator for a dedicated server and each player receives a private
-//! `hearth.handoff` event with its endpoint and single-use ticket. The
-//! dedicated server (`fleet/fake-server`) redeems the tickets and reports the
-//! match lifecycle back, which the lobby records and forwards to the player
-//! stats service.
+//! ready it calls `ctx.handoff`; the adapter asks the configured allocator for a
+//! dedicated server and each player receives a private `hearth.handoff` event
+//! with its endpoint and single-use ticket. The dedicated server redeems the
+//! tickets and reports the match lifecycle back, which the lobby records and
+//! forwards to the player stats service.
+//!
+//! Two allocators are wired for the same room:
+//!
+//! - **Cloudflare Containers** (default): the session's `ArenaServer` object owns
+//!   a container built from `server/Dockerfile`, and players connect through the
+//!   gateway's `handoff/{sid}/connect` proxy.
+//! - **Webhook fleet**: set `HEARTH_ALLOCATOR_MODE = "webhook"` (and the
+//!   `HEARTH_ALLOCATOR_*` vars below) to use `fleet/allocator.mjs` and a
+//!   dedicated server on `udp://`/`wss://`, as `e2e-fleet.mjs` does.
 
 use hearth::sync::SyncMap;
 use hearth::{
@@ -15,6 +23,11 @@ use hearth::{
 };
 use serde::{Deserialize, Serialize};
 use worker::{Context, Env, Request, Response};
+
+// The container Durable Object class: one instance per handoff session, each
+// owning one Cloudflare Container. `[[containers]]` in `wrangler.toml` must name
+// this class, and the `ARENA_SERVER` binding must point at it.
+hearth::container_object!(ArenaServer);
 
 /// The synced lobby state: who is ready, the lifecycle log and the last result.
 #[derive(HearthState, Serialize, Deserialize, Default)]
@@ -81,7 +94,8 @@ impl ArenaLobby {
     mode = "event",
     max_clients = 8,
     binding = "ARENA_LOBBY",
-    allocator = "webhook"
+    allocator = "container",
+    container = "ARENA_SERVER"
 )]
 impl Room for ArenaLobby {
     type State = LobbyState;
@@ -199,6 +213,7 @@ fn room_routes() -> &'static [hearth_gateway::RoomRoute] {
     static ROUTES: [hearth_gateway::RoomRoute; 1] = [hearth_gateway::RoomRoute {
         room_type: "arena",
         binding: "ARENA_LOBBY",
+        container: Some("ARENA_SERVER"),
         schema_hash: hearth::server::schema_hash_hex::<ArenaLobby>,
         max_clients: 8,
     }];

@@ -22,8 +22,12 @@ use worker::{
     WebSocketIncomingMessage, WebSocketPair, WebSocketRequestResponsePair,
 };
 
-use crate::allocator::{Allocator, WebhookAllocator};
+use crate::allocator::{
+    Allocator, ContainerAllocator, ContainerStarter, StartRequest, WebhookAllocator,
+    DEFAULT_CONTAINER_PORT,
+};
 use crate::call::{CallError, Envelope, Target};
+use crate::container::ContainerRpc;
 use crate::fetcher::{Fetcher, HttpReq, HttpResp};
 use crate::handoff::{AllocJob, HandoffError, ServerReport, SessionId};
 use crate::host::{Attachment, Host, RoomName, Session, Sql, SqlValue, ANON_PROVIDER};
@@ -328,22 +332,92 @@ struct HandoffRunner {
 }
 
 /// The allocator a room type selected with
-/// `#[hearth::room(allocator = "...")]`. Task 3 adds the `Container` arm.
+/// `#[hearth::room(allocator = "...")]`.
 enum RoomAllocator {
     Webhook(WebhookAllocator<WorkerFetcher>),
+    Container(ContainerAllocator<WorkerContainerStarter>),
 }
 
 impl RoomAllocator {
     async fn allocate(&self, job: &AllocJob) -> std::result::Result<String, String> {
         match self {
             Self::Webhook(allocator) => allocator.allocate(job).await,
+            Self::Container(allocator) => allocator.allocate(job).await,
         }
     }
 
     async fn stop(&self, sid: &SessionId) -> std::result::Result<(), String> {
         match self {
             Self::Webhook(allocator) => allocator.stop(sid).await,
+            Self::Container(allocator) => allocator.stop(sid).await,
         }
+    }
+}
+
+/// Starts and stops the container that belongs to one session.
+///
+/// Each session's `ContainerObject` is addressed by its sid, exactly as the
+/// gateway proxy addresses it; the object owns the actual Cloudflare Container.
+struct WorkerContainerStarter {
+    env: Env,
+    /// The Durable Object binding of the container class, e.g. `"ARENA_SERVER"`.
+    binding: &'static str,
+}
+
+impl WorkerContainerStarter {
+    /// POST one [`ContainerRpc`] to the container object named after `sid`.
+    async fn call(&self, sid: &SessionId, rpc: ContainerRpc) -> std::result::Result<(), String> {
+        let body = serde_json::to_string(&rpc).map_err(|err| format!("container rpc: {err}"))?;
+        let namespace = self.env.durable_object(self.binding).map_err(|err| {
+            format!(
+                "container binding `{}` is not configured: {err}",
+                self.binding
+            )
+        })?;
+        let stub = namespace
+            .get_by_name(sid.as_str())
+            .map_err(|err| format!("container object for {}: {err}", sid.as_str()))?;
+        let headers = Headers::new();
+        headers
+            .set("Content-Type", "application/json")
+            .map_err(|err| err.to_string())?;
+        let mut init = RequestInit::new();
+        init.with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(body.into()));
+        let request = Request::new_with_init("https://container/__hearth/call", &init)
+            .map_err(|err| format!("container request: {err}"))?;
+        let mut response = stub
+            .fetch_with_request(request)
+            .await
+            .map_err(|err| format!("container object fetch failed: {err}"))?;
+        let status = response.status_code();
+        if (200..300).contains(&status) {
+            return Ok(());
+        }
+        let body = response.text().await.unwrap_or_default();
+        Err(format!(
+            "container object for {} answered {status}: {body}",
+            sid.as_str()
+        ))
+    }
+}
+
+impl ContainerStarter for WorkerContainerStarter {
+    async fn start(&self, request: StartRequest) -> std::result::Result<(), String> {
+        let rpc = ContainerRpc::Start {
+            sid: request.sid.as_str().to_owned(),
+            secret: request.secret,
+            report_url: request.report_url,
+            port: request.port,
+            env: request.env,
+            max_duration_ms: request.max_duration_ms,
+        };
+        self.call(&request.sid, rpc).await
+    }
+
+    async fn stop(&self, sid: &SessionId) -> std::result::Result<(), String> {
+        self.call(sid, ContainerRpc::Stop).await
     }
 }
 
@@ -443,8 +517,30 @@ impl<R: Room> RoomObject<R> {
 
     /// The allocator this room type selected, built from the deployment
     /// environment. A missing configuration fails each job with a clear message.
+    ///
+    /// The room attribute is the compile-time default. `HEARTH_ALLOCATOR_MODE`
+    /// (= `"webhook"` or `"container"`) overrides it per deployment, so one
+    /// sample can serve the fleet and the Containers e2e side by side.
     fn allocator(&self) -> std::result::Result<RoomAllocator, String> {
-        match R::ALLOCATOR {
+        let mode = self
+            .handoff
+            .env
+            .var("HEARTH_ALLOCATOR_MODE")
+            .ok()
+            .map(|value| value.to_string())
+            .filter(|value| !value.is_empty());
+        let mode = match mode {
+            Some(mode) => {
+                if mode != "webhook" && mode != "container" {
+                    return Err(format!(
+                        "HEARTH_ALLOCATOR_MODE must be \"webhook\" or \"container\", not `{mode}`"
+                    ));
+                }
+                Some(mode)
+            }
+            None => R::ALLOCATOR.map(str::to_owned),
+        };
+        match mode.as_deref() {
             Some("webhook") => {
                 let var = |name: &str| {
                     self.handoff
@@ -470,8 +566,38 @@ impl<R: Room> RoomObject<R> {
                     fetcher: WorkerFetcher,
                 }))
             }
-            // Task 3 wires the Cloudflare Containers allocator here.
-            Some("container") => Err("container allocator not wired".to_owned()),
+            // Cloudflare Containers: the session's `ContainerObject` owns the
+            // container, so a missing binding is a deployment error, not a job
+            // retry loop.
+            Some("container") => {
+                let binding = R::CONTAINER.ok_or_else(|| {
+                    "allocator = \"container\" needs container = \"<DO binding>\" in \
+                     #[hearth::room]"
+                        .to_owned()
+                })?;
+                let public_url = self
+                    .handoff
+                    .env
+                    .var("HEARTH_PUBLIC_URL")
+                    .map(|value| value.to_string())
+                    .map_err(|_| "HEARTH_PUBLIC_URL is not set".to_owned())?;
+                let port = self
+                    .handoff
+                    .env
+                    .var("HEARTH_CONTAINER_PORT")
+                    .ok()
+                    .and_then(|value| value.to_string().parse::<u16>().ok())
+                    .unwrap_or(DEFAULT_CONTAINER_PORT);
+                let mut allocator = ContainerAllocator::new(
+                    WorkerContainerStarter {
+                        env: self.handoff.env.clone(),
+                        binding,
+                    },
+                    public_url,
+                );
+                allocator.port = port;
+                Ok(RoomAllocator::Container(allocator))
+            }
             Some(other) => Err(format!("unknown allocator `{other}`")),
             None => Err("allocator not configured".to_owned()),
         }

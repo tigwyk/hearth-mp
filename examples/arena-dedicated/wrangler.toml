@@ -13,17 +13,50 @@ class_name = "ArenaLobbyObject"
 name = "ARENA_PLAYER"
 class_name = "ArenaPlayerObject"
 
+# The session container object: one instance per handoff session (named by the
+# sid), each owning one Cloudflare Container. `class_name` must match
+# `container_object!(ArenaServer)` in src/lib.rs and `[[containers]]` below.
+[[durable_objects.bindings]]
+name = "ARENA_SERVER"
+class_name = "ArenaServer"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["ArenaLobbyObject", "ArenaPlayerObject"]
 
-# The webhook allocator (e2e starts fleet/allocator.mjs on port 8791). The
-# session secret lives in .dev.vars, never here. `HEARTH_PUBLIC_URL` is what the
-# allocator reports as the dedicated server's report base.
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["ArenaServer"]
+
+# Cloudflare Containers: the default allocator for this sample. The image build
+# context is the REPOSITORY ROOT (the sample path-depends on the hearth-*
+# crates and their manifests inherit the root workspace), hence "../.." relative
+# to this file. `server/Dockerfile` documents the same thing.
+[[containers]]
+class_name = "ArenaServer"
+image = "./server/Dockerfile"
+image_build_context = "../.."
+max_instances = 10
+
+# The gateway's public base URL. The dedicated server's report base is
+# `<HEARTH_PUBLIC_URL>/handoff/<sid>`, and the endpoint players receive is
+# `<HEARTH_PUBLIC_URL>/handoff/<sid>/connect` (ws:// for an http base).
 [vars]
-HEARTH_ALLOCATOR_URL = "http://127.0.0.1:8791/allocate"
 HEARTH_PUBLIC_URL = "http://127.0.0.1:8790"
-HEARTH_ALLOW_INSECURE_ENDPOINTS = "1"
+
+# --- The other allocator mode: a webhook fleet (e2e-fleet.mjs) ---------------
+# The room's compile-time default is `allocator = "container"`; a deployment can
+# switch to the webhook fleet with HEARTH_ALLOCATOR_MODE = "webhook". The fleet
+# e2e runs:
+#
+#   npx wrangler dev --port 8790 --persist-to .wrangler/state \
+#     --var HEARTH_ALLOCATOR_MODE:webhook
+#
+# The fleet vars below are read only in webhook mode. The session secret lives in
+# .dev.vars, never here. Container mode reads HEARTH_CONTAINER_PORT (default
+# 8080) when set.
+# HEARTH_ALLOCATOR_URL = "http://127.0.0.1:8791/allocate"
+# HEARTH_ALLOW_INSECURE_ENDPOINTS = "1"
 
 [observability]
 enabled = true

@@ -47,6 +47,12 @@ pub trait RoomConfig {
     /// `#[hearth::room(allocator = "webhook")]` attribute; `None` disables
     /// `Ctx::handoff` (the adapter fails its jobs with a clear error).
     const ALLOCATOR: Option<&'static str> = None;
+    /// The Durable Object binding of the session's container class, used when
+    /// `ALLOCATOR` is `Some("container")`. Set it with the
+    /// `#[hearth::room(container = "ARENA_SERVER")]` attribute; it must match the
+    /// `[[durable_objects.bindings]]` and `[[containers]]` class in
+    /// `wrangler.toml`.
+    const CONTAINER: Option<&'static str> = None;
 }
 
 /// One client. Identity comes from the gateway, never from the client's own
