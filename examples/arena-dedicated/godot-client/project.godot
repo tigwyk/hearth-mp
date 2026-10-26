@@ -1,0 +1,19 @@
+; Engine configuration file.
+; Hearth v0.5 handoff sample client. Run scripts/sync-addon.ps1 once, then open
+; this project in Godot (or `godot --headless --import --path .`).
+;
+; Tests run headless with `-s`, e.g.:
+;   godot --headless --path . -s tests/server_helper.gd
+;   godot --headless --path . -s tests/handoff_smoke.gd
+
+config_version=5
+
+[application]
+
+config/name="Hearth Arena Dedicated Client"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4")
+
+[autoload]
+
+Hearth="*res://addons/hearth/hearth_client.gd"

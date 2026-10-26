@@ -21,7 +21,13 @@ signal joined(player_id: String, seat: int)
 signal state_reset()
 signal patched(ops: Array)
 signal acked(state_seq: int, intent_seqs: Array)
+## A room event. Reserved `hearth.*` names never reach this signal; they are
+## delivered through the dedicated signals below.
 signal event(name: String, data: Variant)
+## A dedicated-server handoff (reserved `hearth.handoff` event).
+signal handoff(sid: String, endpoint: String, ticket: String)
+## The handoff session is over (reserved `hearth.handoff_ended` event).
+signal handoff_ended(sid: String, reason: String)
 signal error(code: String, message: String, ref_seq: int)
 signal disconnected(code: int, reason: String)
 signal reconnecting(attempt: int, retry_in_ms: int)
@@ -272,7 +278,7 @@ func _handle_text(text: String) -> void:
 				_in_flight.erase(int(seq))
 			acked.emit(int(frame.get("state_seq", 0)), frame.get("intent_seqs", []))
 		"EVENT":
-			event.emit(String(frame.get("name", "")), frame.get("data"))
+			_emit_server_event(String(frame.get("name", "")), frame.get("data"))
 		"ERROR":
 			var ref_seq := -1
 			if frame.get("ref_seq") != null:
@@ -281,6 +287,23 @@ func _handle_text(text: String) -> void:
 			_emit_error(String(frame.get("code", "INTERNAL")), String(frame.get("message", "")), ref_seq)
 		_:
 			_emit_error("BAD_FRAME", "unknown server frame op", -1)
+
+
+func _emit_server_event(event_name: String, data: Variant) -> void:
+	# Framework-owned names are reserved: they become dedicated signals and
+	# never reach the generic `event` signal.
+	if event_name == "hearth.handoff":
+		var payload: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
+		handoff.emit(
+			String(payload.get("sid", "")),
+			String(payload.get("endpoint", "")),
+			String(payload.get("ticket", "")),
+		)
+	elif event_name == "hearth.handoff_ended":
+		var payload: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
+		handoff_ended.emit(String(payload.get("sid", "")), String(payload.get("reason", "")))
+	elif not event_name.begins_with("hearth."):
+		event.emit(event_name, data)
 
 
 func _handle_patch(frame: Dictionary) -> void:

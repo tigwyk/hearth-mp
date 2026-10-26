@@ -1,7 +1,12 @@
 // Hearth v0.5 fleet end-to-end test.
 //
-// Run `wrangler dev --port 8790 --persist-to .wrangler/state` in this directory
-// first (with .dev.vars present), then: node e2e-fleet.mjs
+// The room defaults to the Cloudflare Containers allocator; run the webhook fleet
+// instead by switching the mode at dev time:
+//
+//   npx wrangler dev --port 8790 --persist-to .wrangler/state \
+//     --var HEARTH_ALLOCATOR_MODE:webhook
+//
+// (with .dev.vars present), then: node e2e-fleet.mjs
 //
 // The script starts the sample fleet allocator itself (fleet/allocator.mjs) and
 // builds fleet/fake-server if needed. Checks:
@@ -27,6 +32,10 @@ const ALLOCATOR_SECRET =
   process.env.HEARTH_ALLOCATOR_SECRET ??
   'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
 const TIMEOUT_MS = 20_000;
+// `--print-session` is the Task 4 Godot-helper fixture: create one fresh lobby
+// session with two players, print its env + tickets as JSON, then exit WITHOUT
+// ending the session (the room keeps it alive for the helper).
+const PRINT_SESSION = process.argv.slice(2).includes('--print-session');
 
 function fail(message) {
   console.error(`e2e-fleet FAILED: ${message}`);
@@ -356,6 +365,37 @@ function endpointPort(endpoint) {
   return Number(match[1]);
 }
 
+// ----------------------------------------------------------- print-session
+
+// Create a fresh session and print what the allocator would hand the dedicated
+// server: the session env plus the two players' tickets. Does not deliver the
+// tickets or end the session, so a helper (tests/server_helper.gd) can redeem
+// them itself.
+async function printSession() {
+  const schema = await request('/schema/arena');
+  check(schema.status === 200, 'schema route');
+  const room = await mintRoom();
+  const a = await player(room, schema.json.schema_hash);
+  const b = await player(room, schema.json.schema_hash);
+  ready(a);
+  ready(b);
+  const handoffA = await waitHandoff(a);
+  const handoffB = await waitHandoff(b);
+  const session = await allocatorSession(handoffA.sid);
+  const fixture = {
+    sid: handoffA.sid,
+    secret: session.secret,
+    report_url: session.report_url,
+    endpoint: handoffA.endpoint,
+    tickets: [handoffA.ticket, handoffB.ticket],
+    room,
+  };
+  // The fixture consumer reads the last line of stdout.
+  console.log(JSON.stringify(fixture));
+  a.ws.close();
+  b.ws.close();
+}
+
 // ------------------------------------------------------------------- scenario
 
 async function run() {
@@ -480,7 +520,11 @@ async function run() {
 
 await startAllocator();
 try {
-  await run();
+  if (PRINT_SESSION) {
+    await printSession();
+  } else {
+    await run();
+  }
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
 } finally {

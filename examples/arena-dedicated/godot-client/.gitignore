@@ -1,0 +1,4 @@
+# The Hearth addon is single-sourced at godot/addons/hearth and copied here by
+# scripts/sync-addon.ps1, so the copy is not committed.
+addons/hearth/
+.godot/

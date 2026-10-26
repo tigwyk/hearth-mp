@@ -19,7 +19,16 @@ signal joined(player_id: String, seat: int)
 signal state_reset()
 signal patched(ops: Array)
 signal acked(state_seq: int, intent_seqs: Array)
+## A room event. Framework-owned names (`hearth.*`) never reach this signal;
+## they are delivered through the dedicated signals below instead.
 signal event(name: String, data: Variant)
+## A dedicated-server handoff (the reserved `hearth.handoff` event): `sid` names
+## the session, `endpoint` is the server's `ws://`/`wss://` or `udp://` address,
+## and `ticket` is this player's single-use credential for
+## `connect_handoff()`.
+signal handoff(sid: String, endpoint: String, ticket: String)
+## The handoff session is over (the reserved `hearth.handoff_ended` event).
+signal handoff_ended(sid: String, reason: String)
 signal error(code: String, message: String, ref_seq: int)
 ## Fires only when the client gives up (deliberate or fatal close, or the
 ## reconnect grace window is spent). Recoverable drops emit `reconnecting`.
@@ -77,6 +86,11 @@ func _ready() -> void:
 	_backend.patched.connect(_on_patched)
 	_backend.acked.connect(_on_acked)
 	_backend.event.connect(_on_event)
+	# The web backend raises the reserved handoff signals itself; the native
+	# backend sends every event through `event`, which `_on_event` filters.
+	if _backend.has_signal("handoff"):
+		_backend.handoff.connect(_on_handoff)
+		_backend.handoff_ended.connect(_on_handoff_ended)
 	_backend.error.connect(_on_error)
 	_backend.disconnected.connect(_on_disconnected)
 	_backend.reconnecting.connect(_on_reconnecting)
@@ -306,6 +320,36 @@ func interpolator(paths: Array) -> Object:
 	return _backend.create_interpolator(paths)
 
 
+## Open a `WebSocketPeer` to a dedicated server from a `handoff` signal.
+##
+## For `wss://`/`ws://` endpoints this connects to
+## `endpoint + "?ticket=" + ticket` and returns the peer; the caller polls it
+## (and sends/receives its own game protocol). For `udp://` endpoints it
+## returns `null` and emits `error("HANDOFF_ENDPOINT", ...)`: connect with your
+## own netcode and send the ticket there.
+func connect_handoff(endpoint: String, ticket: String) -> WebSocketPeer:
+	if endpoint.begins_with("udp://"):
+		_emit_error(
+			"HANDOFF_ENDPOINT",
+			"udp endpoint: connect with your own netcode and send the ticket",
+			-1,
+		)
+		return null
+	if not (endpoint.begins_with("ws://") or endpoint.begins_with("wss://")):
+		_emit_error("HANDOFF_ENDPOINT", "unsupported handoff endpoint: " + endpoint, -1)
+		return null
+	var peer := WebSocketPeer.new()
+	var error := peer.connect_to_url(endpoint + "?ticket=" + ticket)
+	if error != OK:
+		_emit_error(
+			"HANDOFF_ENDPOINT",
+			"WebSocketPeer.connect_to_url failed (%d)" % error,
+			-1,
+		)
+		return null
+	return peer
+
+
 ## Queue one intent. Returns its client-assigned sequence number (>= 1), or 0
 ## when the intent could not be converted.
 func send_intent(intent) -> int:
@@ -465,7 +509,34 @@ func _on_acked(state_seq: int, intent_seqs: Array) -> void:
 
 
 func _on_event(name: String, data: Variant) -> void:
-	event.emit(name, data)
+	if name == "hearth.handoff":
+		_emit_handoff(data)
+	elif name == "hearth.handoff_ended":
+		_emit_handoff_ended(data)
+	elif not name.begins_with("hearth."):
+		event.emit(name, data)
+
+
+func _on_handoff(sid: String, endpoint: String, ticket: String) -> void:
+	handoff.emit(sid, endpoint, ticket)
+
+
+func _on_handoff_ended(sid: String, reason: String) -> void:
+	handoff_ended.emit(sid, reason)
+
+
+func _emit_handoff(data: Variant) -> void:
+	var payload: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
+	handoff.emit(
+		String(payload.get("sid", "")),
+		String(payload.get("endpoint", "")),
+		String(payload.get("ticket", "")),
+	)
+
+
+func _emit_handoff_ended(data: Variant) -> void:
+	var payload: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
+	handoff_ended.emit(String(payload.get("sid", "")), String(payload.get("reason", "")))
 
 
 func _on_error(code: String, message: String, ref_seq: int) -> void:
