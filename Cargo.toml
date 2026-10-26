@@ -17,6 +17,10 @@ edition = "2021"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
 authors = ["Lee Ingram <lee@soylentcola.com>"]
+repository = "https://github.com/tigwyk/hearth-mp"
+readme = "README.md"
+keywords = ["multiplayer", "gamedev", "websocket", "cloudflare", "durable-objects"]
+categories = ["game-development", "network-programming"]
 
 [workspace.dependencies]
 # External crates, pinned once for the whole workspace.

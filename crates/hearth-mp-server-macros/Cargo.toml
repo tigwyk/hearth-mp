@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [lib]
 proc-macro = true
@@ -16,7 +20,8 @@ quote.workspace = true
 proc-macro2.workspace = true
 
 [dev-dependencies]
-hearth-mp.workspace = true
+# path-only: a dev-dependency cycle with hearth-mp; cargo drops it from the published manifest.
+hearth-mp = { path = "../hearth-mp" }
 hearth-mp-sync.workspace = true
 serde.workspace = true
 worker.workspace = true
