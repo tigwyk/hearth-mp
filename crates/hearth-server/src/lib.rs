@@ -20,11 +20,19 @@ pub mod service;
 mod store;
 
 #[cfg(feature = "worker")]
+pub mod container;
+
+#[cfg(feature = "worker")]
 pub mod worker;
 
 pub use admin::{Cause, InspectClient, InspectDoc, TailMsg};
-pub use allocator::{validate_endpoint, verify_webhook, Allocator, WebhookAllocator};
+pub use allocator::{
+    validate_endpoint, verify_webhook, Allocator, ContainerAllocator, ContainerStarter,
+    StartRequest, WebhookAllocator, DEFAULT_CONTAINER_PORT,
+};
 pub use call::{CallError, Callable, Envelope, Target};
+#[cfg(feature = "worker")]
+pub use container::{ContainerObject, ContainerRpc};
 pub use ctx::Ctx;
 pub use fetcher::{CannedFetcher, Fetcher, HttpReq, HttpResp};
 pub use handoff::{

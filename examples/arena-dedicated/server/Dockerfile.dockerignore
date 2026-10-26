@@ -1,0 +1,14 @@
+# Dockerfile-specific ignore file (BuildKit reads `<Dockerfile>.dockerignore`).
+# The build context is the repository root, so exclude generated and unrelated
+# trees. Everything the build needs is in Cargo.toml/Cargo.lock, crates/ and
+# examples/.
+.git
+**/target
+**/build
+**/.wrangler
+**/node_modules
+bench
+docs
+godot
+unity
+*.wasm

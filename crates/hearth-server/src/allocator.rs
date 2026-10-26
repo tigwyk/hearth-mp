@@ -1,4 +1,6 @@
-//! Webhook allocation for handoff sessions.
+//! Handoff allocation: an operator's webhook fleet or Cloudflare Containers.
+//!
+//! ## Webhook allocators
 //!
 //! The room adapter POSTs a signed allocation request to the operator's fleet
 //! allocator and hands the answered endpoint to clients. The contract:
@@ -15,13 +17,23 @@
 //!
 //! [`verify_webhook`] is exported so an allocator written in Rust can reuse the
 //! exact check; `docs/handoff.md` has the JavaScript equivalent.
+//!
+//! ## Container allocators
+//!
+//! [`ContainerAllocator`] asks a [`ContainerStarter`] to start one Cloudflare
+//! Container per session and returns the gateway's `.../handoff/{sid}/connect`
+//! WebSocket URL. The starter is a seam: the Worker adapter implements it over
+//! the `hearth_server::container::ContainerObject` call path, and native tests
+//! use a fake. Nothing here needs the `worker` feature.
+
+use std::time::Duration;
 
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
 
 use crate::fetcher::{Fetcher, HttpReq};
-use crate::handoff::{constant_time_eq, AllocJob, SessionId};
+use crate::handoff::{constant_time_eq, AllocJob, SessionId, DEFAULT_MAX_DURATION};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -225,4 +237,109 @@ fn now_s() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|elapsed| elapsed.as_secs())
         .unwrap_or(0)
+}
+
+/// The port a session container serves HTTP/WebSocket on unless told otherwise.
+pub const DEFAULT_CONTAINER_PORT: u16 = 8080;
+
+/// Everything a container needs to start one session.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StartRequest {
+    pub sid: SessionId,
+    /// The plaintext session secret. It is delivered only to the container's
+    /// start message, never to a client.
+    pub secret: String,
+    /// `<public_url>/handoff/<sid>`: where the container reports lifecycle
+    /// events (the SDK appends `/report`).
+    pub report_url: String,
+    pub port: u16,
+    /// The developer's extra environment. `HEARTH_*` names are ignored by the
+    /// adapter, so a session's identity cannot be spoofed.
+    pub env: Vec<(String, String)>,
+    pub max_duration_ms: u64,
+}
+
+/// Starts and stops the server for one session.
+///
+/// The Worker adapter implements this by calling a session's container object;
+/// native tests use a fake. It is host-independent on purpose, so the allocator
+/// logic is testable without Workers.
+#[allow(async_fn_in_trait)]
+pub trait ContainerStarter {
+    /// Start this session's server and return only once it is healthy.
+    async fn start(&self, request: StartRequest) -> Result<(), String>;
+    /// Destroy this session's server. Best effort: it is only called for
+    /// sessions that already started.
+    async fn stop(&self, sid: &SessionId) -> Result<(), String>;
+}
+
+/// One Cloudflare Container per session, reached through the gateway's
+/// `/handoff/{sid}/connect` WebSocket proxy.
+pub struct ContainerAllocator<S: ContainerStarter> {
+    pub starter: S,
+    /// The gateway's public base URL (`https://...` in production, `http://...`
+    /// for local dev, which yields a `ws://` connect URL).
+    pub public_url: String,
+    /// The port the container serves HTTP/WebSocket on.
+    pub port: u16,
+    /// Extra environment for the container (cannot override `HEARTH_*`).
+    pub env: Vec<(String, String)>,
+    /// The container's backstop: it is destroyed this long after it starts.
+    pub max_duration: Duration,
+}
+
+impl<S: ContainerStarter> ContainerAllocator<S> {
+    /// Defaults: port [`DEFAULT_CONTAINER_PORT`], no extra env, and the room's
+    /// default maximum session duration.
+    pub fn new(starter: S, public_url: impl Into<String>) -> Self {
+        Self {
+            starter,
+            public_url: public_url.into(),
+            port: DEFAULT_CONTAINER_PORT,
+            env: Vec::new(),
+            max_duration: DEFAULT_MAX_DURATION,
+        }
+    }
+}
+
+impl<S: ContainerStarter> Allocator for ContainerAllocator<S> {
+    async fn allocate(&self, job: &AllocJob) -> Result<String, String> {
+        let report_url = format!(
+            "{}/handoff/{}",
+            self.public_url.trim_end_matches('/'),
+            job.sid.as_str()
+        );
+        self.starter
+            .start(StartRequest {
+                sid: job.sid.clone(),
+                secret: job.secret.clone(),
+                report_url,
+                port: self.port,
+                env: self.env.clone(),
+                max_duration_ms: self.max_duration.as_millis().min(u64::MAX as u128) as u64,
+            })
+            .await?;
+        Ok(connect_url(&self.public_url, &job.sid))
+    }
+
+    async fn stop(&self, sid: &SessionId) -> Result<(), String> {
+        self.starter.stop(sid).await
+    }
+}
+
+/// The gateway's WebSocket route for a session: `wss://` for an `https` public
+/// URL, `ws://` for `http`, and `wss` when the URL has no scheme.
+fn connect_url(public_url: &str, sid: &SessionId) -> String {
+    let (scheme, host) = if let Some(host) = public_url.strip_prefix("https://") {
+        ("wss", host)
+    } else if let Some(host) = public_url.strip_prefix("http://") {
+        ("ws", host)
+    } else {
+        ("wss", public_url)
+    };
+    format!(
+        "{scheme}://{}/handoff/{}/connect",
+        host.trim_end_matches('/'),
+        sid.as_str()
+    )
 }
