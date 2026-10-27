@@ -1,0 +1,22 @@
+[package]
+name = "ffny-ladder"
+description = "Hearth sample: a ranked ladder (queue, pairing, Glicko-2, leaderboard) for a peer-to-peer game mod."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+hearth-mp.workspace = true
+hearth-mp-gateway.workspace = true
+worker.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+hearth-mp-test.workspace = true

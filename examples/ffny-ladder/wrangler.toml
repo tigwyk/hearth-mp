@@ -1,0 +1,17 @@
+name = "ffny-ladder"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-10-01"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release"
+
+# The whole backend: one Durable Object with SQLite inside. Idle, it is not billed.
+[[durable_objects.bindings]]
+name = "LADDER"
+class_name = "LadderObject"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LadderObject"]
+
+# Set the login secret once: wrangler secret put HEARTH_SECRET  (min 32 bytes)

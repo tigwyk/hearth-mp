@@ -389,6 +389,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "ffny-ladder"
+version = "0.1.1"
+dependencies = [
+ "hearth-mp",
+ "hearth-mp-gateway",
+ "hearth-mp-test",
+ "serde",
+ "serde_json",
+ "worker",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
