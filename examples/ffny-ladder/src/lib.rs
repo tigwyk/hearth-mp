@@ -59,23 +59,49 @@ pub struct Entry {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum LadderRpc {
-    Search { player: PlayerId, name: String },
-    Cancel { player: PlayerId },
-    Report { player: PlayerId, pairing: String, result: Outcome },
-    Me { player: PlayerId },
-    Top { limit: u32 },
+    Search {
+        player: PlayerId,
+        name: String,
+    },
+    Cancel {
+        player: PlayerId,
+    },
+    Report {
+        player: PlayerId,
+        pairing: String,
+        result: Outcome,
+    },
+    Me {
+        player: PlayerId,
+    },
+    Top {
+        limit: u32,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(tag = "status", rename_all = "lowercase")]
 pub enum LadderReply {
-    Searching { waited_s: u64, window: u32 },
-    Matched { pairing: String, opponent: Entry },
+    Searching {
+        waited_s: u64,
+        window: u32,
+    },
+    Matched {
+        pairing: String,
+        opponent: Entry,
+    },
     Cancelled,
     /// `settled`: both reports are in. `counted`: they agreed and the ratings moved.
-    Reported { settled: bool, counted: bool },
-    Me { entry: Option<Entry> },
-    Top { entries: Vec<Entry> },
+    Reported {
+        settled: bool,
+        counted: bool,
+    },
+    Me {
+        entry: Option<Entry>,
+    },
+    Top {
+        entries: Vec<Entry>,
+    },
 }
 
 #[derive(Default)]
@@ -107,7 +133,11 @@ fn entry(row: &Row) -> Entry {
 }
 
 fn rating_of(row: &Row) -> Rating {
-    Rating { rating: f(row, "rating"), deviation: f(row, "dev"), volatility: f(row, "vol") }
+    Rating {
+        rating: f(row, "rating"),
+        deviation: f(row, "dev"),
+        volatility: f(row, "vol"),
+    }
 }
 
 const SCHEMA: [&str; 3] = [
@@ -143,25 +173,45 @@ impl Service for Ladder {
                     "SELECT * FROM players WHERE games > 0 ORDER BY rating DESC LIMIT ?",
                     vec![V::Int(limit.clamp(1, 100) as i64)],
                 )?;
-                Ok(LadderReply::Top { entries: rows.iter().map(entry).collect() })
+                Ok(LadderReply::Top {
+                    entries: rows.iter().map(entry).collect(),
+                })
             }
             LadderRpc::Me { player } => {
-                let rows = sql.exec("SELECT * FROM players WHERE id = ?", vec![V::Text(player.0)])?;
-                Ok(LadderReply::Me { entry: rows.first().map(entry) })
+                let rows = sql.exec(
+                    "SELECT * FROM players WHERE id = ?",
+                    vec![V::Text(player.0)],
+                )?;
+                Ok(LadderReply::Me {
+                    entry: rows.first().map(entry),
+                })
             }
             LadderRpc::Cancel { player } => {
-                sql.exec("DELETE FROM queue WHERE player = ?", vec![V::Text(player.0)])?;
+                sql.exec(
+                    "DELETE FROM queue WHERE player = ?",
+                    vec![V::Text(player.0)],
+                )?;
                 Ok(LadderReply::Cancelled)
             }
             LadderRpc::Search { player, name } => search(sql, now, player.0, name),
-            LadderRpc::Report { player, pairing, result } => report(sql, player.0, pairing, result),
+            LadderRpc::Report {
+                player,
+                pairing,
+                result,
+            } => report(sql, player.0, pairing, result),
         }
     }
 }
 
 fn search(sql: &dyn Sql, now: i64, me: String, name: String) -> Result<LadderReply> {
-    sql.exec("DELETE FROM queue WHERE seen < ?", vec![V::Int(now - QUEUE_STALE_MS)])?;
-    sql.exec("DELETE FROM pairings WHERE at < ?", vec![V::Int(now - PAIRING_MS)])?;
+    sql.exec(
+        "DELETE FROM queue WHERE seen < ?",
+        vec![V::Int(now - QUEUE_STALE_MS)],
+    )?;
+    sql.exec(
+        "DELETE FROM pairings WHERE at < ?",
+        vec![V::Int(now - PAIRING_MS)],
+    )?;
     sql.exec(
         "INSERT INTO players (id, name, rating, dev, vol) VALUES (?, ?, ?, ?, ?) \
          ON CONFLICT(id) DO UPDATE SET name = excluded.name",
@@ -185,14 +235,23 @@ fn search(sql: &dyn Sql, now: i64, me: String, name: String) -> Result<LadderRep
             "UPDATE pairings SET a_got = a_got OR a = ?2, b_got = b_got OR b = ?2 WHERE id = ?1",
             vec![V::Text(id.clone()), V::Text(me)],
         )?;
-        return Ok(LadderReply::Matched { pairing: id, opponent: entry(&player_row(sql, &other)?) });
+        return Ok(LadderReply::Matched {
+            pairing: id,
+            opponent: entry(&player_row(sql, &other)?),
+        });
     }
     sql.exec(
         "INSERT INTO queue (player, since, seen) VALUES (?1, ?2, ?2) \
          ON CONFLICT(player) DO UPDATE SET seen = excluded.seen",
         vec![V::Text(me.clone()), V::Int(now)],
     )?;
-    let since = i(&sql.exec("SELECT since FROM queue WHERE player = ?", vec![V::Text(me.clone())])?[0], "since");
+    let since = i(
+        &sql.exec(
+            "SELECT since FROM queue WHERE player = ?",
+            vec![V::Text(me.clone())],
+        )?[0],
+        "since",
+    );
     let waited_s = ((now - since).max(0) / 1000) as u64;
     let window = (WINDOW_START + WINDOW_PER_S * waited_s as f64).min(WINDOW_MAX);
     let mine = f(&player_row(sql, &me)?, "rating");
@@ -203,38 +262,70 @@ fn search(sql: &dyn Sql, now: i64, me: String, name: String) -> Result<LadderRep
         vec![V::Text(me.clone()), V::Real(mine), V::Real(window)],
     )?;
     let Some(other) = found.first().map(|r| s(r, "id")) else {
-        return Ok(LadderReply::Searching { waited_s, window: window as u32 });
+        return Ok(LadderReply::Searching {
+            waited_s,
+            window: window as u32,
+        });
     };
     let id = format!("{now:x}-{}", &me[me.len().saturating_sub(6)..]);
     sql.exec(
         "INSERT INTO pairings (id, a, b, a_got, at) VALUES (?, ?, ?, 1, ?)",
-        vec![V::Text(id.clone()), V::Text(me.clone()), V::Text(other.clone()), V::Int(now)],
+        vec![
+            V::Text(id.clone()),
+            V::Text(me.clone()),
+            V::Text(other.clone()),
+            V::Int(now),
+        ],
     )?;
-    sql.exec("DELETE FROM queue WHERE player IN (?, ?)", vec![V::Text(me), V::Text(other.clone())])?;
-    Ok(LadderReply::Matched { pairing: id, opponent: entry(&player_row(sql, &other)?) })
+    sql.exec(
+        "DELETE FROM queue WHERE player IN (?, ?)",
+        vec![V::Text(me), V::Text(other.clone())],
+    )?;
+    Ok(LadderReply::Matched {
+        pairing: id,
+        opponent: entry(&player_row(sql, &other)?),
+    })
 }
 
 /// A ranked game counts only when both paired players report it and the reports agree.
 fn report(sql: &dyn Sql, me: String, pairing: String, result: Outcome) -> Result<LadderReply> {
     let rows = sql.exec(
         "SELECT * FROM pairings WHERE id = ? AND done = 0 AND (a = ? OR b = ?)",
-        vec![V::Text(pairing.clone()), V::Text(me.clone()), V::Text(me.clone())],
+        vec![
+            V::Text(pairing.clone()),
+            V::Text(me.clone()),
+            V::Text(me.clone()),
+        ],
     )?;
     let Some(p) = rows.first() else {
         anyhow::bail!("no open pairing {pairing} for this player");
     };
     let col = if s(p, "a") == me { "ra" } else { "rb" };
     if !s(p, col).is_empty() {
-        return Ok(LadderReply::Reported { settled: false, counted: false });
+        return Ok(LadderReply::Reported {
+            settled: false,
+            counted: false,
+        });
     }
     sql.exec(
         &format!("UPDATE pairings SET {col} = ? WHERE id = ?"),
-        vec![V::Text(result.as_str().to_owned()), V::Text(pairing.clone())],
+        vec![
+            V::Text(result.as_str().to_owned()),
+            V::Text(pairing.clone()),
+        ],
     )?;
-    let p = sql.exec("SELECT * FROM pairings WHERE id = ?", vec![V::Text(pairing.clone())])?.remove(0);
+    let p = sql
+        .exec(
+            "SELECT * FROM pairings WHERE id = ?",
+            vec![V::Text(pairing.clone())],
+        )?
+        .remove(0);
     let (ra, rb) = (s(&p, "ra"), s(&p, "rb"));
     if ra.is_empty() || rb.is_empty() {
-        return Ok(LadderReply::Reported { settled: false, counted: false });
+        return Ok(LadderReply::Reported {
+            settled: false,
+            counted: false,
+        });
     }
     let score_a = match (ra.as_str(), rb.as_str()) {
         ("win", "loss") => Some(1.0),
@@ -242,18 +333,27 @@ fn report(sql: &dyn Sql, me: String, pairing: String, result: Outcome) -> Result
         ("draw", "draw") => Some(0.5),
         _ => None, // the games disagree: it counts for nobody
     };
-    sql.exec("UPDATE pairings SET done = 1 WHERE id = ?", vec![V::Text(pairing)])?;
+    sql.exec(
+        "UPDATE pairings SET done = 1 WHERE id = ?",
+        vec![V::Text(pairing)],
+    )?;
     if let Some(score_a) = score_a {
         settle(sql, &s(&p, "a"), &s(&p, "b"), score_a)?;
     }
-    Ok(LadderReply::Reported { settled: true, counted: score_a.is_some() })
+    Ok(LadderReply::Reported {
+        settled: true,
+        counted: score_a.is_some(),
+    })
 }
 
 fn player_row(sql: &dyn Sql, id: &str) -> Result<Row> {
-    sql.exec("SELECT * FROM players WHERE id = ?", vec![V::Text(id.to_owned())])?
-        .into_iter()
-        .next()
-        .ok_or_else(|| anyhow::anyhow!("unknown player {id}"))
+    sql.exec(
+        "SELECT * FROM players WHERE id = ?",
+        vec![V::Text(id.to_owned())],
+    )?
+    .into_iter()
+    .next()
+    .ok_or_else(|| anyhow::anyhow!("unknown player {id}"))
 }
 
 /// Move both ratings after one agreed game (each game its own rating period).
@@ -344,7 +444,11 @@ async fn ladder_route(mut req: Request, env: Env, path: &str) -> worker::Result<
             let Ok(body) = req.json::<Body>().await else {
                 return json_error("body must be {pairing, result: win|loss|draw}", 400);
             };
-            LadderRpc::Report { player, pairing: body.pairing, result: body.result }
+            LadderRpc::Report {
+                player,
+                pairing: body.pairing,
+                result: body.result,
+            }
         }
         _ => return json_error("not found", 404),
     };

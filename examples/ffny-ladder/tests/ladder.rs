@@ -16,11 +16,24 @@ fn call(world: &mut TestWorld, rpc: LadderRpc) -> LadderReply {
 }
 
 fn search(world: &mut TestWorld, id: &str) -> LadderReply {
-    call(world, LadderRpc::Search { player: p(id), name: id.to_uppercase() })
+    call(
+        world,
+        LadderRpc::Search {
+            player: p(id),
+            name: id.to_uppercase(),
+        },
+    )
 }
 
 fn report(world: &mut TestWorld, id: &str, pairing: &str, result: Outcome) -> LadderReply {
-    call(world, LadderRpc::Report { player: p(id), pairing: pairing.to_owned(), result })
+    call(
+        world,
+        LadderRpc::Report {
+            player: p(id),
+            pairing: pairing.to_owned(),
+            result,
+        },
+    )
 }
 
 fn world() -> TestWorld {
@@ -31,16 +44,26 @@ fn world() -> TestWorld {
 
 /// Two players search; returns the pairing id after both have been told.
 fn pair(world: &mut TestWorld) -> String {
-    assert!(matches!(search(world, "alice"), LadderReply::Searching { .. }));
+    assert!(matches!(
+        search(world, "alice"),
+        LadderReply::Searching { .. }
+    ));
     let LadderReply::Matched { pairing, opponent } = search(world, "bob") else {
         panic!("bob should match alice");
     };
     assert_eq!(opponent.player, "alice");
     // Alice learns of it on her next poll, once.
-    let LadderReply::Matched { pairing: same, opponent } = search(world, "alice") else {
+    let LadderReply::Matched {
+        pairing: same,
+        opponent,
+    } = search(world, "alice")
+    else {
         panic!("alice should be told");
     };
-    assert_eq!((same.as_str(), opponent.player.as_str()), (pairing.as_str(), "bob"));
+    assert_eq!(
+        (same.as_str(), opponent.player.as_str()),
+        (pairing.as_str(), "bob")
+    );
     pairing
 }
 
@@ -50,11 +73,17 @@ fn agreed_result_moves_both_ratings_and_fills_the_board() {
     let pairing = pair(&mut w);
     assert_eq!(
         report(&mut w, "alice", &pairing, Outcome::Win),
-        LadderReply::Reported { settled: false, counted: false }
+        LadderReply::Reported {
+            settled: false,
+            counted: false
+        }
     );
     assert_eq!(
         report(&mut w, "bob", &pairing, Outcome::Loss),
-        LadderReply::Reported { settled: true, counted: true }
+        LadderReply::Reported {
+            settled: true,
+            counted: true
+        }
     );
     let LadderReply::Top { entries } = call(&mut w, LadderRpc::Top { limit: 10 }) else {
         panic!()
@@ -71,7 +100,10 @@ fn disagreeing_reports_count_for_nobody() {
     report(&mut w, "alice", &pairing, Outcome::Win);
     assert_eq!(
         report(&mut w, "bob", &pairing, Outcome::Win),
-        LadderReply::Reported { settled: true, counted: false }
+        LadderReply::Reported {
+            settled: true,
+            counted: false
+        }
     );
     let LadderReply::Top { entries } = call(&mut w, LadderRpc::Top { limit: 10 }) else {
         panic!()
@@ -86,7 +118,11 @@ fn a_stranger_cannot_report_a_pairing() {
     let err = w
         .call::<Ladder>(
             "global",
-            LadderRpc::Report { player: p("mallory"), pairing, result: Outcome::Win },
+            LadderRpc::Report {
+                player: p("mallory"),
+                pairing,
+                result: Outcome::Win,
+            },
         )
         .unwrap_err();
     assert!(err.to_string().contains("no open pairing"), "{err}");
@@ -101,7 +137,11 @@ fn a_settled_pairing_cannot_be_reported_again() {
     assert!(w
         .call::<Ladder>(
             "global",
-            LadderRpc::Report { player: p("alice"), pairing, result: Outcome::Win },
+            LadderRpc::Report {
+                player: p("alice"),
+                pairing,
+                result: Outcome::Win
+            },
         )
         .is_err());
 }
@@ -111,7 +151,9 @@ fn the_window_widens_with_waiting() {
     let mut w = world();
     // Make carol strong: she beats dave once, so her rating sits well above 1500.
     search(&mut w, "carol");
-    let LadderReply::Matched { pairing, .. } = search(&mut w, "dave") else { panic!() };
+    let LadderReply::Matched { pairing, .. } = search(&mut w, "dave") else {
+        panic!()
+    };
     search(&mut w, "carol");
     report(&mut w, "carol", &pairing, Outcome::Win);
     report(&mut w, "dave", &pairing, Outcome::Loss);
@@ -137,7 +179,10 @@ fn a_cancelled_search_is_not_paired() {
     let mut w = world();
     search(&mut w, "alice");
     call(&mut w, LadderRpc::Cancel { player: p("alice") });
-    assert!(matches!(search(&mut w, "bob"), LadderReply::Searching { .. }));
+    assert!(matches!(
+        search(&mut w, "bob"),
+        LadderReply::Searching { .. }
+    ));
 }
 
 #[test]
@@ -145,5 +190,8 @@ fn a_silent_searcher_expires() {
     let mut w = world();
     search(&mut w, "alice");
     w.advance(Duration::from_secs(30));
-    assert!(matches!(search(&mut w, "bob"), LadderReply::Searching { .. }));
+    assert!(matches!(
+        search(&mut w, "bob"),
+        LadderReply::Searching { .. }
+    ));
 }
