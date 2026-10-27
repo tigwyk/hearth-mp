@@ -143,6 +143,36 @@ Prices change: when Cloudflare updates either page, edit `pricing.toml`, set
 - **The Workers Free plan.** The model assumes the Workers Paid plan, because
   Durable Objects in production want it and the `$5` base is the total's floor.
 
+## Worked example: a ranked ladder
+
+`hearth-mp cost` models rooms. A service such as the ranked ladder in
+`examples/ffny-ladder` (queue, pairing, ratings and a leaderboard for a game
+whose fights run elsewhere) is not covered by it, so this is hand arithmetic
+against Cloudflare's published prices, not a measurement.
+
+Assumptions, all guesses to replace with your own numbers: 5,000 ranked matches
+a month, 30 seconds of searching per player, one poll every 3 seconds, about 3
+row writes per poll.
+
+| Quantity | Per month |
+| --- | --- |
+| Searches (5,000 matches x 2 players x about 10 polls) | about 100,000 |
+| Result reports and leaderboard reads | about 10,000 to 50,000 |
+| Durable Object requests | about 150,000 |
+| Rows written | under 400,000 |
+| Duration | negligible: a few queries per call, then the object sleeps |
+
+On the Workers Paid plan that is about 15% of the 1 million requests and under
+1% of the 50 million rows written included in the `$5` base, so the bill is the
+base. On the Workers Free plan it is about 5,000 requests a day against the
+100,000 a day limit. Each poll also passes through the Worker, which has its own
+request limit; it is not priced here.
+
+Cloudflare's SQLite storage billing was announced for January 2026. The ladder
+stores a few megabytes, far under the included 5 GB, so it does not matter
+here. Check the pricing page for the current figures before quoting these:
+<https://developers.cloudflare.com/durable-objects/platform/pricing/>.
+
 ## Reading `--json`
 
 `--json` prints the same `Estimate` the table is rendered from:
