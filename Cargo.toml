@@ -7,6 +7,7 @@ members = [
     "examples/arena-godot-ext",
     "examples/arena-logic",
     "examples/tictactoe",
+    "examples/ffny-ladder",
 ]
 # Builds its own cdylib named hearth_unity; see its Cargo.toml.
 exclude = ["examples/arena-unity-plugin"]
