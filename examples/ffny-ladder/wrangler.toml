@@ -2,6 +2,9 @@ name = "ffny-ladder"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-10-01"
 
+# A hostname on a domain in your Cloudflare account (Cloudflare adds the DNS record and certificate):
+# routes = [{ pattern = "ladder.example.com", custom_domain = true }]
+
 [build]
 command = "cargo install -q worker-build && worker-build --release"
 

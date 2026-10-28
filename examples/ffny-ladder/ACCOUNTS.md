@@ -53,3 +53,17 @@ wrangler deploy --var DEV_LOGIN:1      # test servers only
 
 A deployed Worker is HTTPS, so the game build takes `RECOMP_ACCOUNT_SERVER=https://<name>.workers.dev`
 (this needs the `account.c` change that accepts `https://`).
+
+## Running for real
+
+This is deployed for the Def Jam: Fight for NY community at **https://ladder.ffny.live/**
+(a custom domain on a Worker; the page at `/` is `src/board.html`, which reads `/api/leaderboard`
+every 15 seconds). Checked against the live Worker:
+
+- The game's own sign-in handshake over HTTP (`RECOMP_ACCOUNT_SERVER=127.0.0.1:8787`, `wrangler dev`).
+- The Go relay (`netplay/relay`) running a full ranked match against it: both tickets redeemed with
+  `X-Internal-Token`, the pairing posted, both players' reports settled (1500 vs 1500 became 1662 vs 1338).
+
+The whole backend is one Durable Object with SQLite, on the free plan. Idle, it is not billed
+(see `docs/cost.md`). Login is still the dev sign-in; Discord OAuth is next.
+

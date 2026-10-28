@@ -547,6 +547,9 @@ async fn main(mut req: Request, env: Env, _ctx: Context) -> worker::Result<Respo
         return ladder_route(req, env, &rest).await;
     }
     let path = req.path();
+    if path == "/" {
+        return Response::from_html(include_str!("board.html"));
+    }
     if ["/api/", "/auth/", "/internal/"].iter().any(|p| path.starts_with(p)) {
         // Routes this service does not own (like /auth/anonymous) fall through to the gateway;
         // `accounts_route` reads the body only for the routes it owns.

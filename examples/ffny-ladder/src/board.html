@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FFNY Ranked Ladder</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 16px;background:#111;color:#eee}
+table{width:100%;border-collapse:collapse}th,td{padding:.4rem .6rem;text-align:left;border-bottom:1px solid #333}
+td:nth-child(n+3),th:nth-child(n+3){text-align:right}small{color:#999}
+</style>
+<h1>FFNY Ranked Ladder</h1>
+<table><thead><tr><th>#</th><th>Player</th><th>W</th><th>L</th><th>Win %</th></tr></thead><tbody id="b"></tbody></table>
+<p><small id="n">loading…</small></p>
+<script>
+async function load(){
+  try{
+    const d=await (await fetch('/api/leaderboard')).json(), b=document.getElementById('b');
+    b.replaceChildren(...d.entries.map(e=>{
+      const r=document.createElement('tr');
+      for(const v of [e.rank,e.name,e.wins,e.losses,e.win_rate]){const c=document.createElement('td');c.textContent=v;r.append(c)}
+      return r}));
+    document.getElementById('n').textContent=d.entries.length?'Players need '+d.min_matches+' ranked matches to appear. Updates every 15 s.':'No ranked players yet: '+d.min_matches+' matches to appear.';
+  }catch(e){document.getElementById('n').textContent='Could not load the ladder.'}
+}
+load();setInterval(load,15000);
+</script>
