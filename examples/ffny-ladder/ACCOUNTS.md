@@ -15,8 +15,8 @@ games report the same result; then Glicko-2 moves both ratings.
 
 ## Not the same as the Go service
 
-- **Login is a dev sign-in** (pick a name, no password), on only when `DEV_LOGIN=1`. The
-  game's start/poll handshake is kept, so Discord OAuth would replace only the start page.
+- **Login is Discord OAuth** when `DISCORD_CLIENT_ID` is set (see below), otherwise a dev sign-in (pick a name,
+  no password) that is on only when `DEV_LOGIN=1`. The game's start/poll handshake is the same either way.
 - Ranked games only: no history (`recent`), no favorite fighter, no streaks, no bug reports.
 - Not ported: the daily cap on repeat pairings, the 3-hour set window rules, "left" and
   "crashed" reports, account deletion beyond the basics, rate limits.
@@ -65,5 +65,23 @@ every 15 seconds). Checked against the live Worker:
   `X-Internal-Token`, the pairing posted, both players' reports settled (1500 vs 1500 became 1662 vs 1338).
 
 The whole backend is one Durable Object with SQLite, on the free plan. Idle, it is not billed
-(see `docs/cost.md`). Login is still the dev sign-in; Discord OAuth is next.
+(see `docs/cost.md`). Login: see "Discord sign-in".
+
+## Discord sign-in
+
+1. In the [Discord developer portal](https://discord.com/developers/applications) make an application. Under
+   OAuth2 add the redirect `https://<your host>/auth/discord/callback` (the host the game talks to).
+2. Set the Worker up:
+
+```sh
+wrangler secret put DISCORD_CLIENT_SECRET
+wrangler deploy --var DISCORD_CLIENT_ID:<client id> --var PUBLIC_URL:https://<your host>
+```
+
+`PUBLIC_URL` is the address registered in step 1, without the path. With `DISCORD_CLIENT_ID` set the dev
+page is gone: `/auth/discord/start` sends the browser to Discord (scope `identify`), the callback trades
+the code for the Discord user, and the Durable Object opens the session the game is polling for. The
+Discord token is not kept. One Discord user is one account, so a returning player keeps their rating.
+
+An older deployment needs its database recreated once: the `accounts` table gained a `discord` column.
 

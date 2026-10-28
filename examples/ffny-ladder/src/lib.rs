@@ -457,12 +457,23 @@ async fn ladder_route(mut req: Request, env: Env, path: &str) -> worker::Result<
 }
 
 /// The account-service routes the game and the relay call (see `accounts.rs`).
-async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Result<Option<Response>> {
-    use accounts::{AccReply, AccRpc};
+async fn accounts_route(
+    req: &mut Request,
+    env: &Env,
+    path: &str,
+) -> worker::Result<Option<Response>> {
+    use accounts::AccRpc;
     use worker::Method::{Delete, Get, Post};
-    let dev = env.var("DEV_LOGIN").map(|v| v.to_string() == "1").unwrap_or(false);
+    let dev = env
+        .var("DEV_LOGIN")
+        .map(|v| v.to_string() == "1")
+        .unwrap_or(false);
     let url = req.url()?;
-    let query = |key: &str| url.query_pairs().find(|(k, _)| k == key).map(|(_, v)| v.into_owned());
+    let query = |key: &str| {
+        url.query_pairs()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+    };
     let token = req
         .headers()
         .get("authorization")?
@@ -472,26 +483,61 @@ async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Res
     let method = req.method();
     // The relay's calls carry a shared secret; without INTERNAL_TOKEN set they do not exist.
     if path.starts_with("/internal/") {
-        let want = env.secret("INTERNAL_TOKEN").map(|s| s.to_string()).unwrap_or_default();
+        let want = env
+            .secret("INTERNAL_TOKEN")
+            .map(|s| s.to_string())
+            .unwrap_or_default();
         let got = req.headers().get("x-internal-token")?.unwrap_or_default();
-        let same = want.len() == got.len() && want.bytes().zip(got.bytes()).fold(0, |d, (a, b)| d | (a ^ b)) == 0;
+        let same = want.len() == got.len()
+            && want
+                .bytes()
+                .zip(got.bytes())
+                .fold(0, |d, (a, b)| d | (a ^ b))
+                == 0;
         if want.is_empty() || !same {
             return Ok(Some(Response::error("not found", 404)?));
         }
     }
+    let discord = env
+        .var("DISCORD_CLIENT_ID")
+        .map(|v| v.to_string())
+        .ok()
+        .filter(|v| !v.is_empty());
+    if let Some(client_id) = &discord {
+        match (&method, path) {
+            (Get, "/auth/discord/start") => {
+                return Ok(Some(
+                    discord_start(env, &url, client_id, query("login").unwrap_or_default()).await?,
+                ));
+            }
+            (Get, "/auth/discord/callback") => {
+                return Ok(Some(discord_callback(env, &url, client_id).await?))
+            }
+            _ => {}
+        }
+    }
     let rpc = match (method, path) {
-        (Get, "/auth/discord/start") => AccRpc::LoginPage { login: query("login").unwrap_or_default(), dev },
+        (Get, "/auth/discord/start") => AccRpc::LoginPage {
+            login: query("login").unwrap_or_default(),
+            dev,
+        },
         (Post, "/auth/dev/complete") => {
             let form = req.form_data().await?;
             let field = |k: &str| match form.get(k) {
                 Some(worker::FormEntry::Field(v)) => v,
                 _ => String::new(),
             };
-            AccRpc::DevComplete { login: field("login"), name: field("name"), dev }
+            AccRpc::DevComplete {
+                login: field("login"),
+                name: field("name"),
+                dev,
+            }
         }
         (Post, "/auth/poll") => {
             let body: serde_json::Value = req.json().await.unwrap_or_default();
-            AccRpc::Poll { secret: body["secret"].as_str().unwrap_or_default().to_owned() }
+            AccRpc::Poll {
+                secret: body["secret"].as_str().unwrap_or_default().to_owned(),
+            }
         }
         (Post, "/auth/logout") => AccRpc::Logout { token },
         (Get, "/api/me") => AccRpc::Me { token },
@@ -503,14 +549,25 @@ async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Res
         },
         (Get, "/api/leaderboard") => AccRpc::Board { discord: false },
         (Get, "/internal/leaderboard") => AccRpc::Board { discord: true },
-        (Post, "/api/matches") => AccRpc::Report { token, body: req.text().await? },
+        (Post, "/api/matches") => AccRpc::Report {
+            token,
+            body: req.text().await?,
+        },
         (Post, "/internal/ranked/redeem") => {
             let body: serde_json::Value = req.json().await.unwrap_or_default();
-            AccRpc::Redeem { ticket: body["ticket"].as_str().unwrap_or_default().to_owned() }
+            AccRpc::Redeem {
+                ticket: body["ticket"].as_str().unwrap_or_default().to_owned(),
+            }
         }
-        (Post, "/internal/ranked/pairing") => AccRpc::Pair { body: req.text().await? },
+        (Post, "/internal/ranked/pairing") => AccRpc::Pair {
+            body: req.text().await?,
+        },
         _ => return Ok(None),
     };
+    Ok(Some(account_response(call_accounts(env, rpc).await?)?))
+}
+
+async fn call_accounts(env: &Env, rpc: accounts::AccRpc) -> worker::Result<accounts::AccReply> {
     let envelope = Envelope {
         msg_id: None,
         from: Target::new("gateway", ""),
@@ -521,7 +578,10 @@ async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Res
     let value = hearth_mp::server::worker::call_object(env, &to, envelope)
         .await
         .map_err(|e| worker::Error::RustError(e.to_string()))?;
-    let reply: AccReply = serde_json::from_value(value).map_err(|e| worker::Error::RustError(e.to_string()))?;
+    serde_json::from_value(value).map_err(|e| worker::Error::RustError(e.to_string()))
+}
+
+fn account_response(reply: accounts::AccReply) -> worker::Result<Response> {
     let ctype = match reply.kind.as_str() {
         "json" => "application/json",
         "html" => "text/html; charset=utf-8",
@@ -530,7 +590,135 @@ async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Res
     let mut response = Response::ok(reply.body)?.with_status(reply.status);
     response.headers_mut().set("content-type", ctype)?;
     response.headers_mut().set("cache-control", "no-store")?;
-    Ok(Some(response))
+    Ok(response)
+}
+
+fn page(status: u16, title: &str, text: &str) -> worker::Result<Response> {
+    account_response(accounts::AccReply {
+        status,
+        kind: "html".into(),
+        body: format!(
+            "<!doctype html><meta charset=utf-8><title>{title}</title>             <body style='font:16px sans-serif;max-width:28em;margin:3em auto'><h1>{title}</h1><p>{text}</p>"
+        ),
+    })
+}
+
+/// Discord sign-in (set `DISCORD_CLIENT_ID` and the secret `DISCORD_CLIENT_SECRET`; `PUBLIC_URL` is the
+/// address registered as the application's redirect, without the path). Same steps as the Go service:
+/// the browser goes to Discord with an OAuth state, comes back with a code, and the code is traded for
+/// who signed in; the Discord token is not kept.
+async fn discord_start(
+    env: &Env,
+    url: &worker::Url,
+    client_id: &str,
+    login: String,
+) -> worker::Result<Response> {
+    let reply = call_accounts(env, accounts::AccRpc::OauthStart { login }).await?;
+    if reply.status != 200 {
+        return account_response(reply);
+    }
+    let state = serde_json::from_str::<serde_json::Value>(&reply.body).unwrap_or_default()["state"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    let mut to = worker::Url::parse("https://discord.com/oauth2/authorize")?;
+    to.query_pairs_mut()
+        .append_pair("response_type", "code")
+        .append_pair("client_id", client_id)
+        .append_pair("scope", "identify")
+        .append_pair("state", &state)
+        .append_pair("redirect_uri", &redirect_uri(env, url))
+        .append_pair("prompt", "none");
+    Response::redirect(to)
+}
+
+fn redirect_uri(env: &Env, url: &worker::Url) -> String {
+    let base = env
+        .var("PUBLIC_URL")
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| url.origin().ascii_serialization());
+    format!("{}/auth/discord/callback", base.trim_end_matches('/'))
+}
+
+async fn discord_callback(
+    env: &Env,
+    url: &worker::Url,
+    client_id: &str,
+) -> worker::Result<Response> {
+    let query = |key: &str| {
+        url.query_pairs()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.into_owned())
+            .unwrap_or_default()
+    };
+    let (state, code) = (query("state"), query("code"));
+    if !query("error").is_empty() || code.is_empty() {
+        return page(
+            200,
+            "Sign-in cancelled",
+            "Nothing was saved. You can close this window.",
+        );
+    }
+    let secret = env
+        .secret("DISCORD_CLIENT_SECRET")
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+    let mut form = worker::Url::parse("http://form/")?;
+    form.query_pairs_mut()
+        .append_pair("grant_type", "authorization_code")
+        .append_pair("code", &code)
+        .append_pair("redirect_uri", &redirect_uri(env, url))
+        .append_pair("client_id", client_id)
+        .append_pair("client_secret", &secret);
+    let who = async {
+        let headers = worker::Headers::new();
+        headers.set("content-type", "application/x-www-form-urlencoded")?;
+        let mut init = worker::RequestInit::new();
+        init.with_method(worker::Method::Post)
+            .with_headers(headers)
+            .with_body(Some(form.query().unwrap_or_default().into()));
+        let req = Request::new_with_init("https://discord.com/api/oauth2/token", &init)?;
+        let token: serde_json::Value = worker::Fetch::Request(req).send().await?.json().await?;
+        let access = token["access_token"]
+            .as_str()
+            .ok_or_else(|| worker::Error::RustError("no token".into()))?;
+        let headers = worker::Headers::new();
+        headers.set("authorization", &format!("Bearer {access}"))?;
+        let mut init = worker::RequestInit::new();
+        init.with_headers(headers);
+        let req = Request::new_with_init("https://discord.com/api/users/@me", &init)?;
+        worker::Fetch::Request(req)
+            .send()
+            .await?
+            .json::<serde_json::Value>()
+            .await
+    }
+    .await;
+    let Some((id, name)) = who.ok().and_then(|u| {
+        let name = u["global_name"]
+            .as_str()
+            .filter(|n| !n.is_empty())
+            .or(u["username"].as_str())?
+            .to_owned();
+        Some((u["id"].as_str()?.to_owned(), name))
+    }) else {
+        return page(
+            502,
+            "Discord did not answer",
+            "Try again from the launcher in a moment.",
+        );
+    };
+    account_response(
+        call_accounts(
+            env,
+            accounts::AccRpc::OauthDone {
+                state,
+                discord: id,
+                name,
+            },
+        )
+        .await?,
+    )
 }
 
 // The one gateway feature the ladder needs is its login (`POST /auth/anonymous`).
@@ -550,7 +738,10 @@ async fn main(mut req: Request, env: Env, _ctx: Context) -> worker::Result<Respo
     if path == "/" {
         return Response::from_html(include_str!("board.html"));
     }
-    if ["/api/", "/auth/", "/internal/"].iter().any(|p| path.starts_with(p)) {
+    if ["/api/", "/auth/", "/internal/"]
+        .iter()
+        .any(|p| path.starts_with(p))
+    {
         // Routes this service does not own (like /auth/anonymous) fall through to the gateway;
         // `accounts_route` reads the body only for the routes it owns.
         if let Some(response) = accounts_route(&mut req, &env, &path).await? {

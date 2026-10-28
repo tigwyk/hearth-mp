@@ -29,23 +29,63 @@ const BOARD_PAGE: usize = 10;
 #[derive(Serialize, Deserialize, Debug)]
 pub enum AccRpc {
     /// `GET /auth/discord/start?login=`: the dev sign-in page.
-    LoginPage { login: String, dev: bool },
+    LoginPage {
+        login: String,
+        dev: bool,
+    },
     /// The dev sign-in form: bind `login` to a new account called `name`.
-    DevComplete { login: String, name: String, dev: bool },
+    DevComplete {
+        login: String,
+        name: String,
+        dev: bool,
+    },
+    /// Discord sign-in, step 1: remember `login` under a fresh OAuth `state` (the reply's `state`).
+    OauthStart {
+        login: String,
+    },
+    /// Discord sign-in, step 2: Discord says `state` belongs to Discord user `discord`, called `name`.
+    OauthDone {
+        state: String,
+        discord: String,
+        name: String,
+    },
     /// `POST /auth/poll`.
-    Poll { secret: String },
-    Logout { token: String },
-    Me { token: String },
-    DeleteMe { token: String },
-    Ticket { token: String, text: bool },
-    Stats { token: String, page: usize },
-    Board { discord: bool },
+    Poll {
+        secret: String,
+    },
+    Logout {
+        token: String,
+    },
+    Me {
+        token: String,
+    },
+    DeleteMe {
+        token: String,
+    },
+    Ticket {
+        token: String,
+        text: bool,
+    },
+    Stats {
+        token: String,
+        page: usize,
+    },
+    Board {
+        discord: bool,
+    },
     /// `POST /api/matches`: the body as the game sent it.
-    Report { token: String, body: String },
+    Report {
+        token: String,
+        body: String,
+    },
     /// The relay (internal): a ticket's account.
-    Redeem { ticket: String },
+    Redeem {
+        ticket: String,
+    },
     /// The relay (internal): a ranked match it started.
-    Pair { body: String },
+    Pair {
+        body: String,
+    },
 }
 
 /// The HTTP answer: `kind` is `json`, `text` or `html`.
@@ -57,13 +97,21 @@ pub struct AccReply {
 }
 
 fn json_reply(status: u16, v: Value) -> AccReply {
-    AccReply { status, kind: "json".into(), body: v.to_string() }
+    AccReply {
+        status,
+        kind: "json".into(),
+        body: v.to_string(),
+    }
 }
 fn err(status: u16, message: &str) -> AccReply {
     json_reply(status, json!({ "error": message }))
 }
 fn empty(status: u16) -> AccReply {
-    AccReply { status, kind: "text".into(), body: String::new() }
+    AccReply {
+        status,
+        kind: "text".into(),
+        body: String::new(),
+    }
 }
 
 #[derive(Default)]
@@ -81,10 +129,11 @@ fn f(row: &Row, k: &str) -> f64 {
     row.get(k).and_then(Value::as_f64).unwrap_or(0.0)
 }
 
-const SCHEMA: [&str; 7] = [
+const SCHEMA: [&str; 8] = [
     "CREATE TABLE IF NOT EXISTS accounts (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, \
      rating REAL NOT NULL, dev REAL NOT NULL, vol REAL NOT NULL, games INTEGER NOT NULL DEFAULT 0, \
-     wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0)",
+     wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, \n     discord TEXT UNIQUE)",
+    "CREATE TABLE IF NOT EXISTS oauth (state TEXT PRIMARY KEY, login TEXT NOT NULL, exp INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, account INTEGER NOT NULL, exp INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS tickets (ticket TEXT PRIMARY KEY, account INTEGER NOT NULL, exp INTEGER NOT NULL)",
     "CREATE TABLE IF NOT EXISTS logins (hash TEXT PRIMARY KEY, token TEXT, exp INTEGER NOT NULL)",
@@ -128,7 +177,11 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
                 "INSERT OR IGNORE INTO logins (hash, exp) VALUES (?, ?)",
                 vec![V::Text(login.clone()), V::Int(now + LOGIN_MS)],
             )?;
-            AccReply { status: 200, kind: "html".into(), body: login_page(&login) }
+            AccReply {
+                status: 200,
+                kind: "html".into(),
+                body: login_page(&login),
+            }
         }
         AccRpc::DevComplete { login, name, dev } => {
             let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
@@ -151,19 +204,102 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
                     V::Real(rating::VOLATILITY_START),
                 ],
             )?;
-            let id = i(&sql.exec("SELECT last_insert_rowid() AS id", vec![])?[0], "id");
-            let token = random_hex(32)?;
+            let id = i(
+                &sql.exec("SELECT last_insert_rowid() AS id", vec![])?[0],
+                "id",
+            );
+            finish_login(sql, now, &login, id)?;
+            AccReply {
+                status: 200,
+                kind: "html".into(),
+                body: done_page(),
+            }
+        }
+        AccRpc::OauthStart { login } => {
+            if !is_hex(&login, 64) {
+                return Ok(err(400, "bad sign-in"));
+            }
+            sql.exec("DELETE FROM oauth WHERE exp < ?", vec![V::Int(now)])?;
             sql.exec(
-                "INSERT INTO sessions (token, account, exp) VALUES (?, ?, ?)",
-                vec![V::Text(token.clone()), V::Int(id), V::Int(now + SESSION_MS)],
+                "INSERT OR IGNORE INTO logins (hash, exp) VALUES (?, ?)",
+                vec![V::Text(login.clone()), V::Int(now + LOGIN_MS)],
             )?;
-            sql.exec("UPDATE logins SET token = ? WHERE hash = ?", vec![V::Text(token), V::Text(login)])?;
-            AccReply { status: 200, kind: "html".into(), body: done_page() }
+            let state = random_hex(16)?;
+            sql.exec(
+                "INSERT INTO oauth (state, login, exp) VALUES (?, ?, ?)",
+                vec![
+                    V::Text(state.clone()),
+                    V::Text(login),
+                    V::Int(now + LOGIN_MS),
+                ],
+            )?;
+            json_reply(200, json!({ "state": state }))
+        }
+        AccRpc::OauthDone {
+            state,
+            discord,
+            name,
+        } => {
+            let rows = sql.exec(
+                "SELECT login FROM oauth WHERE state = ? AND exp > ?",
+                vec![V::Text(state.clone()), V::Int(now)],
+            )?;
+            let Some(row) = rows.first() else {
+                return Ok(err(410, "the sign-in ran out; try again"));
+            };
+            let login = s(row, "login");
+            let name: String = name.chars().filter(|c| !c.is_control()).take(24).collect();
+            let name = if name.trim().is_empty() {
+                "Fighter".to_owned()
+            } else {
+                name.trim().to_owned()
+            };
+            // One Discord user is one account; a returning player keeps their rating.
+            let found = sql.exec(
+                "SELECT id FROM accounts WHERE discord = ?",
+                vec![V::Text(discord.clone())],
+            )?;
+            let id = match found.first() {
+                Some(row) => {
+                    let id = i(row, "id");
+                    sql.exec(
+                        "UPDATE accounts SET name = ? WHERE id = ?",
+                        vec![V::Text(name), V::Int(id)],
+                    )?;
+                    id
+                }
+                None => {
+                    sql.exec(
+                        "INSERT INTO accounts (name, rating, dev, vol, discord) VALUES (?, ?, ?, ?, ?)",
+                        vec![
+                            V::Text(name),
+                            V::Real(rating::START),
+                            V::Real(rating::DEVIATION_START),
+                            V::Real(rating::VOLATILITY_START),
+                            V::Text(discord),
+                        ],
+                    )?;
+                    i(
+                        &sql.exec("SELECT last_insert_rowid() AS id", vec![])?[0],
+                        "id",
+                    )
+                }
+            };
+            sql.exec("DELETE FROM oauth WHERE state = ?", vec![V::Text(state)])?;
+            finish_login(sql, now, &login, id)?;
+            AccReply {
+                status: 200,
+                kind: "html".into(),
+                body: done_page(),
+            }
         }
         AccRpc::Poll { secret } => {
             let hash = hex(&Sha256::digest(secret.as_bytes()));
             sql.exec("DELETE FROM logins WHERE exp < ?", vec![V::Int(now)])?;
-            let rows = sql.exec("SELECT token FROM logins WHERE hash = ?", vec![V::Text(hash.clone())])?;
+            let rows = sql.exec(
+                "SELECT token FROM logins WHERE hash = ?",
+                vec![V::Text(hash.clone())],
+            )?;
             let Some(row) = rows.first() else {
                 return Ok(err(404, "no such sign-in"));
             };
@@ -173,21 +309,30 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
             }
             sql.exec("DELETE FROM logins WHERE hash = ?", vec![V::Text(hash)])?;
             let a = account_of_token(sql, &token)?;
-            json_reply(200, json!({ "token": token, "name": s(&a, "name"), "username": s(&a, "name") }))
+            json_reply(
+                200,
+                json!({ "token": token, "name": s(&a, "name"), "username": s(&a, "name") }),
+            )
         }
         AccRpc::Logout { token } => {
             sql.exec("DELETE FROM sessions WHERE token = ?", vec![V::Text(token)])?;
             empty(204)
         }
         AccRpc::Me { token } => match signed_in(&token)? {
-            Some(a) => json_reply(200, json!({ "id": i(&a, "id"), "name": s(&a, "name"), "username": s(&a, "name") })),
+            Some(a) => json_reply(
+                200,
+                json!({ "id": i(&a, "id"), "name": s(&a, "name"), "username": s(&a, "name") }),
+            ),
             None => err(401, "not signed in"),
         },
         AccRpc::DeleteMe { token } => match signed_in(&token)? {
             Some(a) => {
                 let id = V::Int(i(&a, "id"));
                 for table in ["sessions", "tickets", "reports"] {
-                    sql.exec(&format!("DELETE FROM {table} WHERE account = ?"), vec![id.clone()])?;
+                    sql.exec(
+                        &format!("DELETE FROM {table} WHERE account = ?"),
+                        vec![id.clone()],
+                    )?;
                 }
                 sql.exec("DELETE FROM accounts WHERE id = ?", vec![id])?;
                 empty(204)
@@ -200,12 +345,23 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
                 sql.exec("DELETE FROM tickets WHERE exp < ?", vec![V::Int(now)])?;
                 sql.exec(
                     "INSERT INTO tickets (ticket, account, exp) VALUES (?, ?, ?)",
-                    vec![V::Text(ticket.clone()), V::Int(i(&a, "id")), V::Int(now + TICKET_MS)],
+                    vec![
+                        V::Text(ticket.clone()),
+                        V::Int(i(&a, "id")),
+                        V::Int(now + TICKET_MS),
+                    ],
                 )?;
                 if text {
-                    AccReply { status: 200, kind: "text".into(), body: format!("{ticket}\n") }
+                    AccReply {
+                        status: 200,
+                        kind: "text".into(),
+                        body: format!("{ticket}\n"),
+                    }
                 } else {
-                    json_reply(200, json!({ "ticket": ticket, "expires_in": TICKET_MS / 1000 }))
+                    json_reply(
+                        200,
+                        json!({ "ticket": ticket, "expires_in": TICKET_MS / 1000 }),
+                    )
                 }
             }
             None => err(401, "not signed in"),
@@ -216,7 +372,10 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
                 vec![V::Text(ticket.clone()), V::Int(now)],
             )?;
             // Used at once, redeemable only once.
-            sql.exec("DELETE FROM tickets WHERE ticket = ?", vec![V::Text(ticket)])?;
+            sql.exec(
+                "DELETE FROM tickets WHERE ticket = ?",
+                vec![V::Text(ticket)],
+            )?;
             match rows.first() {
                 Some(a) => json_reply(
                     200,
@@ -239,6 +398,24 @@ fn handle(sql: &dyn Sql, now: i64, rpc: AccRpc) -> Result<AccReply> {
             None => err(401, "not signed in"),
         },
     })
+}
+
+/// Opens a session for `account` and hands its token to the game that is polling with `login`.
+fn finish_login(sql: &dyn Sql, now: i64, login: &str, account: i64) -> Result<()> {
+    let token = random_hex(32)?;
+    sql.exec(
+        "INSERT INTO sessions (token, account, exp) VALUES (?, ?, ?)",
+        vec![
+            V::Text(token.clone()),
+            V::Int(account),
+            V::Int(now + SESSION_MS),
+        ],
+    )?;
+    sql.exec(
+        "UPDATE logins SET token = ? WHERE hash = ?",
+        vec![V::Text(token), V::Text(login.to_owned())],
+    )?;
+    Ok(())
 }
 
 fn session(sql: &dyn Sql, token: &str, now: i64) -> Result<Option<Row>> {
@@ -297,14 +474,25 @@ fn board_page(sql: &dyn Sql, offset: usize, n: usize) -> Result<(Vec<Value>, usi
 }
 
 fn clean(text: &str) -> String {
-    text.chars().map(|c| if matches!(c, '|' | '\n' | '\r') { ' ' } else { c }).collect()
+    text.chars()
+        .map(|c| {
+            if matches!(c, '|' | '\n' | '\r') {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect()
 }
 
 /// One `key=value` per line, as `StatsText` in the Go service writes it. No match history
 /// here (`recent`), and no favorite fighter: this service sees only ranked games.
 fn stats_text(sql: &dyn Sql, a: &Row, page: usize) -> Result<AccReply> {
     let list = ranked(sql)?;
-    let rank = list.iter().position(|r| i(r, "id") == i(a, "id")).map_or(0, |p| p + 1);
+    let rank = list
+        .iter()
+        .position(|r| i(r, "id") == i(a, "id"))
+        .map_or(0, |p| p + 1);
     let (board, total) = board_page(sql, page * BOARD_PAGE, BOARD_PAGE)?;
     let pages = total.div_ceil(BOARD_PAGE).max(1);
     let mut out = String::new();
@@ -337,12 +525,25 @@ fn stats_text(sql: &dyn Sql, a: &Row, page: usize) -> Result<AccReply> {
     for e in &board {
         line(
             "board",
-            format!("{}|{}|{}|{}|{}", e["rank"], clean(e["name"].as_str().unwrap_or("")), e["wins"], e["losses"], e["win_rate"]),
+            format!(
+                "{}|{}|{}|{}|{}",
+                e["rank"],
+                clean(e["name"].as_str().unwrap_or("")),
+                e["wins"],
+                e["losses"],
+                e["win_rate"]
+            ),
         );
     }
     let page = page.min(pages - 1);
-    out.push_str(&format!("board_page={page}\nboard_pages={pages}\nboard_total={total}\n"));
-    Ok(AccReply { status: 200, kind: "text".into(), body: out })
+    out.push_str(&format!(
+        "board_page={page}\nboard_pages={pages}\nboard_total={total}\n"
+    ));
+    Ok(AccReply {
+        status: 200,
+        kind: "text".into(),
+        body: out,
+    })
 }
 
 // ---- ranked pairing and match reports ----
@@ -369,23 +570,44 @@ fn pair(sql: &dyn Sql, now: i64, body: &str) -> Result<AccReply> {
     slots.dedup();
     accounts.sort_unstable();
     accounts.dedup();
-    if key.len() != 15 || key[6] != b'-' || p.seats.len() != 2 || slots.len() != 2 || accounts.len() != 2
+    if key.len() != 15
+        || key[6] != b'-'
+        || p.seats.len() != 2
+        || slots.len() != 2
+        || accounts.len() != 2
         || slots.iter().any(|x| !(0..=3).contains(x))
     {
         return Ok(err(400, "pairing not taken"));
     }
     for id in &accounts {
-        if sql.exec("SELECT id FROM accounts WHERE id = ?", vec![V::Int(*id)])?.is_empty() {
+        if sql
+            .exec("SELECT id FROM accounts WHERE id = ?", vec![V::Int(*id)])?
+            .is_empty()
+        {
             return Ok(err(400, "pairing not taken"));
         }
     }
-    sql.exec("DELETE FROM pairings WHERE at < ?", vec![V::Int(now - PAIRING_MS)])?;
-    sql.exec("DELETE FROM reports WHERE at < ?", vec![V::Int(now - PAIRING_MS)])?;
-    sql.exec("DELETE FROM settled WHERE at < ?", vec![V::Int(now - PAIRING_MS)])?;
+    sql.exec(
+        "DELETE FROM pairings WHERE at < ?",
+        vec![V::Int(now - PAIRING_MS)],
+    )?;
+    sql.exec(
+        "DELETE FROM reports WHERE at < ?",
+        vec![V::Int(now - PAIRING_MS)],
+    )?;
+    sql.exec(
+        "DELETE FROM settled WHERE at < ?",
+        vec![V::Int(now - PAIRING_MS)],
+    )?;
     for seat in &p.seats {
         sql.exec(
             "INSERT OR REPLACE INTO pairings (key, slot, account, at) VALUES (?, ?, ?, ?)",
-            vec![V::Text(p.key.clone()), V::Int(seat.slot), V::Int(seat.account), V::Int(now)],
+            vec![
+                V::Text(p.key.clone()),
+                V::Int(seat.slot),
+                V::Int(seat.account),
+                V::Int(now),
+            ],
         )?;
     }
     Ok(empty(204))
@@ -441,7 +663,10 @@ impl MatchReport {
         players.sort_by_key(|p| p.slot);
         let mut winners = self.winners.clone();
         winners.sort_unstable();
-        let lineup: String = players.iter().map(|p| format!("{}:{}:{},", p.slot, p.fighter, p.cpu)).collect();
+        let lineup: String = players
+            .iter()
+            .map(|p| format!("{}:{}:{},", p.slot, p.fighter, p.cpu))
+            .collect();
         let won: String = winners.iter().map(|w| format!("w{w}")).collect();
         format!("{}/{}/{}/{lineup}{won}", self.mode, self.venue, self.draw)
     }
@@ -460,18 +685,36 @@ fn report(sql: &dyn Sql, now: i64, account: i64, body: &str) -> Result<AccReply>
     if !rep.valid() {
         return Ok(err(400, "report not taken"));
     }
-    let accepted = json_reply(202, json!({ "status": "counted once the other players' games agree" }));
+    let accepted = json_reply(
+        202,
+        json!({ "status": "counted once the other players' games agree" }),
+    );
     // Only ranked results matter here: starts, leaves and crashes, and games nobody paired, are taken and ignored.
-    let Some(pk) = pairing_key_of(&rep.key) else { return Ok(accepted) };
+    let Some(pk) = pairing_key_of(&rep.key) else {
+        return Ok(accepted);
+    };
     if !matches!(rep.event.as_str(), "" | "result") {
         return Ok(accepted);
     }
-    let seats = sql.exec("SELECT slot, account FROM pairings WHERE key = ?", vec![V::Text(pk.to_owned())])?;
-    let seat_of = |slot: i64| seats.iter().find(|r| i(r, "slot") == slot).map(|r| i(r, "account"));
+    let seats = sql.exec(
+        "SELECT slot, account FROM pairings WHERE key = ?",
+        vec![V::Text(pk.to_owned())],
+    )?;
+    let seat_of = |slot: i64| {
+        seats
+            .iter()
+            .find(|r| i(r, "slot") == slot)
+            .map(|r| i(r, "account"))
+    };
     if seats.len() != 2 || seat_of(rep.you) != Some(account) {
         return Ok(accepted);
     }
-    if rep.players.len() != 2 || rep.players.iter().any(|p| p.cpu || seat_of(p.slot).is_none()) {
+    if rep.players.len() != 2
+        || rep
+            .players
+            .iter()
+            .any(|p| p.cpu || seat_of(p.slot).is_none())
+    {
         return Ok(accepted);
     }
     sql.exec(
@@ -486,10 +729,21 @@ fn report(sql: &dyn Sql, now: i64, account: i64, body: &str) -> Result<AccReply>
             V::Int(now),
         ],
     )?;
-    let both = sql.exec("SELECT * FROM reports WHERE key = ?", vec![V::Text(rep.key.clone())])?;
-    let done = !sql.exec("SELECT key FROM settled WHERE key = ?", vec![V::Text(rep.key.clone())])?.is_empty();
+    let both = sql.exec(
+        "SELECT * FROM reports WHERE key = ?",
+        vec![V::Text(rep.key.clone())],
+    )?;
+    let done = !sql
+        .exec(
+            "SELECT key FROM settled WHERE key = ?",
+            vec![V::Text(rep.key.clone())],
+        )?
+        .is_empty();
     if both.len() == 2 && !done {
-        sql.exec("INSERT INTO settled (key, at) VALUES (?, ?)", vec![V::Text(rep.key.clone()), V::Int(now)])?;
+        sql.exec(
+            "INSERT INTO settled (key, at) VALUES (?, ?)",
+            vec![V::Text(rep.key.clone()), V::Int(now)],
+        )?;
         if s(&both[0], "lineup") == s(&both[1], "lineup") {
             // Score for the first reporter: a draw, or a win when its own slot won.
             let a = &both[0];
@@ -508,7 +762,11 @@ fn report(sql: &dyn Sql, now: i64, account: i64, body: &str) -> Result<AccReply>
 }
 
 fn rating_of(r: &Row) -> Rating {
-    Rating { rating: f(r, "rating"), deviation: f(r, "dev"), volatility: f(r, "vol") }
+    Rating {
+        rating: f(r, "rating"),
+        deviation: f(r, "dev"),
+        volatility: f(r, "vol"),
+    }
 }
 
 /// Move both ratings after one agreed game (each game its own rating period).
