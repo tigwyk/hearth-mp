@@ -1,6 +1,10 @@
 name = "ffny-ladder"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-10-01"
+workers_dev = true
+
+# A hostname on a domain in your Cloudflare account (Cloudflare adds the DNS record and certificate):
+# routes = [{ pattern = "ladder.example.com", custom_domain = true }]
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
@@ -10,8 +14,12 @@ command = "cargo install -q worker-build && worker-build --release"
 name = "LADDER"
 class_name = "LadderObject"
 
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "AccountsObject"
+
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["LadderObject"]
+new_sqlite_classes = ["LadderObject", "AccountsObject"]
 
 # Set the login secret once: wrangler secret put HEARTH_SECRET  (min 32 bytes)
