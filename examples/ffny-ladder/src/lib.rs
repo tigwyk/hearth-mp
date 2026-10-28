@@ -10,6 +10,7 @@
 //! `POST /ladder/report {pairing, result}`, `GET /ladder/me`, `GET /ladder/top?limit=`
 //! (the last one needs no token).
 
+pub mod accounts;
 pub mod rating;
 
 use hearth_mp::server::{Sql, SqlValue as V};
@@ -455,6 +456,83 @@ async fn ladder_route(mut req: Request, env: Env, path: &str) -> worker::Result<
     reply(call(&env, rpc).await)
 }
 
+/// The account-service routes the game and the relay call (see `accounts.rs`).
+async fn accounts_route(req: &mut Request, env: &Env, path: &str) -> worker::Result<Option<Response>> {
+    use accounts::{AccReply, AccRpc};
+    use worker::Method::{Delete, Get, Post};
+    let dev = env.var("DEV_LOGIN").map(|v| v.to_string() == "1").unwrap_or(false);
+    let url = req.url()?;
+    let query = |key: &str| url.query_pairs().find(|(k, _)| k == key).map(|(_, v)| v.into_owned());
+    let token = req
+        .headers()
+        .get("authorization")?
+        .and_then(|h| h.strip_prefix("Bearer ").map(str::to_owned))
+        .unwrap_or_default();
+    let text = query("format").as_deref() == Some("text");
+    let method = req.method();
+    // The relay's calls carry a shared secret; without INTERNAL_TOKEN set they do not exist.
+    if path.starts_with("/internal/") {
+        let want = env.secret("INTERNAL_TOKEN").map(|s| s.to_string()).unwrap_or_default();
+        let got = req.headers().get("x-internal-token")?.unwrap_or_default();
+        let same = want.len() == got.len() && want.bytes().zip(got.bytes()).fold(0, |d, (a, b)| d | (a ^ b)) == 0;
+        if want.is_empty() || !same {
+            return Ok(Some(Response::error("not found", 404)?));
+        }
+    }
+    let rpc = match (method, path) {
+        (Get, "/auth/discord/start") => AccRpc::LoginPage { login: query("login").unwrap_or_default(), dev },
+        (Post, "/auth/dev/complete") => {
+            let form = req.form_data().await?;
+            let field = |k: &str| match form.get(k) {
+                Some(worker::FormEntry::Field(v)) => v,
+                _ => String::new(),
+            };
+            AccRpc::DevComplete { login: field("login"), name: field("name"), dev }
+        }
+        (Post, "/auth/poll") => {
+            let body: serde_json::Value = req.json().await.unwrap_or_default();
+            AccRpc::Poll { secret: body["secret"].as_str().unwrap_or_default().to_owned() }
+        }
+        (Post, "/auth/logout") => AccRpc::Logout { token },
+        (Get, "/api/me") => AccRpc::Me { token },
+        (Delete, "/api/me") => AccRpc::DeleteMe { token },
+        (Post, "/api/ranked/ticket") => AccRpc::Ticket { token, text },
+        (Get, "/api/me/stats") => AccRpc::Stats {
+            token,
+            page: query("page").and_then(|p| p.parse().ok()).unwrap_or(0),
+        },
+        (Get, "/api/leaderboard") => AccRpc::Board { discord: false },
+        (Get, "/internal/leaderboard") => AccRpc::Board { discord: true },
+        (Post, "/api/matches") => AccRpc::Report { token, body: req.text().await? },
+        (Post, "/internal/ranked/redeem") => {
+            let body: serde_json::Value = req.json().await.unwrap_or_default();
+            AccRpc::Redeem { ticket: body["ticket"].as_str().unwrap_or_default().to_owned() }
+        }
+        (Post, "/internal/ranked/pairing") => AccRpc::Pair { body: req.text().await? },
+        _ => return Ok(None),
+    };
+    let envelope = Envelope {
+        msg_id: None,
+        from: Target::new("gateway", ""),
+        chain: Vec::new(),
+        rpc: serde_json::to_value(rpc).map_err(|e| worker::Error::RustError(e.to_string()))?,
+    };
+    let to = Target::new(accounts::Accounts::BINDING, "global");
+    let value = hearth_mp::server::worker::call_object(env, &to, envelope)
+        .await
+        .map_err(|e| worker::Error::RustError(e.to_string()))?;
+    let reply: AccReply = serde_json::from_value(value).map_err(|e| worker::Error::RustError(e.to_string()))?;
+    let ctype = match reply.kind.as_str() {
+        "json" => "application/json",
+        "html" => "text/html; charset=utf-8",
+        _ => "text/plain; charset=utf-8",
+    };
+    let mut response = Response::ok(reply.body)?.with_status(reply.status);
+    response.headers_mut().set("content-type", ctype)?;
+    response.headers_mut().set("cache-control", "no-store")?;
+    Ok(Some(response))
+}
+
 // The one gateway feature the ladder needs is its login (`POST /auth/anonymous`).
 fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayConfig, String> {
     static NO_ROOMS: [hearth_mp_gateway::RoomRoute; 0] = [];
@@ -463,10 +541,18 @@ fn gateway_config(env: &Env) -> std::result::Result<hearth_mp_gateway::GatewayCo
 }
 
 #[worker::event(fetch)]
-async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
+async fn main(mut req: Request, env: Env, _ctx: Context) -> worker::Result<Response> {
     if let Some(rest) = req.path().strip_prefix("/ladder/") {
         let rest = rest.to_owned();
         return ladder_route(req, env, &rest).await;
+    }
+    let path = req.path();
+    if ["/api/", "/auth/", "/internal/"].iter().any(|p| path.starts_with(p)) {
+        // Routes this service does not own (like /auth/anonymous) fall through to the gateway;
+        // `accounts_route` reads the body only for the routes it owns.
+        if let Some(response) = accounts_route(&mut req, &env, &path).await? {
+            return Ok(response);
+        }
     }
     match gateway_config(&env) {
         Ok(config) => hearth_mp_gateway::serve(req, env, &config).await,

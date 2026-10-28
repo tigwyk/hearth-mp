@@ -10,8 +10,12 @@ command = "cargo install -q worker-build && worker-build --release"
 name = "LADDER"
 class_name = "LadderObject"
 
+[[durable_objects.bindings]]
+name = "ACCOUNTS"
+class_name = "AccountsObject"
+
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["LadderObject"]
+new_sqlite_classes = ["LadderObject", "AccountsObject"]
 
 # Set the login secret once: wrangler secret put HEARTH_SECRET  (min 32 bytes)
