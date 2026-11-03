@@ -392,11 +392,13 @@ checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 name = "ffny-ladder"
 version = "0.1.1"
 dependencies = [
+ "getrandom 0.2.17",
  "hearth-mp",
  "hearth-mp-gateway",
  "hearth-mp-test",
  "serde",
  "serde_json",
+ "sha2",
  "worker",
 ]
 
