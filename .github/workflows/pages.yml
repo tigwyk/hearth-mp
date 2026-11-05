@@ -1,0 +1,65 @@
+name: GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths: [docs/**, .github/workflows/pages.yml]
+  pull_request:
+    paths: [docs/**, .github/workflows/pages.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Validate HTML
+        run: npx --yes html-validate@11.18.0 docs/index.html
+      - name: Smoke-test static site
+        run: |
+          python3 -m http.server 4173 --directory docs >"$RUNNER_TEMP/pages.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          for _ in $(seq 1 30); do
+            if curl -fsS -o "$RUNNER_TEMP/index.html" http://127.0.0.1:4173/; then
+              curl -fsS -o /dev/null http://127.0.0.1:4173/.nojekyll
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/pages.log"
+          exit 1
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    needs: validate
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
